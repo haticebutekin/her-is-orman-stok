@@ -170,25 +170,47 @@ border-radius:15px;
 
 <script>
 
-function kameraAc(){{
+<button type="button" onclick="kameraAc()">
+📷 KAMERA İLE BARKOD OKU
+</button>
 
-let scanner = new Html5QrcodeScanner(
-"kamera",
-{{fps:10, qrbox:250}}
-);
+<div id="kamera" style="margin-top:20px"></div>
+
+<script>
+
+function kameraAc(){
+
+let kamera = document.getElementById("kamera");
+
+kamera.innerHTML="Kamera açılıyor...";
+
+let scanner = new Html5Qrcode("kamera");
 
 
-scanner.render(function(text){{
+scanner.start(
+{ facingMode:"environment" },
+{
+fps:10,
+qrbox:250
+},
+
+function(text){
 
 document.getElementById("barkod").value=text;
 
-scanner.clear();
+scanner.stop();
 
 document.forms[0].submit();
 
-}});
+},
 
-}}
+function(error){
+
+}
+
+);
+
+}
 
 </script>
 
