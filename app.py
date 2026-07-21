@@ -211,7 +211,7 @@ TOPLAM {toplam} TL
 <script>
 
 function kameraAc(){
-"""
+
 let scanner=new Html5QrcodeScanner(
 "kamera",
 {fps:10,qrbox:250}
@@ -230,6 +230,7 @@ document.forms[0].submit();
 }
 
 </script>
+    
 """
 
 </body>
