@@ -6,7 +6,6 @@ app = Flask(__name__)
 conn = sqlite3.connect("db.db", check_same_thread=False)
 c = conn.cursor()
 
-
 c.execute("""
 CREATE TABLE IF NOT EXISTS urun(
 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,109 +23,50 @@ fiyat REAL
 
 conn.commit()
 
-
 sepet=[]
-
 
 
 @app.route("/", methods=["GET","POST"])
 def login():
 
     if request.method=="POST":
-
         if request.form["k"]=="admin" and request.form["s"]=="1234":
             return redirect("/pos")
 
-
     return """
+    <html>
+    <style>
+    body{
+    background:#0f172a;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+    padding:30px;
+    }
+    input,button{
+    width:90%;
+    padding:15px;
+    margin:8px;
+    font-size:18px;
+    border-radius:10px;
+    border:0;
+    }
+    button{
+    background:#22c55e;
+    }
+    </style>
 
-<!DOCTYPE html>
-<html>
+    <h1>🌲</h1>
+    <h2>ORMAN KASA PRO</h2>
 
-<head>
+    <form method="post">
+    <input name="k" placeholder="Kullanıcı">
+    <input name="s" type="password" placeholder="Şifre">
+    <button>GİRİŞ</button>
+    </form>
 
-<style>
-
-body{
-background:#0f172a;
-color:white;
-font-family:Arial;
-text-align:center;
-padding:30px;
-}
-
-
-.kutu{
-
-background:#1e293b;
-padding:25px;
-border-radius:20px;
-max-width:400px;
-margin:auto;
-
-}
-
-
-input,button{
-
-width:100%;
-padding:15px;
-margin:8px;
-font-size:18px;
-border-radius:10px;
-border:0;
-
-}
-
-
-button{
-
-background:#22c55e;
-
-}
-
-</style>
-
-</head>
-
-
-<body>
-
-
-<div class="kutu">
-
-
-<h1>🌲</h1>
-
-<h2>ORMAN KASA PRO</h2>
-
-
-<form method="post">
-
-<input name="k" placeholder="Kullanıcı">
-
-
-<input name="s" type="password" placeholder="Şifre">
-
-
-<button>
-GİRİŞ
-</button>
-
-
-</form>
-
-
-</div>
-
-
-</body>
-
-</html>
-
-"""
-
-
+    </html>
+    """
 
 
 @app.route("/pos", methods=["GET","POST"])
@@ -134,12 +74,9 @@ def pos():
 
     global sepet
 
-
     if request.method=="POST":
 
-
         barkod=request.form["barkod"]
-
 
         urun=c.execute(
         "SELECT * FROM urun WHERE barkod=?",
@@ -147,23 +84,18 @@ def pos():
         ).fetchone()
 
 
-
         if urun:
 
-
             sepet.append({
-
-            "ad":urun[2],
-            "cins":urun[3],
-            "ebat":urun[4],
-            "sinif":urun[5],
-            "renk":urun[6],
-            "yuzey":urun[7],
-            "adet":urun[8],
-            "fiyat":urun[9]
-
+                "ad":urun[2],
+                "cins":urun[3],
+                "ebat":urun[4],
+                "sinif":urun[5],
+                "renk":urun[6],
+                "yuzey":urun[7],
+                "adet":urun[8],
+                "fiyat":urun[9]
             })
-
 
             c.execute(
             "UPDATE urun SET adet=adet-1 WHERE id=?",
@@ -173,213 +105,137 @@ def pos():
             conn.commit()
 
 
-
     toplam=0
-    kartlar=""
+    ürünler=""
 
 
     for u in sepet:
 
-
         toplam+=u["fiyat"]
 
+        ürünler+=f"""
+        <div class="kart">
 
-        kartlar+=f"""
+        <h3>{u['ad']}</h3>
 
-<div class="urun">
+        Cins: {u['cins']}<br>
+        Ebat: {u['ebat']} mm<br>
+        Sınıf: {u['sinif']}<br>
+        Renk: {u['renk']}<br>
+        Yüzey: {u['yuzey']}<br>
+        Stok: {u['adet']}<br>
 
-<h3>{u['ad']}</h3>
+        <b>{u['fiyat']} TL</b>
 
-Cins: {u['cins']}<br>
-
-Ebat: {u['ebat']} mm<br>
-
-Sınıf: {u['sinif']}<br>
-
-Renk: {u['renk']}<br>
-
-Yüzey: {u['yuzey']}<br>
-
-Stok: {u['adet']}<br>
-
-
-<b>{u['fiyat']} TL</b>
-
-</div>
-
-
-"""
-
+        </div>
+        """
 
 
     return f"""
-
 <html>
 
 <head>
 
-
 <script src="https://unpkg.com/html5-qrcode"></script>
-
 
 <style>
 
-
 body{{
-
 background:#020617;
-
 color:white;
-
 font-family:Arial;
-
 padding:20px;
-
 }}
-
 
 input,button{{
-
 width:100%;
-
 padding:18px;
-
+margin:5px;
 font-size:20px;
-
-margin:6px;
-
 border-radius:12px;
-
 border:0;
-
 }}
-
 
 button{{
-
 background:#22c55e;
-
 }}
 
-
-.urun{{
-
+.kart{{
 background:#1e293b;
-
 padding:15px;
-
 border-radius:15px;
-
 margin:10px 0;
-
 }}
-
 
 </style>
-
 
 </head>
 
 
-
 <body>
 
-
-<h2>
-🌲 ORMAN KASA PRO
-</h2>
-
+<h2>🌲 ORMAN KASA PRO</h2>
 
 
 <form method="post">
 
-<input id="barkod"
-name="barkod"
+<input name="barkod" id="barkod"
 placeholder="Barkod okut">
 
 </form>
 
 
-<button onclick="kameraAc()">
-
+<button onclick="kameraAc()" type="button">
 📷 KAMERA İLE BARKOD OKU
-
 </button>
 
 
 <a href="/ekle">
-
 <button type="button">
-
 ➕ ÜRÜN EKLE
-
 </button>
-
 </a>
 
 
 <div id="kamera"></div>
 
 
-
-{kartlar}
-
+{ürünler}
 
 
 <h1>
-
-TOPLAM: {toplam} TL
-
+TOPLAM {toplam} TL
 </h1>
-
 
 
 <script>
 
-
-function kameraAc(){{
-
+function kameraAc(){
 
 let scanner=new Html5QrcodeScanner(
-
 "kamera",
-
-{{fps:10,qrbox:250}}
-
+{fps:10,qrbox:250}
 );
 
-
-scanner.render(
-
-function(text){{
-
+scanner.render(function(text){
 
 document.getElementById("barkod").value=text;
 
-
 scanner.clear();
-
 
 document.forms[0].submit();
 
+});
 
-}}
-
-);
-
-
-}}
-
+}
 
 </script>
 
 
-
 </body>
-
 </html>
-
-@app.route("/ekle", methods=["GET","POST"])
+"""
+    @app.route("/ekle", methods=["GET","POST"])
 def ekle():
 
     if request.method=="POST":
@@ -390,15 +246,15 @@ def ekle():
         VALUES (?,?,?,?,?,?,?,?,?)
         """,
         (
-        request.form["b"],
-        request.form["a"],
-        request.form["c"],
-        request.form["e"],
-        request.form["s"],
-        request.form["r"],
-        request.form["y"],
-        request.form["adet"],
-        request.form["f"]
+            request.form["b"],
+            request.form["a"],
+            request.form["c"],
+            request.form["e"],
+            request.form["s"],
+            request.form["r"],
+            request.form["y"],
+            request.form["adet"],
+            request.form["f"]
         ))
 
         conn.commit()
@@ -406,9 +262,7 @@ def ekle():
         return redirect("/pos")
 
 
-
     return """
-
 <html>
 
 <head>
@@ -416,60 +270,43 @@ def ekle():
 <style>
 
 body{
-
 background:#020617;
 color:white;
 font-family:Arial;
 padding:20px;
-
 }
 
-
 .kutu{
-
 background:#1e293b;
 padding:20px;
 border-radius:20px;
 max-width:500px;
 margin:auto;
-
 }
 
-
 input,select,button{
-
 width:100%;
 padding:15px;
-margin:7px;
+margin:8px;
 font-size:18px;
 border-radius:12px;
 border:0;
-
 }
-
 
 button{
-
 background:#22c55e;
-
 }
-
 
 </style>
 
-
 </head>
-
 
 <body>
 
 
 <div class="kutu">
 
-
-<h2>
-📦 YENİ ÜRÜN
-</h2>
+<h2>📦 ÜRÜN EKLE</h2>
 
 
 <form method="post">
@@ -493,22 +330,13 @@ background:#22c55e;
 <input name="r" placeholder="Renk">
 
 
-
 <select name="y">
 
+<option value="MAT">MAT</option>
 
-<option value="MAT">
-MAT
-</option>
-
-
-<option value="HG">
-HG
-</option>
-
+<option value="HG">HG</option>
 
 </select>
-
 
 
 <input name="adet" placeholder="Adet">
@@ -518,14 +346,11 @@ HG
 
 
 <button>
-
 💾 KAYDET
-
 </button>
 
 
 </form>
-
 
 </div>
 
@@ -533,15 +358,12 @@ HG
 </body>
 
 </html>
-
 """
-
 
 
 
 @app.route("/rapor")
 def rapor():
-
 
     data=c.execute(
     "SELECT * FROM urun"
@@ -553,7 +375,6 @@ def rapor():
 
     for u in data:
 
-
         liste+=f"""
 
 <tr>
@@ -564,6 +385,8 @@ def rapor():
 
 <td>{u[4]}</td>
 
+<td>{u[5]}</td>
+
 <td>{u[6]}</td>
 
 <td>{u[7]}</td>
@@ -572,66 +395,30 @@ def rapor():
 
 <td>{u[9]}</td>
 
-
 </tr>
 
 """
-
 
 
     return f"""
 
 <html>
 
-<head>
+<body style="background:#020617;color:white;font-family:Arial;padding:20px">
 
-<style>
-
-body{{
-
-background:#020617;
-color:white;
-font-family:Arial;
-padding:20px;
-
-}}
-
-table{{
-
-width:100%;
-background:#1e293b;
-
-}}
-
-td{{
-
-padding:10px;
-
-}}
-
-</style>
-
-</head>
+<h2>📊 STOK RAPOR</h2>
 
 
-<body>
-
-
-<h2>
-📊 STOK RAPOR
-</h2>
-
-
-<table border="1">
-
+<table border="1" width="100%">
 
 <tr>
 
 <th>Ürün</th>
 <th>Cins</th>
 <th>Ebat</th>
+<th>Sınıf</th>
 <th>Renk</th>
-<th>Yüzey</th>
+<th>MAT/HG</th>
 <th>Adet</th>
 <th>Fiyat</th>
 
@@ -661,48 +448,36 @@ Geri
 
 
 
-
 @app.route("/odeme")
 def odeme():
 
     global sepet
 
-
     toplam=0
 
-
     for u in sepet:
-
         toplam+=u["fiyat"]
 
 
-
     sepet.clear()
-
 
 
     return f"""
 
 <html>
 
-<body>
+<body style="background:#020617;color:white;text-align:center;font-family:Arial;padding:30px">
+
+
+<h1>✅ SATIŞ TAMAMLANDI</h1>
 
 <h2>
-✅ SATIŞ TAMAMLANDI
+Toplam: {toplam} TL
 </h2>
 
 
-<h3>
-
-Toplam: {toplam} TL
-
-</h3>
-
-
 <a href="/pos">
-
 Yeni Satış
-
 </a>
 
 
@@ -720,4 +495,3 @@ if __name__=="__main__":
     host="0.0.0.0",
     port=5000
     )
-"""
