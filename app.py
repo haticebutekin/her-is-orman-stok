@@ -3,6 +3,7 @@ import sqlite3
 
 app = Flask(__name__)
 
+# DATABASE
 conn = sqlite3.connect("db.db", check_same_thread=False)
 c = conn.cursor()
 
@@ -20,47 +21,42 @@ adet INTEGER,
 fiyat REAL
 )
 """)
-
 conn.commit()
 
-sepet=[]
+sepet = []
 
 
+# LOGIN
 @app.route("/", methods=["GET","POST"])
 def login():
-
     if request.method=="POST":
         if request.form["k"]=="admin" and request.form["s"]=="1234":
             return redirect("/pos")
 
     return """
     <h2>🌲 ORMAN KASA PRO</h2>
-
     <form method="post">
-    <input name="k" placeholder="Kullanıcı">
-    <input name="s" type="password" placeholder="Şifre">
+    <input name="k" placeholder="Kullanıcı"><br>
+    <input name="s" type="password" placeholder="Şifre"><br>
     <button>Giriş</button>
     </form>
     """
 
 
+# POS
 @app.route("/pos", methods=["GET","POST"])
 def pos():
-
     global sepet
 
     if request.method=="POST":
+        barkod = request.form["barkod"]
 
-        barkod=request.form["barkod"]
-
-        urun=c.execute(
+        urun = c.execute(
         "SELECT * FROM urun WHERE barkod=?",
         (barkod,)
         ).fetchone()
 
-
         if urun:
-
             sepet.append({
             "ad":urun[2],
             "cins":urun[3],
@@ -68,7 +64,6 @@ def pos():
             "sinif":urun[5],
             "renk":urun[6],
             "yuzey":urun[7],
-            "adet":urun[8],
             "fiyat":urun[9]
             })
 
@@ -76,204 +71,122 @@ def pos():
             "UPDATE urun SET adet=adet-1 WHERE id=?",
             (urun[0],)
             )
-
             conn.commit()
-
 
     liste=""
     toplam=0
 
     for u in sepet:
-
         toplam+=u["fiyat"]
 
         liste+=f"""
-        <div class="kart">
+        <div class='kart'>
         <h3>{u['ad']}</h3>
-        Cins: {u['cins']}<br>
-        Ebat: {u['ebat']} mm<br>
-        Sınıf: {u['sinif']}<br>
-        Renk: {u['renk']}<br>
-        Yüzey: {u['yuzey']}<br>
-        Fiyat: {u['fiyat']} TL
+        {u['cins']} - {u['ebat']} mm - {u['sinif']}<br>
+        {u['renk']} - {u['yuzey']}<br>
+        {u['fiyat']} TL
         </div>
         """
 
-
-return f"""
+    return f"""
 <!DOCTYPE html>
 <html>
-
 <head>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
-
-body{{
+body {{
 background:#020617;
 color:white;
 font-family:Arial;
 padding:20px;
 }}
 
-input,button{{
+input,button {{
 width:100%;
-padding:18px;
+padding:15px;
 margin:5px;
-font-size:18px;
 border-radius:10px;
 border:0;
+font-size:18px;
 }}
 
-button{{
+button {{
 background:#22c55e;
 }}
 
-.kart{{
+.kart {{
 background:#1e293b;
 padding:15px;
 margin:10px;
-border-radius:15px;
+border-radius:10px;
 }}
-
 </style>
 
 </head>
 
-
 <body>
-
 
 <h2>🌲 ORMAN KASA PRO</h2>
 
-
 <form method="post">
-
-<input id="barkod" 
-name="barkod" 
-placeholder="Barkod okut">
-
+<input id="barkod" name="barkod" placeholder="Barkod okut">
 </form>
 
-
-<button type="button" onclick="kameraAc()">
-📷 KAMERA İLE BARKOD OKU
+<button onclick="kameraAc()" type="button">
+📷 KAMERA
 </button>
-
 
 <a href="/ekle">
-<button type="button">
-➕ ÜRÜN EKLE
-</button>
+<button type="button">➕ ÜRÜN EKLE</button>
 </a>
-
 
 <div id="kamera"></div>
 
-
 {liste}
 
-
-<h1>
-TOPLAM: {toplam} TL
-</h1>
-
-
+<h2>TOPLAM: {toplam} TL</h2>
 
 <script>
 
 function kameraAc(){{
 
-
 let scanner = new Html5QrcodeScanner(
 "kamera",
-{{
-fps:10,
-qrbox:250
-}}
+{{fps:10, qrbox:250}}
 );
 
-
-
-scanner.render(
-
-function(text){{
-
-
-document.getElementById("barkod").value=text;
-
-
-scanner.clear();
-
-
-document.forms[0].submit();
-
-
-}},
-
-function(error){{
-
-}}
-
-);
-
-
-}}
-
-
-</script>
-
-
-</body>
-
-</html>
-"""
-
-scanner.render(function(text){
-
-console.log("OKUNAN BARKOD:", text);
-
+scanner.render(function(text){{
 
 document.getElementById("barkod").value = text;
 
-
 scanner.clear();
-
-
-setTimeout(function(){
 
 document.forms[0].submit();
 
-},500);
+}});
 
-
-},
-function(error){
-
-});
-
-
-}
+}}
 
 </script>
-
 
 </body>
 </html>
 """
 
+
+# ÜRÜN EKLE
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
-    
+
     if request.method=="POST":
 
         c.execute("""
         INSERT INTO urun
         (barkod,ad,cins,ebat,sinif,renk,yuzey,adet,fiyat)
         VALUES (?,?,?,?,?,?,?,?,?)
-        """,
-        (
+        """,(
         request.form["b"],
         request.form["a"],
         request.form["c"],
@@ -286,222 +199,38 @@ def ekle():
         ))
 
         conn.commit()
-
         return redirect("/pos")
 
-
     return """
-<!DOCTYPE html>
-<html>
+    <body style="background:#020617;color:white;font-family:Arial;padding:20px">
 
-<head>
+    <h2>ÜRÜN EKLE</h2>
 
-<style>
+    <form method="post">
 
-body{
-background:#020617;
-color:white;
-font-family:Arial;
-padding:20px;
-}
+    <input name="b" placeholder="Barkod"><br>
+    <input name="a" placeholder="Ad"><br>
+    <input name="c" placeholder="Cins"><br>
+    <input name="e" placeholder="Ebat"><br>
+    <input name="s" placeholder="Sınıf"><br>
+    <input name="r" placeholder="Renk"><br>
 
-.kutu{
-background:#1e293b;
-padding:20px;
-border-radius:20px;
-max-width:500px;
-margin:auto;
-}
+    <select name="y">
+    <option value="MAT">MAT</option>
+    <option value="HG">HG</option>
+    </select><br>
 
-input,select,button{
+    <input name="adet" placeholder="Adet"><br>
+    <input name="f" placeholder="Fiyat"><br>
 
-width:100%;
-padding:15px;
-margin:8px;
-font-size:18px;
-border-radius:10px;
-border:0;
+    <button>KAYDET</button>
 
-}
+    </form>
 
-button{
-background:#22c55e;
-}
+    </body>
+    """
 
-</style>
 
-</head>
-
-
-<body>
-
-<div class="kutu">
-
-<h2>📦 ÜRÜN EKLE</h2>
-
-<form method="post">
-
-<input name="b" placeholder="Barkod">
-
-<input name="a" placeholder="Ürün adı">
-
-<input name="c" placeholder="Cins">
-
-<input name="e" placeholder="Ebat mm">
-
-<input name="s" placeholder="Sınıf">
-
-<input name="r" placeholder="Renk">
-
-
-<select name="y">
-
-<option value="MAT">
-MAT
-</option>
-
-<option value="HG">
-HG
-</option>
-
-</select>
-
-
-<input name="adet" placeholder="Adet">
-
-<input name="f" placeholder="Fiyat">
-
-
-<button>
-💾 KAYDET
-</button>
-
-
-</form>
-
-</div>
-
-</body>
-
-</html>
-"""
-
-
-
-@app.route("/rapor")
-def rapor():
-
-    data=c.execute(
-    "SELECT * FROM urun"
-    ).fetchall()
-
-
-    satir=""
-
-
-    for u in data:
-
-        satir+=f"""
-
-<tr>
-
-<td>{u[2]}</td>
-<td>{u[3]}</td>
-<td>{u[4]}</td>
-<td>{u[5]}</td>
-<td>{u[6]}</td>
-<td>{u[7]}</td>
-<td>{u[8]}</td>
-<td>{u[9]}</td>
-
-</tr>
-
-"""
-
-
-    return f"""
-
-<html>
-
-<body style="background:#020617;color:white;font-family:Arial">
-
-<h2>📊 STOK RAPOR</h2>
-
-
-<table border="1" width="100%">
-
-<tr>
-
-<th>Ad</th>
-<th>Cins</th>
-<th>Ebat</th>
-<th>Sınıf</th>
-<th>Renk</th>
-<th>Yüzey</th>
-<th>Adet</th>
-<th>Fiyat</th>
-
-</tr>
-
-
-{satir}
-
-</table>
-
-
-<a href="/pos">
-Geri
-</a>
-
-</body>
-
-</html>
-
-"""
-
-
-
-@app.route("/odeme")
-def odeme():
-
-    global sepet
-
-    toplam=0
-
-    for u in sepet:
-        toplam+=u["fiyat"]
-
-
-    sepet.clear()
-
-
-    return f"""
-
-<html>
-
-<body style="background:#020617;color:white;font-family:Arial;text-align:center">
-
-<h1>✅ SATIŞ TAMAMLANDI</h1>
-
-<h2>
-Toplam: {toplam} TL
-</h2>
-
-<a href="/pos">
-Yeni satış
-</a>
-
-</body>
-
-</html>
-
-"""
-
-
-
-if __name__=="__main__":
-
-    app.run(
-    host="0.0.0.0",
-    port=5000
-    )
+# RUN
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
