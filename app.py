@@ -127,6 +127,52 @@ color:#22c55e
 <form method="post">
 
 <input id="barkod"
+<button type="button" onclick="kameraAc()" style="
+width:100%;
+padding:20px;
+font-size:22px;
+background:#f59e0b;
+color:white;
+border-radius:10px;
+border:0;
+margin-top:10px;">
+📷 KAMERA İLE BARKOD OKU
+</button>
+
+<div id="kamera" style="margin-top:20px;"></div>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<script>
+function kameraAc(){
+
+    let kamera = document.getElementById("kamera");
+
+    kamera.innerHTML="Kamera açılıyor...";
+
+    let scanner = new Html5QrcodeScanner(
+        "kamera",
+        {
+            fps:10,
+            qrbox:250
+        }
+    );
+
+    scanner.render(
+        function(barkod){
+
+            document.getElementById("barkod").value=barkod;
+
+            scanner.clear();
+
+            document.forms[0].submit();
+
+        },
+        function(hata){
+        }
+    );
+}
+</script>
 name="barkod"
 placeholder="Barkod okut">
 
