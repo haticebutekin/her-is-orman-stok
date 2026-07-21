@@ -8,7 +8,7 @@ c = conn.cursor()
 
 c.execute("""
 CREATE TABLE IF NOT EXISTS urun(
-id INTEGER PRIMARY KEY,
+id INTEGER PRIMARY KEY AUTOINCREMENT,
 barkod TEXT,
 ad TEXT,
 cins TEXT,
@@ -62,18 +62,15 @@ def pos():
         if urun:
 
             sepet.append({
-
-            "ad":urun[2],
-            "cins":urun[3],
-            "ebat":urun[4],
-            "sinif":urun[5],
-            "renk":urun[6],
-            "yuzey":urun[7],
-            "adet":urun[8],
-            "fiyat":urun[9]
-
+                "ad":urun[2],
+                "cins":urun[3],
+                "ebat":urun[4],
+                "sinif":urun[5],
+                "renk":urun[6],
+                "yuzey":urun[7],
+                "adet":urun[8],
+                "fiyat":urun[9]
             })
-
 
             c.execute(
             "UPDATE urun SET adet=adet-1 WHERE id=?",
@@ -83,45 +80,34 @@ def pos():
             conn.commit()
 
 
-
     toplam=0
     liste=""
 
 
     for u in sepet:
 
-        toplam+=u["fiyat"]
+        toplam += u["fiyat"]
 
+        liste += f"""
+        <tr>
+        <td>
 
-        liste+=f"""
+        <b>{u['ad']}</b><br>
+        Cins: {u['cins']}<br>
+        Ebat: {u['ebat']} mm<br>
+        Sınıf: {u['sinif']}<br>
+        Renk: {u['renk']}<br>
+        Yüzey: {u['yuzey']}<br>
+        Stok: {u['adet']}
 
-<tr>
-<td>
+        </td>
 
-<b>{u['ad']}</b><br>
+        <td>
+        {u['fiyat']} TL
+        </td>
 
-Cins: {u['cins']}<br>
-
-Ebat: {u['ebat']} mm<br>
-
-Sınıf: {u['sinif']}<br>
-
-Renk: {u['renk']}<br>
-
-Yüzey: {u['yuzey']}<br>
-
-Stok: {u['adet']}
-
-</td>
-
-<td>
-{u['fiyat']} TL
-</td>
-
-</tr>
-
-"""
-
+        </tr>
+        """
 
 
     return f"""
@@ -174,7 +160,7 @@ placeholder="Barkod okut">
 </form>
 
 
-<button onclick="kameraAc()">
+<button type="button" onclick="kameraAc()">
 📷 KAMERA İLE BARKOD OKU
 </button>
 
@@ -199,14 +185,9 @@ TOPLAM: {toplam} TL
 
 function kameraAc(){{
 
-
-let scanner =
-new Html5QrcodeScanner(
-
+let scanner = new Html5QrcodeScanner(
 "kamera",
-
 {{fps:10,qrbox:250}}
-
 );
 
 
@@ -214,17 +195,11 @@ scanner.render(
 
 function(text){{
 
-
-document.getElementById(
-"barkod"
-).value=text;
-
+document.getElementById("barkod").value=text;
 
 scanner.clear();
 
-
 document.forms[0].submit();
-
 
 }}
 
@@ -242,19 +217,17 @@ document.forms[0].submit();
 """
 
 
-
-@app.route("/ekle",methods=["GET","POST"])
+@app.route("/ekle", methods=["GET","POST"])
 def ekle():
 
     if request.method=="POST":
 
-
         c.execute("""
         INSERT INTO urun
-        VALUES(NULL,?,?,?,?,?,?,?,?,?)
+        (barkod,ad,cins,ebat,sinif,renk,yuzey,adet,fiyat)
+        VALUES (?,?,?,?,?,?,?,?,?)
         """,
         (
-
         request.form["b"],
         request.form["a"],
         request.form["c"],
@@ -264,23 +237,18 @@ def ekle():
         request.form["y"],
         request.form["adet"],
         request.form["f"]
-
         ))
-
 
         conn.commit()
 
         return redirect("/pos")
 
 
-
     return """
 
 <h2>Ürün Ekle</h2>
 
-
 <form method="post">
-
 
 <input name="b" placeholder="Barkod">
 
@@ -300,62 +268,55 @@ def ekle():
 
 <input name="f" placeholder="Fiyat">
 
-
 <button>Kaydet</button>
-
 
 </form>
 
 """
 
 
-
 @app.route("/rapor")
 def rapor():
 
-    data=c.execute(
-    "SELECT * FROM urun"
-    ).fetchall()
-
+    data=c.execute("SELECT * FROM urun").fetchall()
 
     html=""
 
     for u in data:
 
         html+=f"""
-
-<tr>
-
-<td>{u[2]}</td>
-
-<td>{u[7]}</td>
-
-<td>{u[8]}</td>
-
-<td>{u[9]}</td>
-
-</tr>
-
-"""
+        <tr>
+        <td>{u[2]}</td>
+        <td>{u[7]}</td>
+        <td>{u[8]}</td>
+        <td>{u[9]}</td>
+        </tr>
+        """
 
 
     return f"""
+    <h2>STOK</h2>
 
-<h2>STOK</h2>
+    <table border="1">
+    {html}
+    </table>
 
-<table border=1>
-
-{html}
-
-</table>
-
-<a href="/pos">Geri</a>
-
-"""
+    <a href="/pos">Geri</a>
+    """
 
 
+@app.route("/odeme")
+def odeme():
 
-app.run(
-host="0.0.0.0",
-port=5000
-)
+    global sepet
+
+    sepet.clear()
+
+    return """
+    <h2>Satış tamamlandı</h2>
+    <a href="/pos">Geri</a>
+    """
+
+
+if __name__=="__main__":
+    app.run(host="0.0.0.0",port=5000)
