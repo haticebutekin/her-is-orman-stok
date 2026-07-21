@@ -197,10 +197,9 @@ document.forms[0].submit();
 </html>
 """
 
-    @app.route("/ekle", methods=["GET","POST"])
+@app.route("/ekle", methods=["GET","POST"])
 def ekle():
     
-   
     if request.method=="POST":
 
         c.execute("""
