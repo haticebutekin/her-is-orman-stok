@@ -180,6 +180,8 @@ border-radius:15px;
 
 function kameraAc(){
 
+return f"""
+    
 let scanner = new Html5QrcodeScanner(
 "kamera",
 {
@@ -188,6 +190,11 @@ qrbox:250
 }
 );
 
+</script>
+
+</body>
+</html>
+"""
 
 scanner.render(function(text){
 
