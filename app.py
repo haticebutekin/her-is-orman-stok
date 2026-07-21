@@ -180,35 +180,38 @@ border-radius:15px;
 
 function kameraAc(){
 
-let kamera = document.getElementById("kamera");
-
-kamera.innerHTML="Kamera açılıyor...";
-
-let scanner = new Html5Qrcode("kamera");
-
-
-scanner.start(
-{ facingMode:"environment" },
+let scanner = new Html5QrcodeScanner(
+"kamera",
 {
 fps:10,
 qrbox:250
-},
+}
+);
 
-function(text){
 
-document.getElementById("barkod").value=text;
+scanner.render(function(text){
 
-scanner.stop();
+console.log("OKUNAN BARKOD:", text);
+
+
+document.getElementById("barkod").value = text;
+
+
+scanner.clear();
+
+
+setTimeout(function(){
 
 document.forms[0].submit();
 
-},
+},500);
 
+
+},
 function(error){
 
-}
+});
 
-);
 
 }
 
