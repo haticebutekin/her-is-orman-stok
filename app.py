@@ -2,6 +2,7 @@ from flask import Flask, request, redirect
 import sqlite3
 
 app = Flask(__name__)
+print("YENI KOD CALISIYOR")
 
 conn = sqlite3.connect("db.db", check_same_thread=False)
 c = conn.cursor()
