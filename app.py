@@ -100,7 +100,7 @@ def pos():
         """
 
 
-    return f"""
+return f"""
 <!DOCTYPE html>
 <html>
 
@@ -141,19 +141,26 @@ border-radius:15px;
 
 </head>
 
+
 <body>
+
 
 <h2>🌲 ORMAN KASA PRO</h2>
 
+
 <form method="post">
 
-<input id="barkod" name="barkod" placeholder="Barkod okut">
+<input id="barkod" 
+name="barkod" 
+placeholder="Barkod okut">
 
 </form>
 
-<button onclick="kameraAc()" type="button">
+
+<button type="button" onclick="kameraAc()">
 📷 KAMERA İLE BARKOD OKU
 </button>
+
 
 <a href="/ekle">
 <button type="button">
@@ -161,38 +168,65 @@ border-radius:15px;
 </button>
 </a>
 
+
 <div id="kamera"></div>
+
 
 {liste}
 
-<h2>TOPLAM: {toplam} TL</h2>
+
+<h1>
+TOPLAM: {toplam} TL
+</h1>
 
 
-<script>
-
-<button type="button" onclick="kameraAc()">
-📷 KAMERA İLE BARKOD OKU
-</button>
-
-<div id="kamera" style="margin-top:20px"></div>
 
 <script>
 
-function kameraAc(){
+function kameraAc(){{
 
-return f"""
-    
+
 let scanner = new Html5QrcodeScanner(
 "kamera",
-{
+{{
 fps:10,
 qrbox:250
-}
+}}
 );
+
+
+
+scanner.render(
+
+function(text){{
+
+
+document.getElementById("barkod").value=text;
+
+
+scanner.clear();
+
+
+document.forms[0].submit();
+
+
+}},
+
+function(error){{
+
+}}
+
+);
+
+
+}}
+
 
 </script>
 
+
 </body>
+
 </html>
 """
 
