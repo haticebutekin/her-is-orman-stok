@@ -164,6 +164,17 @@ placeholder="Barkod okut">
 📷 KAMERA İLE BARKOD OKU
 </button>
 
+<a href="/ekle">
+<button type="button">
+➕ ÜRÜN EKLE
+</button>
+</a>
+
+<a href="/rapor">
+<button type="button">
+📊 STOK RAPOR
+</button>
+</a>
 
 <div id="kamera"></div>
 
