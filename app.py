@@ -3,6 +3,7 @@ import sqlite3, os, csv
 import barcode
 from barcode.writer import ImageWriter
 
+# ✅ DOĞRU
 app = Flask(__name__)
 app.secret_key = "secret123"
 
@@ -37,22 +38,20 @@ def barkod_uret(kod):
     ean.save(f"barcodes/{kod}")
 
 # ---------------- LOGIN ----------------
-LOGIN_HTML = """
-<h2>🔐 Giriş</h2>
-<form method="POST">
-<input name="user" placeholder="Kullanıcı">
-<input name="pass" type="password" placeholder="Şifre">
-<button>Giriş</button>
-</form>
-"""
-
 @app.route("/login", methods=["GET","POST"])
 def login():
     if request.method == "POST":
         if request.form["user"] == "admin" and request.form["pass"] == "1234":
             session["ok"] = True
             return redirect("/")
-    return LOGIN_HTML
+    return """
+    <h2>🔐 Giriş</h2>
+    <form method="POST">
+    <input name="user" placeholder="Kullanıcı">
+    <input name="pass" type="password" placeholder="Şifre">
+    <button>Giriş</button>
+    </form>
+    """
 
 def kontrol():
     return "ok" in session
@@ -116,7 +115,7 @@ input,select,button { width:100%; padding:12px; margin:5px 0;}
 <hr>
 
 <a href="/excel"><button>📊 Excel indir</button></a>
-<a href="/temizle"><button>🗑️ Tüm Stok Sıfırla</button></a>
+<a href="/temizle"><button>🗑️ Stok Sil</button></a>
 <a href="/logout"><button>🚪 Çıkış</button></a>
 
 <hr>
@@ -262,5 +261,6 @@ self.addEventListener('install', e => {
 });
 """
 
-# ---------------- RUN ----------------
-app.run(host="0.0.0.0", port=5000)
+# ✅ Render uyumlu
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
