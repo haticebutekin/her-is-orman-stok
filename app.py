@@ -36,6 +36,43 @@ def generate_barcode(code):
     ean.save(path)
     return f"/{path}.png"
 
+@app.route("/scan")
+def scan():
+    html = """
+    <h1>📷 Barkod Okut</h1>
+
+    <video id="video" width="300" height="200" autoplay></video>
+    <p id="result">Kod: -</p>
+
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+
+    <script>
+    const codeReader = new ZXing.BrowserBarcodeReader()
+    const videoElement = document.getElementById('video')
+
+    codeReader.decodeFromVideoDevice(null, videoElement, (result, err) => {
+        if (result) {
+            let code = result.text
+            document.getElementById('result').innerText = "Kod: " + code
+
+            // otomatik stok düş
+            window.location.href = "/scan-result/" + code
+        }
+    })
+    </script>
+    """
+    return html
+
+@app.route("/scan-result/<code>")
+def scan_result(code):
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("UPDATE products SET stock = stock - 1 WHERE barcode=?", (code,))
+    conn.commit()
+    conn.close()
+
+    return f"<h2>{code} okutuldu ✔️ Stok düşürüldü</h2><a href='/'>Geri dön</a>"
+    
 @app.route("/")
 def index():
     conn = sqlite3.connect(DB)
@@ -46,6 +83,8 @@ def index():
 
     html = """
     <h1>📦 HER-İŞ STOK</h1>
+
+    <a href="/scan"><button>📷 Barkod Oku</button></a>
 
     <h2>Ürün Ekle</h2>
     <form method="POST" action="/add">
