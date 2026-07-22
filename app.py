@@ -1,259 +1,230 @@
-from flask import Flask, render_template_string, request, redirect, session, send_file
+from flask import Flask, render_template_string, request, send_file, jsonify
 import sqlite3, os
 import barcode
 from barcode.writer import ImageWriter
 
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Image, Paragraph, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
-
 app = Flask(__name__)
-app.secret_key = "1234"
 
-# DB
-conn = sqlite3.connect("db.db", check_same_thread=False)
-c = conn.cursor()
+# klasör
+if not os.path.exists("barcodes"):
+    os.makedirs("barcodes")
 
-c.execute("CREATE TABLE IF NOT EXISTS kullanicilar(id INTEGER PRIMARY KEY,username TEXT,password TEXT,rol TEXT)")
-c.execute("CREATE TABLE IF NOT EXISTS urunler(id INTEGER PRIMARY KEY,ad TEXT,cins TEXT,stok INTEGER,kritik INTEGER,barkod TEXT)")
-conn.commit()
-
-# default user
-c.execute("SELECT * FROM kullanicilar")
-if not c.fetchall():
-    c.execute("INSERT INTO kullanicilar VALUES(NULL,'admin','1234','admin')")
+# ---------------- DB ----------------
+def init_db():
+    conn = sqlite3.connect("stok.db")
+    c = conn.cursor()
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS stok (
+        barkod TEXT PRIMARY KEY,
+        cins TEXT,
+        ebat TEXT,
+        mm TEXT,
+        sinif TEXT,
+        renk TEXT,
+        adet INTEGER
+    )
+    """)
     conn.commit()
+    conn.close()
 
-# barkod
-def barkod_olustur(kod):
+init_db()
+
+# ---------------- BARCODE ----------------
+def barkod_uret(kod):
     EAN = barcode.get_barcode_class('code128')
     ean = EAN(kod, writer=ImageWriter())
-    path = f"static/{kod}"
-    ean.save(path)
-    return path + ".png"
+    ean.save(f"barcodes/{kod}")
 
-# PDF etiket
-def etiket_grid(urun, adet):
-    ad, cins, barkod = urun
-    doc = SimpleDocTemplate("etiketler.pdf", pagesize=A4)
-    styles = getSampleStyleSheet()
+# ---------------- HTML ----------------
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
 
-    data, row = [], []
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#28a745">
 
-    for i in range(adet):
-        cell = []
-        img = f"static/{barkod}.png"
+<script src="https://unpkg.com/html5-qrcode"></script>
 
-        if os.path.exists(img):
-            cell.append(Image(img, width=120, height=40))
+<style>
+body { font-family:Arial; padding:10px; background:#f5f5f5;}
+input,select,button { width:100%; padding:12px; margin:5px 0;}
+.card { background:white; padding:10px; margin:5px; border-radius:8px;}
+.red {background:#dc3545;color:white;padding:5px;}
+.green {background:#28a745;color:white;padding:5px;}
+</style>
 
-        cell.append(Paragraph(f"<b>{ad}</b>", styles["Normal"]))
-        cell.append(Paragraph(f"{cins}", styles["Normal"]))
+</head>
+<body>
 
-        row.append(cell)
+<h2>📦 Barkod Stok</h2>
 
-        if len(row) == 3:
-            data.append(row)
-            row = []
+<div id="reader"></div>
 
-    if row:
-        data.append(row)
+<form method="POST">
+<input id="barkod" name="barkod" placeholder="Barkod" required>
+<input name="cins" placeholder="Cins">
+<input name="ebat" placeholder="Ebat">
+<input name="mm" placeholder="MM">
 
-    table = Table(data, colWidths=180, rowHeights=100)
-    table.setStyle(TableStyle([
-        ('GRID',(0,0),(-1,-1),0.5,colors.grey),
-        ('ALIGN',(0,0),(-1,-1),'CENTER')
-    ]))
+<select name="sinif">
+<option>HG</option>
+<option>MAT</option>
+</select>
 
-    doc.build([table])
+<input name="renk" placeholder="Renk">
+<input name="adet" type="number" placeholder="Adet">
 
-# LOGIN
+<select name="islem">
+<option value="ekle">Yeni</option>
+<option value="artir">Artır</option>
+<option value="azalt">Azalt</option>
+</select>
+
+<button>✔️ Kaydet</button>
+</form>
+
+<audio id="bip">
+<source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg">
+</audio>
+
+<hr>
+
+<a href="/etiket"><button>🧾 A4 Etiket</button></a>
+
+<hr>
+
+{% for i in stok %}
+<div class="card">
+<b>{{i[0]}}</b><br>
+{{i[1]}} | {{i[2]}} | {{i[3]}}<br>
+{{i[4]}} | {{i[5]}}<br>
+
+{% if i[6] <= 0 %}
+<div class="red">STOK BİTTİ</div>
+{% else %}
+<div class="green">Stok: {{i[6]}}</div>
+{% endif %}
+
+<img src="/barcode/{{i[0]}}" width="100%">
+</div>
+{% endfor %}
+
+<script>
+function onScanSuccess(decodedText) {
+    document.getElementById('barkod').value = decodedText;
+    document.getElementById('bip').play();
+}
+
+// kamera başlat
+new Html5QrcodeScanner("reader",{fps:10,qrbox:250})
+.render(onScanSuccess);
+
+// service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
+</script>
+
+</body>
+</html>
+"""
+
+# ---------------- MAIN ----------------
 @app.route("/", methods=["GET","POST"])
-def login():
-    if request.method == "POST":
-        u,p = request.form["u"], request.form["p"]
-        c.execute("SELECT * FROM kullanicilar WHERE username=? AND password=?", (u,p))
-        user = c.fetchone()
-        if user:
-            session["user"] = user[1]
-            session["rol"] = user[3]
-            return redirect("/panel")
-    return """
-    <h2>Login</h2>
-    <form method=post>
-    <input name=u placeholder=Kullanıcı>
-    <input name=p placeholder=Şifre>
-    <button>Giriş</button>
-    </form>
-    """
+def index():
+    conn = sqlite3.connect("stok.db")
+    c = conn.cursor()
 
-# PANEL
-@app.route("/panel")
-def panel():
-    if "user" not in session:
-        return redirect("/")
-    c.execute("SELECT * FROM urunler")
+    if request.method == "POST":
+        barkod = request.form["barkod"]
+        adet = int(request.form["adet"] or 0)
+        islem = request.form["islem"]
+
+        c.execute("SELECT * FROM stok WHERE barkod=?", (barkod,))
+        urun = c.fetchone()
+
+        if islem == "ekle":
+            barkod_uret(barkod)
+            c.execute("INSERT OR IGNORE INTO stok VALUES (?,?,?,?,?,?,?)",
+                      (barkod,
+                       request.form["cins"],
+                       request.form["ebat"],
+                       request.form["mm"],
+                       request.form["sinif"],
+                       request.form["renk"],
+                       adet))
+
+        elif urun:
+            stok = urun[6]
+            if islem == "artir":
+                stok += adet
+            else:
+                stok -= adet
+            c.execute("UPDATE stok SET adet=? WHERE barkod=?", (stok, barkod))
+
+        conn.commit()
+
+    c.execute("SELECT * FROM stok")
     data = c.fetchall()
+    conn.close()
 
-    return render_template_string("""
-    <h2>Hoşgeldin {{user}}</h2>
+    return render_template_string(HTML, stok=data)
 
-    <a href="/ekle">➕ Ürün</a> |
-    <a href="/cikis">🚪 Çıkış</a>
+# ---------------- BARCODE IMAGE ----------------
+@app.route("/barcode/<kod>")
+def barcode_img(kod):
+    return send_file(f"barcodes/{kod}.png")
 
-    <hr>
+# ---------------- ETIKET ----------------
+@app.route("/etiket")
+def etiket():
+    conn = sqlite3.connect("stok.db")
+    c = conn.cursor()
+    c.execute("SELECT * FROM stok")
+    data = c.fetchall()
+    conn.close()
 
-    <h3>📦 Barkod Okut</h3>
-    <input id="barkod" autofocus onkeypress="okut(event)">
-    <audio id="bip">
-      <source src="https://www.soundjay.com/buttons/beep-07.mp3">
-    </audio>
+    html = "<h1>Etiketler</h1>"
+    for i in data:
+        html += f"""
+        <div style='width:200px;float:left;border:1px solid #000;margin:5px;padding:5px;text-align:center'>
+        <b>{i[1]}</b><br>
+        <img src='/barcode/{i[0]}' width='180'><br>
+        {i[0]}
+        </div>
+        """
+    return html
 
-    <script>
-    function okut(e){
-        if(e.key==="Enter"){
-            let b=document.getElementById("barkod").value;
-            document.getElementById("bip").play();
-            window.location="/sat/"+b;
-        }
-    }
-    </script>
+# ---------------- PWA ----------------
+@app.route("/manifest.json")
+def manifest():
+    return jsonify({
+        "name": "Stok Barkod",
+        "short_name": "Stok",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#ffffff",
+        "theme_color": "#28a745",
+        "icons": [{
+            "src": "https://cdn-icons-png.flaticon.com/512/263/263115.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        }]
+    })
 
-    <hr>
-
-    <table border=1>
-    <tr><th>Ad</th><th>Cins</th><th>Stok</th><th>Durum</th><th>İşlem</th></tr>
-
-    {% for u in data %}
-    <tr>
-    <td>{{u[1]}}</td>
-    <td>{{u[2]}}</td>
-    <td>{{u[3]}}</td>
-    <td>
-    {% if u[3] <= u[4] %}
-        <span style="color:red;">⚠ Kritik</span>
-    {% else %}
-        OK
-    {% endif %}
-    </td>
-    <td>
-    <a href="/art/{{u[0]}}">+</a>
-    <a href="/azalt/{{u[0]}}">-</a>
-    <a href="/etiket/{{u[0]}}">🧾 Etiket</a>
-    </td>
-    </tr>
-    {% endfor %}
-    </table>
-    """, data=data, user=session["user"])
-
-# ÜRÜN EKLE
-@app.route("/ekle", methods=["GET","POST"])
-def ekle():
-    if request.method == "POST":
-        ad = request.form["ad"]
-        cins = request.form["cins"]
-        stok = int(request.form["stok"])
-        kritik = int(request.form["kritik"])
-
-        barkod = ad[:3] + cins[:3] + str(stok)
-        barkod_olustur(barkod)
-
-        c.execute("INSERT INTO urunler VALUES(NULL,?,?,?,?,?)",
-                  (ad,cins,stok,kritik,barkod))
-        conn.commit()
-        return redirect("/panel")
-
+@app.route("/sw.js")
+def sw():
     return """
-    <h2>Ürün Ekle</h2>
-    <form method=post>
-    Ad:<input name=ad><br>
-    Cins:
-    <select name=cins>
-    <option>Glosslak</option>
-    <option>122 Vario HGloss</option>
-    <option>Kapı</option>
-    <option>Laminant</option>
-    <option>MDF Lam</option>
-    <option>Ham MDF</option>
-    <option>Arkalık</option>
-    </select><br>
-    Stok:<input name=stok><br>
-    Kritik:<input name=kritik><br>
-    <button>Ekle</button>
-    </form>
-    """
+self.addEventListener('install', e => {
+    e.waitUntil(
+        caches.open('app').then(cache => {
+            return cache.addAll(['/']);
+        })
+    );
+});
+"""
 
-# SAT (barkod)
-@app.route("/sat/<b>")
-def sat(b):
-    c.execute("SELECT * FROM urunler WHERE barkod=?", (b,))
-    u = c.fetchone()
-    if u:
-        c.execute("UPDATE urunler SET stok=stok-1 WHERE id=?", (u[0],))
-        conn.commit()
-    return redirect("/panel")
-
-# stok +
-@app.route("/art/<id>")
-def art(id):
-    c.execute("UPDATE urunler SET stok=stok+1 WHERE id=?", (id,))
-    conn.commit()
-    return redirect("/panel")
-
-# stok -
-@app.route("/azalt/<id>")
-def azalt(id):
-    c.execute("UPDATE urunler SET stok=stok-1 WHERE id=?", (id,))
-    conn.commit()
-    return redirect("/panel")
-
-# ETİKET
-@app.route("/etiket/<id>", methods=["GET","POST"])
-def etiket(id):
-    c.execute("SELECT ad,cins,barkod FROM urunler WHERE id=?", (id,))
-    urun = c.fetchone()
-
-    if request.method == "POST":
-        adet = int(request.form["adet"])
-        etiket_grid(urun, adet)
-        return redirect("/yazdir")
-
-    return f"""
-    <h2>{urun[0]} Etiket</h2>
-    <form method=post>
-    Adet: <input name=adet value=10>
-    <button>Oluştur</button>
-    </form>
-    """
-
-# YAZDIR
-@app.route("/yazdir")
-def yazdir():
-    return """
-    <h2>Hazır</h2>
-    <button onclick="yazdir()">📱 Yazdır</button>
-
-    <script>
-    function yazdir(){
-        let w = window.open('/pdf');
-        w.onload = ()=>w.print();
-    }
-    </script>
-    """
-
-@app.route("/pdf")
-def pdf():
-    return send_file("etiketler.pdf")
-
-# çıkış
-@app.route("/cikis")
-def cikis():
-    session.clear()
-    return redirect("/")
-
-# RUN
-if __name__ == "__main__":
-    if not os.path.exists("static"):
-        os.mkdir("static")
-    app.run(debug=True)
+# ---------------- RUN ----------------
+app.run(host="0.0.0.0", port=5000)
