@@ -1,5 +1,4 @@
-flask
-pandas
+Flask
+gunicorn
 python-barcode
 pillow
-gunicorn
