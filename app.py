@@ -1,105 +1,59 @@
 from flask import Flask, request, redirect, session
-import sqlite3, random, datetime
+import sqlite3, random
 
 app = Flask(__name__)
-app.secret_key = "secret"
+app.secret_key = "1234"
 
 conn = sqlite3.connect("db.db", check_same_thread=False)
 c = conn.cursor()
 
-# TABLOLAR
-c.execute("""CREATE TABLE IF NOT EXISTS users(
-id INTEGER PRIMARY KEY, username TEXT, password TEXT, role TEXT)""")
-
-c.execute("""CREATE TABLE IF NOT EXISTS urun(
+# 🔥 FULL TABLO
+c.execute("""
+CREATE TABLE IF NOT EXISTS urun(
 id INTEGER PRIMARY KEY,
 barkod TEXT,
 ad TEXT,
+cins TEXT,
+ebat TEXT,
+renk TEXT,
 yuzey TEXT,
 fiyat REAL,
-stok INTEGER)""")
-
-c.execute("""CREATE TABLE IF NOT EXISTS satis(
-id INTEGER PRIMARY KEY,
-barkod TEXT,
-adet INTEGER,
-tarih TEXT)""")
-
-conn.commit()
-
-# admin
-c.execute("INSERT OR IGNORE INTO users VALUES (1,'admin','1234','admin')")
+stok INTEGER
+)
+""")
 conn.commit()
 
 def barkod():
     return str(random.randint(100000000000,999999999999))
 
-# LOGIN
-@app.route("/", methods=["GET","POST"])
-def login():
-    if request.method == "POST":
-        u = request.form["u"]
-        p = request.form["p"]
-        user = c.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p)).fetchone()
-        if user:
-            session["user"] = u
-            return redirect("/pos")
-    return '''
-    <h2>Giriş</h2>
-    <form method=post>
-    <input name=u placeholder="kullanıcı">
-    <input name=p type=password placeholder="şifre">
-    <button>Giriş</button>
-    </form>
-    '''
-
-# POS
-@app.route("/pos")
-def pos():
-    if "user" not in session:
-        return redirect("/")
-
+# ANA SAYFA
+@app.route("/")
+def home():
     urunler = c.execute("SELECT * FROM urun").fetchall()
 
-    html = '''
+    html = """
     <html>
     <head>
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode"></script>
     <style>
     body{background:#0f172a;color:white;font-family:Arial;padding:20px;}
-    input,select,button{padding:10px;margin:5px;}
-    button{background:#22c55e;color:white;}
+    input,select,button{padding:8px;margin:5px;}
+    table{width:100%;border-collapse:collapse;}
+    td,th{border:1px solid gray;padding:8px;}
     </style>
     </head>
+
     <body>
 
-    <h1>🛒 POS</h1>
+    <h1>🌲 ORMAN KASA PRO</h1>
 
-    <button onclick="kamera()">📷 Barkod Oku</button>
-    <div id="reader"></div>
-
-    <form method="POST" action="/sat">
-    Barkod <input id="barkod" name="barkod">
-    Adet <input name="adet" value="1">
-    <button>Sat</button>
-    </form>
-
-    <h2>Ürünler</h2>
-    '''
-
-    for u in urunler:
-        html += f"{u[2]} - {u[3]} - {u[4]} TL - stok:{u[5]}<br>"
-
-    html += '''
-
-    <hr>
-
-    <h2>➕ Ürün Ekle</h2>
+    <h2>➕ ÜRÜN EKLE</h2>
 
     <form method="POST" action="/ekle">
-    Barkod <input name="barkod" placeholder="boş bırak otomatik"><br>
+    Barkod <input name="barkod"><br>
     Ad <input name="ad"><br>
+    Cins <input name="cins"><br>
+    Ebat <input name="ebat"><br>
+    Renk <input name="renk"><br>
 
     Yüzey
     <select name="yuzey">
@@ -113,19 +67,36 @@ def pos():
     <button>Kaydet</button>
     </form>
 
-    <script>
-    function kamera(){
-        let scanner = new Html5QrcodeScanner("reader",{fps:10});
-        scanner.render((text)=>{
-            document.getElementById("barkod").value = text;
-            scanner.clear();
-        });
-    }
-    </script>
+    <h2>📦 Ürünler</h2>
 
-    </body>
-    </html>
-    '''
+    <table>
+    <tr>
+    <th>Barkod</th>
+    <th>Ad</th>
+    <th>Cins</th>
+    <th>Ebat</th>
+    <th>Renk</th>
+    <th>Yüzey</th>
+    <th>Fiyat</th>
+    <th>Stok</th>
+    </tr>
+    """
+
+    for u in urunler:
+        html += f"""
+        <tr>
+        <td>{u[1]}</td>
+        <td>{u[2]}</td>
+        <td>{u[3]}</td>
+        <td>{u[4]}</td>
+        <td>{u[5]}</td>
+        <td>{u[6]}</td>
+        <td>{u[7]}</td>
+        <td>{u[8]}</td>
+        </tr>
+        """
+
+    html += "</table></body></html>"
     return html
 
 # ÜRÜN EKLE
@@ -133,48 +104,21 @@ def pos():
 def ekle():
     barkod_v = request.form.get("barkod") or barkod()
     ad = request.form.get("ad")
+    cins = request.form.get("cins")
+    ebat = request.form.get("ebat")
+    renk = request.form.get("renk")
     yuzey = request.form.get("yuzey")
     fiyat = request.form.get("fiyat")
     stok = request.form.get("stok")
 
-    c.execute("INSERT INTO urun (barkod,ad,yuzey,fiyat,stok) VALUES (?,?,?,?,?)",
-              (barkod_v,ad,yuzey,fiyat,stok))
+    c.execute("""
+    INSERT INTO urun (barkod,ad,cins,ebat,renk,yuzey,fiyat,stok)
+    VALUES (?,?,?,?,?,?,?,?)
+    """,(barkod_v,ad,cins,ebat,renk,yuzey,fiyat,stok))
+
     conn.commit()
 
-    return redirect("/pos")
-
-# SATIŞ + STOK DÜŞME
-@app.route("/sat", methods=["POST"])
-def sat():
-    barkod_v = request.form.get("barkod")
-    adet = int(request.form.get("adet"))
-
-    urun = c.execute("SELECT * FROM urun WHERE barkod=?", (barkod_v,)).fetchone()
-
-    if urun:
-        yeni_stok = urun[5] - adet
-        c.execute("UPDATE urun SET stok=? WHERE barkod=?", (yeni_stok, barkod_v))
-        c.execute("INSERT INTO satis (barkod,adet,tarih) VALUES (?,?,?)",
-                  (barkod_v,adet,str(datetime.datetime.now())))
-        conn.commit()
-
-    return redirect("/pos")
-
-# RAPOR
-@app.route("/rapor")
-def rapor():
-    data = c.execute("SELECT * FROM satis").fetchall()
-    return "<br>".join([str(x) for x in data])
-
-# FİŞ
-@app.route("/fis")
-def fis():
-    return '''
-    <h3>FİŞ</h3>
-    <script>
-    window.print()
-    </script>
-    '''
+    return redirect("/")
 
 if __name__ == "__main__":
     app.run(debug=True)
