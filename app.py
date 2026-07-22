@@ -1,15 +1,14 @@
-from flask import Flask, render_template_string, request, send_file, jsonify
+from flask import Flask, render_template_string, request, send_file
 import sqlite3, os
 import barcode
 from barcode.writer import ImageWriter
 
-app = Flask(__name__)
+app = Flask(_name_)
 
-# klasör
 if not os.path.exists("barcodes"):
     os.makedirs("barcodes")
 
-# ---------------- DB ----------------
+# DB
 def init_db():
     conn = sqlite3.connect("stok.db")
     c = conn.cursor()
@@ -29,22 +28,17 @@ def init_db():
 
 init_db()
 
-# ---------------- BARCODE ----------------
+# barkod üret
 def barkod_uret(kod):
     EAN = barcode.get_barcode_class('code128')
     ean = EAN(kod, writer=ImageWriter())
     ean.save(f"barcodes/{kod}")
 
-# ---------------- HTML ----------------
 HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#28a745">
-
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
@@ -54,7 +48,6 @@ input,select,button { width:100%; padding:12px; margin:5px 0;}
 .red {background:#dc3545;color:white;padding:5px;}
 .green {background:#28a745;color:white;padding:5px;}
 </style>
-
 </head>
 <body>
 
@@ -63,7 +56,7 @@ input,select,button { width:100%; padding:12px; margin:5px 0;}
 <div id="reader"></div>
 
 <form method="POST">
-<input id="barkod" name="barkod" placeholder="Barkod" required>
+<input id="barkod" name="barkod" placeholder="Barkod">
 <input name="cins" placeholder="Cins">
 <input name="ebat" placeholder="Ebat">
 <input name="mm" placeholder="MM">
@@ -91,7 +84,8 @@ input,select,button { width:100%; padding:12px; margin:5px 0;}
 
 <hr>
 
-<a href="/etiket"><button>🧾 A4 Etiket</button></a>
+<a href="/etiket"><button>🧾 A4 Etiket Çıktı</button></a>
+<a href="/excel"><button>📊 Excel</button></a>
 
 <hr>
 
@@ -113,25 +107,18 @@ input,select,button { width:100%; padding:12px; margin:5px 0;}
 
 <script>
 function onScanSuccess(decodedText) {
-    document.getElementById('barkod').value = decodedText;
-    document.getElementById('bip').play();
+document.getElementById('barkod').value = decodedText;
+document.getElementById('bip').play();
 }
 
-// kamera başlat
 new Html5QrcodeScanner("reader",{fps:10,qrbox:250})
 .render(onScanSuccess);
-
-// service worker
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
-}
 </script>
 
 </body>
 </html>
 """
 
-# ---------------- MAIN ----------------
 @app.route("/", methods=["GET","POST"])
 def index():
     conn = sqlite3.connect("stok.db")
@@ -172,12 +159,11 @@ def index():
 
     return render_template_string(HTML, stok=data)
 
-# ---------------- BARCODE IMAGE ----------------
 @app.route("/barcode/<kod>")
 def barcode_img(kod):
     return send_file(f"barcodes/{kod}.png")
 
-# ---------------- ETIKET ----------------
+
 @app.route("/etiket")
 def etiket():
     conn = sqlite3.connect("stok.db")
@@ -197,34 +183,4 @@ def etiket():
         """
     return html
 
-# ---------------- PWA ----------------
-@app.route("/manifest.json")
-def manifest():
-    return jsonify({
-        "name": "Stok Barkod",
-        "short_name": "Stok",
-        "start_url": "/",
-        "display": "standalone",
-        "background_color": "#ffffff",
-        "theme_color": "#28a745",
-        "icons": [{
-            "src": "https://cdn-icons-png.flaticon.com/512/263/263115.png",
-            "sizes": "192x192",
-            "type": "image/png"
-        }]
-    })
-
-@app.route("/sw.js")
-def sw():
-    return """
-self.addEventListener('install', e => {
-    e.waitUntil(
-        caches.open('app').then(cache => {
-            return cache.addAll(['/']);
-        })
-    );
-});
-"""
-
-# ---------------- RUN ----------------
 app.run(host="0.0.0.0", port=5000)
