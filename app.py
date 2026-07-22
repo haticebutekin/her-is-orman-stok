@@ -1,304 +1,108 @@
+from flask import Flask, render_template_string, request, redirect
 import sqlite3
-import random
-from flask import Flask, request, redirect, session
+import os
+import barcode
+from barcode.writer import ImageWriter
 
 app = Flask(__name__)
-app.secret_key = "HERIS2026"
 
 DB = "stok.db"
+BARCODE_FOLDER = "static/barcodes"
 
+os.makedirs(BARCODE_FOLDER, exist_ok=True)
 
-def db():
-    return sqlite3.connect(DB)
-
-
-def setup():
-
-    con=db()
-    c=con.cursor()
-
+def init_db():
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
     c.execute("""
-    CREATE TABLE IF NOT EXISTS urun(
+    CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        barkod TEXT,
-        ad TEXT,
-        cins TEXT,
-        ebat TEXT,
-        tip TEXT,
-        sinif TEXT,
-        stok INTEGER,
-        fiyat REAL
+        name TEXT,
+        barcode TEXT UNIQUE,
+        stock INTEGER
     )
     """)
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS satis(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        urun TEXT,
-        fiyat REAL
-    )
-    """)
-
-    con.commit()
-    con.close()
-
-
-setup()
-
-
-def barkod():
-    return str(random.randint(1000000000000,9999999999999))
-
-
-CSS="""
-<style>
-body{
-background:#07111f;
-color:white;
-font-family:Arial;
-padding:20px;
-}
-
-input,select{
-padding:10px;
-margin:5px;
-width:220px;
-}
-
-button{
-padding:12px;
-background:#22c55e;
-border:0;
-color:white;
-border-radius:8px;
-}
-
-.card{
-background:#111827;
-padding:15px;
-margin:10px;
-border-radius:10px;
-}
-
-</style>
-"""
-
-
-@app.route("/admin",methods=["GET","POST"])
-def admin():
-
-    if request.method=="POST":
-
-        if request.form["sifre"]=="1234":
-
-            session["admin"]=True
-            return redirect("/panel")
-
-
-    return CSS+"""
-    <h1>🌲 HER-İŞ STOK PRO</h1>
-
-    <form method="post">
-
-    <input type="password"
-    name="sifre"
-    placeholder="Şifre">
-
-    <button>Giriş</button>
-
-    </form>
-    """
-
-
-
-@app.route("/panel",methods=["GET","POST"])
-def panel():
-
-    if not session.get("admin"):
-        return redirect("/admin")
-
-
-    con=db()
-
-
-    if request.method=="POST":
-
-        con.execute("""
-        INSERT INTO urun
-        VALUES(NULL,?,?,?,?,?,?,?,?)
-        """,
-        (
-        barkod(),
-        request.form["ad"],
-        request.form["cins"],
-        request.form["ebat"],
-        request.form["tip"],
-        request.form["sinif"],
-        request.form["stok"],
-        request.form["fiyat"]
-        ))
-
-        con.commit()
-
-
-
-    urunler=con.execute(
-        "SELECT * FROM urun"
-    ).fetchall()
-
-
-    html=CSS+"""
-
-<h1>ÜRÜN EKLE</h1>
-
-
-<form method="post">
-
-<input name="ad" placeholder="Ürün adı">
-
-<input name="cins" placeholder="Cins">
-
-<input name="ebat" placeholder="Ebat mm">
-
-<select name="tip">
-<option>HG</option>
-<option>MAT</option>
-</select>
-
-<input name="sinif" placeholder="Sınıf">
-
-<input name="stok" placeholder="Stok">
-
-<input name="fiyat" placeholder="Fiyat">
-
-
-<button>KAYDET</button>
-
-</form>
-
-
-<h2>STOK</h2>
-
-"""
-
-
-    for u in urunler:
-
-        html+=f"""
-
-<div class="card">
-
-<b>{u[2]}</b><br>
-
-Barkod: {u[1]}<br>
-
-Cins: {u[3]}<br>
-
-Ebat: {u[4]}<br>
-
-Tip: {u[5]}<br>
-
-Sınıf: {u[6]}<br>
-
-Stok: {u[7]}<br>
-
-Fiyat: {u[8]} TL
-
-</div>
-
-"""
-
-
-    con.close()
-
-    return html
-
-
-
-sepet=[]
-
+    conn.commit()
+    conn.close()
+
+def generate_barcode(code):
+    path = os.path.join(BARCODE_FOLDER, code)
+    ean = barcode.get('code128', code, writer=ImageWriter())
+    ean.save(path)
+    return f"/{path}.png"
 
 @app.route("/")
-@app.route("/pos",methods=["GET","POST"])
-def pos():
+def index():
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("SELECT * FROM products")
+    products = c.fetchall()
+    conn.close()
 
-    global sepet
+    html = """
+    <h1>📦 HER-İŞ STOK</h1>
 
-    con=db()
+    <h2>Ürün Ekle</h2>
+    <form method="POST" action="/add">
+        <input name="name" placeholder="Ürün adı" required>
+        <input name="barcode" placeholder="Barkod" required>
+        <input name="stock" type="number" placeholder="Stok" required>
+        <button type="submit">EKLE</button>
+    </form>
 
+    <h2>📋 Ürünler</h2>
+    {% for p in products %}
+        <div style="border:1px solid #ccc; padding:10px; margin:10px;">
+            <b>{{p[1]}}</b><br>
+            Barkod: {{p[2]}}<br>
+            Stok: {{p[3]}}<br>
+            <img src="/static/barcodes/{{p[2]}}.png" width="200"><br><br>
 
-    if request.method=="POST":
+            <a href="/stock/{{p[2]}}/add">➕</a>
+            <a href="/stock/{{p[2]}}/remove">➖</a>
+        </div>
+    {% endfor %}
+    """
+    return render_template_string(html, products=products)
 
-        b=request.form["barkod"]
+@app.route("/add", methods=["POST"])
+def add():
+    name = request.form["name"]
+    code = request.form["barcode"]
+    stock = int(request.form["stock"])
 
+    try:
+        generate_barcode(code)
 
-        u=con.execute(
-        "SELECT * FROM urun WHERE barkod=?",
-        (b,)
-        ).fetchone()
+        conn = sqlite3.connect(DB)
+        c = conn.cursor()
+        c.execute("INSERT INTO products (name, barcode, stock) VALUES (?, ?, ?)",
+                  (name, code, stock))
+        conn.commit()
+        conn.close()
+    except:
+        pass
 
+    return redirect("/")
 
-        if u:
+@app.route("/stock/<code>/add")
+def stock_add(code):
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("UPDATE products SET stock = stock + 1 WHERE barcode=?", (code,))
+    conn.commit()
+    conn.close()
+    return redirect("/")
 
-            sepet.append(
-            (u[2],u[8])
-            )
+@app.route("/stock/<code>/remove")
+def stock_remove(code):
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("UPDATE products SET stock = stock - 1 WHERE barcode=?", (code,))
+    conn.commit()
+    conn.close()
+    return redirect("/")
 
-            con.execute(
-            "INSERT INTO satis VALUES(NULL,?,?)",
-            (u[2],u[8])
-            )
-
-            con.commit()
-
-
-
-    html=CSS+"""
-
-<h1>🌲 ORMAN KASA PRO</h1>
-
-
-<form method="post">
-
-<input autofocus
-name="barkod"
-placeholder="Barkod okut">
-
-<button>EKLE</button>
-
-</form>
-
-
-<h2>SEPET</h2>
-
-"""
-
-
-    toplam=0
-
-
-    for s in sepet:
-
-        html+=f"""
-
-<div class="card">
-
-{s[0]} - {s[1]} TL
-
-</div>
-
-"""
-
-        toplam+=s[1]
-
-
-    html+=f"""
-
-<h1>TOPLAM {toplam} TL</h1>
-
-"""
-
-
-    con.close()
-
-    return html
+if __name__ == "__main__":
+    init_db()
+    app.run(debug=True, host="0.0.0.0", port=5000)
