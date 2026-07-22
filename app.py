@@ -23,31 +23,27 @@ fiyat REAL
 )
 """)
 
-c.execute("""
-CREATE TABLE IF NOT EXISTS satis(
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-urun TEXT,
-adet INTEGER,
-toplam REAL
-)
-""")
+# 🔥 GEÇİCİ SEPET
+sepet = []
 
-# 🔥 OTOMATİK BARKOD
+# 🔥 BARKOD
 def barkod_uret():
     return str(random.randint(100000000000,999999999999))
 
-# 🔥 FİŞ YAZDIR
-def fis_yazdir(urun, adet, toplam):
+# 🔥 FİŞ
+def fis_yazdir():
     try:
-        p = Usb(0x04b8, 0x0202)  # USB ID değişebilir
-        p.text("ORMAN KASA PRO\n")
-        p.text("------------------\n")
-        p.text(f"{urun} x{adet}\n")
+        p = Usb(0x04b8, 0x0202)
+        p.text("=== ORMAN KASA PRO ===\n")
+        toplam = 0
+        for u in sepet:
+            p.text(f"{u['ad']} x{u['adet']} = {u['toplam']} TL\n")
+            toplam += u["toplam"]
+        p.text("----------------------\n")
         p.text(f"TOPLAM: {toplam} TL\n")
-        p.text("------------------\n")
         p.cut()
     except:
-        print("Yazıcı bağlı değil")
+        print("Yazıcı yok")
 
 # 🔐 GİRİŞ
 @app.route("/", methods=["GET","POST"])
@@ -57,29 +53,12 @@ def login():
             session["login"] = True
             return redirect("/pos")
     return '''
-    <h2>Giriş</h2>
+    <h2>🔐 ORMAN KASA GİRİŞ</h2>
     <form method="post">
     Şifre: <input type="password" name="sifre">
     <button>Giriş</button>
     </form>
     '''
-
-# 🧠 ADMIN PANEL
-@app.route("/admin")
-def admin():
-    if "login" not in session:
-        return redirect("/")
-    urunler = c.execute("SELECT * FROM urun").fetchall()
-    return render_template_string("""
-    <h2>Admin Panel</h2>
-    <a href="/pos">Kasaya dön</a>
-    <table border=1>
-    <tr><th>Ad</th><th>Marka</th><th>Barkod</th><th>Stok</th></tr>
-    {% for u in urunler %}
-    <tr><td>{{u[2]}}</td><td>{{u[3]}}</td><td>{{u[1]}}</td><td>{{u[7]}}</td></tr>
-    {% endfor %}
-    </table>
-    """, urunler=urunler)
 
 # 🛒 KASA
 @app.route("/pos", methods=["GET","POST"])
@@ -87,7 +66,7 @@ def pos():
     if "login" not in session:
         return redirect("/")
 
-    sonuc = ""
+    global sepet
 
     if request.method == "POST":
         barkod = request.form["barkod"]
@@ -97,61 +76,87 @@ def pos():
 
         if urun:
             toplam = adet * urun[8]
-            sonuc = f"{urun[2]} - {toplam} TL"
 
-            c.execute("INSERT INTO satis (urun,adet,toplam) VALUES (?,?,?)",
-                      (urun[2], adet, toplam))
-            db.commit()
+            sepet.append({
+                "ad": urun[2],
+                "marka": urun[3],
+                "ebat": urun[4],
+                "yuzey": urun[5],
+                "renk": urun[6],
+                "adet": adet,
+                "toplam": toplam
+            })
 
-            fis_yazdir(urun[2], adet, toplam)
+    toplam_genel = sum([u["toplam"] for u in sepet])
 
     return render_template_string("""
-    <html>
-    <head>
-    <style>
-    body{background:#020617;color:white;font-family:Arial}
-    input,select,button{padding:10px;margin:5px;font-size:18px}
-    .box{background:#111827;padding:20px;border-radius:10px}
-    </style>
-    </head>
+<html>
+<head>
+<style>
+body{background:#020617;color:white;font-family:Arial}
+.grid{display:grid;grid-template-columns:2fr 1fr}
+.box{background:#111827;padding:20px;border-radius:10px;margin:10px}
+input,button,select{padding:12px;font-size:18px;margin:5px;width:90%}
+.big{font-size:28px}
+</style>
+</head>
 
-    <body>
+<body>
 
-    <h1>🔥 ORMAN KASA PRO</h1>
+<h1>🌲 ORMAN KASA PRO</h1>
 
-    <a href="/admin">Admin</a>
+<div class="grid">
 
-    <div class="box">
-    <h2>Satış</h2>
-    <form method="post">
-    Barkod: <input id="barkod" name="barkod">
-    Adet: <input name="adet" value="1">
-    <button>Sat</button>
-    </form>
+<div class="box">
+<h2>Satış</h2>
 
-    <button onclick="kamera()">📷 Kamera</button>
-    <div id="kamera"></div>
+<form method="post">
+<input id="barkod" name="barkod" placeholder="Barkod">
+<input name="adet" value="1">
+<button>➕ Sepete Ekle</button>
+</form>
 
-    <h3>{{sonuc}}</h3>
-    </div>
+<button onclick="kamera()">📷 Kamera</button>
+<div id="kamera"></div>
 
-    <div class="box">
-    <h2>Ürün Ekle</h2>
-    <form action="/ekle" method="post">
-    Ad: <input name="ad">
-    Marka: <input name="marka">
-    Ebat: <input name="ebat">
-    Yüzey:
-    <select name="yuzey">
-    <option>HG</option>
-    <option>MAT</option>
-    </select>
-    Renk: <input name="renk">
-    Stok: <input name="adet">
-    Fiyat: <input name="fiyat">
-    <button>Ekle</button>
-    </form>
-    </div>
+<h2>Ürün Ekle</h2>
+<form action="/ekle" method="post">
+<input name="ad" placeholder="Ad">
+<input name="marka" placeholder="Marka">
+<input name="ebat" placeholder="Ebat">
+<select name="yuzey">
+<option>HG</option>
+<option>MAT</option>
+</select>
+<input name="renk" placeholder="Renk">
+<input name="adet" placeholder="Stok">
+<input name="fiyat" placeholder="Fiyat">
+<button>Kaydet</button>
+</form>
+
+</div>
+
+<div class="box">
+<h2>🧾 Fiş</h2>
+
+{% for u in sepet %}
+<div>
+<b>{{u.ad}}</b><br>
+{{u.marka}} | {{u.ebat}} | {{u.yuzey}} | {{u.renk}}<br>
+{{u.adet}} x = {{u.toplam}} TL
+<hr>
+</div>
+{% endfor %}
+
+<h1 class="big">TOPLAM: {{toplam}} TL</h1>
+
+<form action="/odeme">
+<button class="big">💳 ÖDE</button>
+</form>
+
+</div>
+
+</div>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
@@ -164,11 +169,19 @@ function kamera(){
 }
 </script>
 
-    </body>
-    </html>
-    """, sonuc=sonuc)
+</body>
+</html>
+""", sepet=sepet, toplam=toplam_genel)
 
-# ➕ ÜRÜN EKLE
+# 💳 ÖDEME
+@app.route("/odeme")
+def odeme():
+    global sepet
+    fis_yazdir()
+    sepet = []
+    return redirect("/pos")
+
+# ➕ EKLE
 @app.route("/ekle", methods=["POST"])
 def ekle():
     barkod = barkod_uret()
@@ -186,14 +199,7 @@ def ekle():
         request.form["adet"],
         request.form["fiyat"]
     ))
-
     db.commit()
     return redirect("/pos")
-
-# 📊 RAPOR
-@app.route("/rapor")
-def rapor():
-    data = c.execute("SELECT urun, SUM(toplam) FROM satis GROUP BY urun").fetchall()
-    return str(data)
 
 app.run(debug=True)
