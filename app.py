@@ -19,12 +19,13 @@ with db() as conn:
         ebat TEXT,
         renk TEXT,
         yuzey TEXT,
+        sinif TEXT,
         adet INTEGER,
         fiyat REAL
     )
     """)
 
-# 🔥 KASA
+# 🧾 KASA
 @app.route("/", methods=["GET","POST"])
 def pos():
     if "sepet" not in session:
@@ -42,7 +43,7 @@ def pos():
                 sepet = session["sepet"]
                 sepet.append({
                     "ad": urun[2],
-                    "fiyat": urun[8]
+                    "fiyat": urun[9]
                 })
                 session["sepet"] = sepet
 
@@ -96,7 +97,7 @@ def fis():
 
     return f"<pre>{text}</pre><script>window.print()</script>"
 
-# 📦 TÜM ÜRÜNLER + BARKOD GÖSTER
+# 📦 ÜRÜNLER + BARKOD GÖRSEL
 @app.route("/liste")
 def liste():
     with db() as conn:
@@ -110,12 +111,16 @@ def liste():
         html += f"""
         <div style='border:1px solid #ccc;padding:10px;margin:10px'>
         <b>{i[2]}</b><br>
-        Barkod: <b>{i[1]}</b><br>
-        Cins: {i[3]}<br>
-        Ebat: {i[4]}<br>
-        Renk: {i[5]}<br>
-        Yüzey: {i[6]}<br>
-        Fiyat: {i[8]} TL
+        Barkod: {i[1]}<br>
+
+        <img src='https://barcode.tec-it.com/barcode.ashx?data={i[1]}&code=EAN13&dpi=96'>
+
+        <br>Cins: {i[3]}
+        <br>Ebat: {i[4]}
+        <br>Renk: {i[5]}
+        <br>Yüzey: {i[6]}
+        <br><b>Sınıf: {i[7]}</b>
+        <br>Fiyat: {i[9]} TL
         </div>
         """
 
@@ -127,7 +132,6 @@ def liste():
 def ekle():
     if request.method == "POST":
 
-        # 🔥 GERÇEK OTOMATİK BARKOD
         barkod = "20" + str(random.randint(100000000,999999999))
 
         data = (
@@ -137,19 +141,20 @@ def ekle():
             request.form["ebat"],
             request.form["renk"],
             request.form["yuzey"],
+            request.form["sinif"],
             request.form["adet"],
             request.form["fiyat"]
         )
 
         with db() as conn:
             c = conn.cursor()
-            c.execute("INSERT INTO urun VALUES (NULL,?,?,?,?,?,?,?,?)", data)
+            c.execute("INSERT INTO urun VALUES (NULL,?,?,?,?,?,?,?,?,?)", data)
 
         return f"""
         <h2>✅ ÜRÜN KAYDEDİLDİ</h2>
         <h1>BARKOD: {barkod}</h1>
-        <a href='/liste'>📦 Ürünleri Gör</a><br>
-        <a href='/'>Kasa</a>
+        <img src='https://barcode.tec-it.com/barcode.ashx?data={barkod}&code=EAN13'>
+        <br><a href='/liste'>📦 Ürünler</a>
         """
 
     return """
@@ -166,8 +171,15 @@ def ekle():
             <option>MAT</option>
         </select><br>
 
+        Sınıf:
+        <select name="sinif">
+            <option>1. Kalite</option>
+            <option>2. Kalite</option>
+        </select><br>
+
         Adet: <input name="adet"><br>
         Fiyat: <input name="fiyat"><br>
+
         <button>Kaydet</button>
     </form>
     """
