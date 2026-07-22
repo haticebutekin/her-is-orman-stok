@@ -28,6 +28,14 @@ conn.commit()
 
 sepet = []
 
+# ✅ BARKOD FONKSİYONU (DIŞARIDA OLACAK!)
+def barkod_resim_olustur(kod):
+    if not os.path.exists("static/barcodes"):
+        os.makedirs("static/barcodes")
+
+    CODE128 = barcode.get_barcode_class('code128')
+    barkod_obj = CODE128(kod, writer=ImageWriter())
+    barkod_obj.save(f"static/barcodes/{kod}")
 
 # LOGIN
 @app.route("/", methods=["GET","POST"])
@@ -36,14 +44,6 @@ def login():
         if request.form["k"]=="admin" and request.form["s"]=="1234":
             return redirect("/pos")
 
-    def barkod_resim_olustur(kod):
-        if not os.path.exists("static/barcodes"):
-            os.makedirs("static/barcodes")
-
-        CODE128 = barcode.get_barcode_class('code128')
-        barkod = CODE128(kod, writer=ImageWriter())
-        barkod.save(f"static/barcodes/{kod}")
-    
     return """
     <h2>🌲 ORMAN KASA PRO</h2>
     <form method="post">
@@ -53,7 +53,6 @@ def login():
     </form>
     """
 
-
 # POS
 @app.route("/pos", methods=["GET","POST"])
 def pos():
@@ -61,6 +60,8 @@ def pos():
 
     if request.method=="POST":
         barkod = request.form["barkod"]
+
+        # ✅ barkod resmi oluştur
         barkod_resim_olustur(barkod)
 
         urun = c.execute(
@@ -187,19 +188,23 @@ document.forms[0].submit();
 </html>
 """
 
-
 # ÜRÜN EKLE
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
 
     if request.method=="POST":
 
+        barkod = request.form["b"]
+
+        # ✅ burada da barkod oluştur
+        barkod_resim_olustur(barkod)
+
         c.execute("""
         INSERT INTO urun
         (barkod,ad,cins,ebat,sinif,renk,yuzey,adet,fiyat)
         VALUES (?,?,?,?,?,?,?,?,?)
         """,(
-        request.form["b"],
+        barkod,
         request.form["a"],
         request.form["c"],
         request.form["e"],
@@ -241,7 +246,6 @@ def ekle():
 
     </body>
     """
-
 
 # RUN
 if __name__ == "__main__":
