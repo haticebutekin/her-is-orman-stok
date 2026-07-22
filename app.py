@@ -37,12 +37,12 @@ def login():
             return redirect("/pos")
 
     def barkod_resim_olustur(kod):
-    if not os.path.exists("static/barcodes"):
-        os.makedirs("static/barcodes")
+        if not os.path.exists("static/barcodes"):
+            os.makedirs("static/barcodes")
 
-    CODE128 = barcode.get_barcode_class('code128')
-    barkod = CODE128(kod, writer=ImageWriter())
-    barkod.save(f"static/barcodes/{kod}")
+        CODE128 = barcode.get_barcode_class('code128')
+        barkod = CODE128(kod, writer=ImageWriter())
+        barkod.save(f"static/barcodes/{kod}")
     
     return """
     <h2>🌲 ORMAN KASA PRO</h2>
