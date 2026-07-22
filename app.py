@@ -1,95 +1,101 @@
-from flask import Flask, request, redirect, render_template_string
-import psycopg2, sqlite3, os
+from flask import Flask, request, redirect, render_template_string, session, send_file
+import sqlite3, os, random
+from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
+app.secret_key = "123"
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-# 🔥 AKILLI DATABASE SEÇİMİ
 def db():
-    if DATABASE_URL:
-        return psycopg2.connect(DATABASE_URL)
-    else:
-        return sqlite3.connect("db.db")
+    return sqlite3.connect("db.db")
 
 # TABLO
-def tablo():
-    with db() as conn:
-        c = conn.cursor()
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS urun(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            barkod TEXT,
-            ad TEXT,
-            cins TEXT,
-            ebat TEXT,
-            renk TEXT,
-            adet INTEGER,
-            fiyat REAL
-        )
-        """)
-        conn.commit()
+with db() as conn:
+    c = conn.cursor()
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS urun(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barkod TEXT,
+        ad TEXT,
+        cins TEXT,
+        ebat TEXT,
+        renk TEXT,
+        adet INTEGER,
+        fiyat REAL
+    )
+    """)
 
-tablo()
-
-# KASA
+# 🧾 KASA
 @app.route("/", methods=["GET","POST"])
 def pos():
-    sonuc = None
+    if "sepet" not in session:
+        session["sepet"] = []
+
     if request.method == "POST":
         barkod = request.form["barkod"]
 
         with db() as conn:
             c = conn.cursor()
             c.execute("SELECT * FROM urun WHERE barkod=?", (barkod,))
-            sonuc = c.fetchone()
+            urun = c.fetchone()
+
+            if urun:
+                sepet = session["sepet"]
+                sepet.append({
+                    "ad": urun[2],
+                    "fiyat": urun[7]
+                })
+                session["sepet"] = sepet
+
+    toplam = sum(i["fiyat"] for i in session["sepet"])
 
     return render_template_string("""
-    <h1>🧾 ORMAN KASA PRO</h1>
+    <h1>🧾 KASA EKRANI</h1>
 
     <form method="post">
         Barkod: <input name="barkod" id="barkod">
-        <button>Ara</button>
+        <button>Ekle</button>
     </form>
 
-    <button onclick="kamera()">📷 Kamera ile oku</button>
+    <button onclick="kamera()">📷 Kamera</button>
     <div id="reader"></div>
 
-    {% if sonuc %}
-        <h2>ÜRÜN</h2>
-        Ad: {{sonuc[2]}}<br>
-        Cins: {{sonuc[3]}}<br>
-        Ebat: {{sonuc[4]}}<br>
-        Renk: {{sonuc[5]}}<br>
-        Adet: {{sonuc[6]}}<br>
-        Fiyat: {{sonuc[7]}} ₺
-    {% endif %}
+    <h2>Sepet</h2>
+    {% for i in sepet %}
+        {{i.ad}} - {{i.fiyat}} ₺<br>
+    {% endfor %}
 
-    <hr>
+    <h3>TOPLAM: {{toplam}} ₺</h3>
+
+    <a href="/temizle">🧹 Sepeti Temizle</a>
+    <br><br>
     <a href="/ekle">➕ Ürün Ekle</a>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script>
     function kamera(){
-        let html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start(
-            { facingMode: "environment" },
-            { fps: 10 },
-            (text) => {
-                document.getElementById("barkod").value = text;
-                html5QrCode.stop();
-            }
-        );
+        let q = new Html5Qrcode("reader");
+        q.start({ facingMode: "environment" }, { fps: 10 }, (text)=>{
+            document.getElementById("barkod").value = text;
+            q.stop();
+        });
     }
     </script>
-    """, sonuc=sonuc)
+    """, sepet=session["sepet"], toplam=toplam)
 
-# ÜRÜN EKLE
+# 🧹 SEPET TEMİZLE
+@app.route("/temizle")
+def temizle():
+    session["sepet"] = []
+    return redirect("/")
+
+# ➕ ÜRÜN EKLE (OTOMATİK BARKOD)
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
     if request.method == "POST":
+        barkod = str(random.randint(1000000000,9999999999))
+
         data = (
-            request.form["barkod"],
+            barkod,
             request.form["ad"],
             request.form["cins"],
             request.form["ebat"],
@@ -100,15 +106,18 @@ def ekle():
 
         with db() as conn:
             c = conn.cursor()
-            c.execute("INSERT INTO urun (barkod,ad,cins,ebat,renk,adet,fiyat) VALUES (?,?,?,?,?,?,?)", data)
-            conn.commit()
+            c.execute("INSERT INTO urun VALUES (NULL,?,?,?,?,?,?,?)", data)
 
-        return redirect("/")
+        return f"""
+        KAYDEDİLDİ ✅ <br>
+        Barkod: {barkod} <br>
+        <a href='/etiket/{barkod}'>📄 Etiket Yazdır</a><br>
+        <a href='/'>Kasa</a>
+        """
 
     return """
     <h1>Ürün Ekle</h1>
     <form method="post">
-        Barkod: <input name="barkod"><br>
         Ad: <input name="ad"><br>
         Cins: <input name="cins"><br>
         Ebat: <input name="ebat"><br>
@@ -118,6 +127,18 @@ def ekle():
         <button>Kaydet</button>
     </form>
     """
+
+# 🏷️ ETİKET PDF
+@app.route("/etiket/<barkod>")
+def etiket(barkod):
+    file = "etiket.pdf"
+    c = canvas.Canvas(file)
+
+    c.drawString(100,750,"URUN BARKOD")
+    c.drawString(100,700,barkod)
+
+    c.save()
+    return send_file(file, as_attachment=True)
 
 if __name__ == "__main__":
     app.run()
