@@ -1,5 +1,8 @@
 from flask import Flask, request, redirect
 import sqlite3
+import barcode
+from barcode.writer import ImageWriter
+import os
 
 app = Flask(__name__)
 
@@ -33,6 +36,14 @@ def login():
         if request.form["k"]=="admin" and request.form["s"]=="1234":
             return redirect("/pos")
 
+    def barkod_resim_olustur(kod):
+    if not os.path.exists("static/barcodes"):
+        os.makedirs("static/barcodes")
+
+    CODE128 = barcode.get_barcode_class('code128')
+    barkod = CODE128(kod, writer=ImageWriter())
+    barkod.save(f"static/barcodes/{kod}")
+    
     return """
     <h2>🌲 ORMAN KASA PRO</h2>
     <form method="post">
@@ -50,6 +61,7 @@ def pos():
 
     if request.method=="POST":
         barkod = request.form["barkod"]
+        barkod_resim_olustur(barkod)
 
         urun = c.execute(
         "SELECT * FROM urun WHERE barkod=?",
