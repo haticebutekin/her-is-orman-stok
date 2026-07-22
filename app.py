@@ -69,7 +69,7 @@ def pos():
 <html>
 <head>
 <meta name=viewport content="width=device-width, initial-scale=1">
-<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https#unpkg.com/html5-qrcode"></script>
 <style>
 body{background:#020617;color:white;font-family:Arial;text-align:center}
 .box{background:#111;padding:15px;margin:10px;border-radius:15px}
@@ -159,3 +159,8 @@ def rapor():
     return html
 
 app.run()
+
+import os
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
