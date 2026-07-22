@@ -327,7 +327,7 @@ placeholder="Barkod okut">
 
 function kamera(){
 
-
+html += """
 let scanner =
 new Html5QrcodeScanner(
 "reader",
