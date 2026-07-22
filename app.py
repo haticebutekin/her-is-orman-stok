@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, render_template_string, session, Response
+from flask import Flask, request, redirect, render_template_string, session
 import sqlite3, random
 
 app = Flask(__name__)
@@ -24,7 +24,7 @@ with db() as conn:
     )
     """)
 
-# 🧾 KASA
+# 🔥 KASA
 @app.route("/", methods=["GET","POST"])
 def pos():
     if "sepet" not in session:
@@ -66,8 +66,9 @@ def pos():
 
     <h3>TOPLAM: {{toplam}} ₺</h3>
 
-    <a href="/fis">🧾 Fiş Yazdır</a><br>
-    <a href="/temizle">🧹 Temizle</a><br><br>
+    <a href="/fis">🧾 Fiş</a> |
+    <a href="/liste">📦 Ürünler</a> |
+    <a href="/temizle">🧹 Temizle</a> |
     <a href="/ekle">➕ Ürün Ekle</a>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -82,36 +83,52 @@ def pos():
     </script>
     """, sepet=session["sepet"], toplam=toplam)
 
-# 🧾 FİŞ (PRINT)
+# 🧾 FİŞ
 @app.route("/fis")
 def fis():
     sepet = session.get("sepet", [])
     toplam = sum(i["fiyat"] for i in sepet)
 
-    fis_text = "ORMAN KASA PRO\n\n"
-
+    text = "ORMAN KASA PRO\n\n"
     for i in sepet:
-        fis_text += f"{i['ad']} - {i['fiyat']} TL\n"
+        text += f"{i['ad']} - {i['fiyat']} TL\n"
+    text += f"\nTOPLAM: {toplam} TL"
 
-    fis_text += f"\nTOPLAM: {toplam} TL\n"
-    fis_text += "TESK EDERIZ"
+    return f"<pre>{text}</pre><script>window.print()</script>"
 
-    return Response(
-        f"<pre>{fis_text}</pre><script>window.print()</script>",
-        mimetype="text/html"
-    )
+# 📦 TÜM ÜRÜNLER + BARKOD GÖSTER
+@app.route("/liste")
+def liste():
+    with db() as conn:
+        c = conn.cursor()
+        c.execute("SELECT * FROM urun")
+        data = c.fetchall()
 
-# 🧹 TEMİZLE
-@app.route("/temizle")
-def temizle():
-    session["sepet"] = []
-    return redirect("/")
+    html = "<h1>ÜRÜNLER</h1>"
+
+    for i in data:
+        html += f"""
+        <div style='border:1px solid #ccc;padding:10px;margin:10px'>
+        <b>{i[2]}</b><br>
+        Barkod: <b>{i[1]}</b><br>
+        Cins: {i[3]}<br>
+        Ebat: {i[4]}<br>
+        Renk: {i[5]}<br>
+        Yüzey: {i[6]}<br>
+        Fiyat: {i[8]} TL
+        </div>
+        """
+
+    html += "<a href='/'>Kasa</a>"
+    return html
 
 # ➕ ÜRÜN EKLE
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
     if request.method == "POST":
-        barkod = str(random.randint(1000000000,9999999999))
+
+        # 🔥 GERÇEK OTOMATİK BARKOD
+        barkod = "20" + str(random.randint(100000000,999999999))
 
         data = (
             barkod,
@@ -119,7 +136,7 @@ def ekle():
             request.form["cins"],
             request.form["ebat"],
             request.form["renk"],
-            request.form["yuzey"],   # HG / MAT
+            request.form["yuzey"],
             request.form["adet"],
             request.form["fiyat"]
         )
@@ -129,9 +146,9 @@ def ekle():
             c.execute("INSERT INTO urun VALUES (NULL,?,?,?,?,?,?,?,?)", data)
 
         return f"""
-        ✅ KAYDEDİLDİ <br>
-        Barkod: {barkod} <br>
-        Yüzey: {request.form['yuzey']} <br>
+        <h2>✅ ÜRÜN KAYDEDİLDİ</h2>
+        <h1>BARKOD: {barkod}</h1>
+        <a href='/liste'>📦 Ürünleri Gör</a><br>
         <a href='/'>Kasa</a>
         """
 
@@ -154,6 +171,12 @@ def ekle():
         <button>Kaydet</button>
     </form>
     """
+
+# 🧹 TEMİZLE
+@app.route("/temizle")
+def temizle():
+    session["sepet"] = []
+    return redirect("/")
 
 if __name__ == "__main__":
     app.run()
