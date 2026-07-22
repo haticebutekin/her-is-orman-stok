@@ -1,42 +1,48 @@
 from flask import Flask, request, redirect, render_template_string
-import psycopg2
-import os
+import psycopg2, sqlite3, os
 
 app = Flask(__name__)
 
-# PostgreSQL bağlantı (Render otomatik verecek)
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
+# 🔥 AKILLI DATABASE SEÇİMİ
 def db():
-    return psycopg2.connect(DATABASE_URL)
+    if DATABASE_URL:
+        return psycopg2.connect(DATABASE_URL)
+    else:
+        return sqlite3.connect("db.db")
 
-# TABLO OLUŞTUR
-with db() as conn:
-    with conn.cursor() as c:
+# TABLO
+def tablo():
+    with db() as conn:
+        c = conn.cursor()
         c.execute("""
         CREATE TABLE IF NOT EXISTS urun(
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             barkod TEXT,
             ad TEXT,
             cins TEXT,
             ebat TEXT,
             renk TEXT,
             adet INTEGER,
-            fiyat FLOAT
+            fiyat REAL
         )
         """)
+        conn.commit()
 
-# ANA SAYFA (KASA)
-@app.route("/", methods=["GET", "POST"])
+tablo()
+
+# KASA
+@app.route("/", methods=["GET","POST"])
 def pos():
     sonuc = None
     if request.method == "POST":
         barkod = request.form["barkod"]
 
         with db() as conn:
-            with conn.cursor() as c:
-                c.execute("SELECT * FROM urun WHERE barkod=%s", (barkod,))
-                sonuc = c.fetchone()
+            c = conn.cursor()
+            c.execute("SELECT * FROM urun WHERE barkod=?", (barkod,))
+            sonuc = c.fetchone()
 
     return render_template_string("""
     <h1>🧾 ORMAN KASA PRO</h1>
@@ -60,7 +66,6 @@ def pos():
     {% endif %}
 
     <hr>
-
     <a href="/ekle">➕ Ürün Ekle</a>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -77,7 +82,7 @@ def pos():
         );
     }
     </script>
-    """ , sonuc=sonuc)
+    """, sonuc=sonuc)
 
 # ÜRÜN EKLE
 @app.route("/ekle", methods=["GET","POST"])
@@ -94,11 +99,9 @@ def ekle():
         )
 
         with db() as conn:
-            with conn.cursor() as c:
-                c.execute("""
-                INSERT INTO urun (barkod,ad,cins,ebat,renk,adet,fiyat)
-                VALUES (%s,%s,%s,%s,%s,%s,%s)
-                """, data)
+            c = conn.cursor()
+            c.execute("INSERT INTO urun (barkod,ad,cins,ebat,renk,adet,fiyat) VALUES (?,?,?,?,?,?,?)", data)
+            conn.commit()
 
         return redirect("/")
 
