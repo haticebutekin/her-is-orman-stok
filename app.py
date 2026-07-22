@@ -1,8 +1,6 @@
 from flask import Flask, render_template_string, request, redirect, send_from_directory
 import sqlite3
 import os
-import barcode
-from barcode.writer import ImageWriter
 
 app = Flask(__name__)
 
@@ -11,6 +9,7 @@ BARCODE_FOLDER = "barcodes"
 
 os.makedirs(BARCODE_FOLDER, exist_ok=True)
 
+# ✅ SADECE 1 KEZ ÇALIŞIR
 def init_db():
     conn = sqlite3.connect(DB)
     c = conn.cursor()
@@ -25,11 +24,8 @@ def init_db():
     conn.commit()
     conn.close()
 
-def generate_barcode(code):
-    path = os.path.join(BARCODE_FOLDER, code)
-    ean = barcode.get('code128', code, writer=ImageWriter())
-    ean.save(path)
-    return f"/barcodes/{code}.png"
+# 🔥 BURASI KRİTİK (IMPORT OLURKEN ÇALIŞIR)
+init_db()
 
 @app.route('/barcodes/<path:filename>')
 def serve_barcode(filename):
@@ -43,8 +39,8 @@ def index():
     products = c.fetchall()
     conn.close()
 
-    html = """
-    <h1>📦 HER-İŞ STOK</h1>
+    return render_template_string("""
+    <h1>📦 STOK</h1>
 
     <a href="/scan"><button>📷 Barkod Oku</button></a>
 
@@ -52,24 +48,21 @@ def index():
     <form method="POST" action="/add">
         <input name="name" placeholder="Ürün adı" required>
         <input name="barcode" placeholder="Barkod" required>
-        <input name="stock" type="number" placeholder="Stok" required>
+        <input name="stock" type="number" required>
         <button type="submit">EKLE</button>
     </form>
 
-    <h2>📋 Ürünler</h2>
+    <h2>Ürünler</h2>
     {% for p in products %}
-        <div style="border:1px solid #ccc; padding:10px; margin:10px;">
+        <div style="border:1px solid #ccc; margin:10px; padding:10px;">
             <b>{{p[1]}}</b><br>
-            Barkod: {{p[2]}}<br>
+            Kod: {{p[2]}}<br>
             Stok: {{p[3]}}<br>
-            <img src="/barcodes/{{p[2]}}.png" width="200"><br><br>
-
             <a href="/stock/{{p[2]}}/add">➕</a>
             <a href="/stock/{{p[2]}}/remove">➖</a>
         </div>
     {% endfor %}
-    """
-    return render_template_string(html, products=products)
+    """, products=products)
 
 @app.route("/add", methods=["POST"])
 def add():
@@ -77,17 +70,12 @@ def add():
     code = request.form["barcode"]
     stock = int(request.form["stock"])
 
-    try:
-        generate_barcode(code)
-
-        conn = sqlite3.connect(DB)
-        c = conn.cursor()
-        c.execute("INSERT INTO products (name, barcode, stock) VALUES (?, ?, ?)",
-                  (name, code, stock))
-        conn.commit()
-        conn.close()
-    except:
-        pass
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("INSERT OR IGNORE INTO products (name, barcode, stock) VALUES (?, ?, ?)",
+              (name, code, stock))
+    conn.commit()
+    conn.close()
 
     return redirect("/")
 
@@ -111,28 +99,20 @@ def stock_remove(code):
 
 @app.route("/scan")
 def scan():
-    html = """
-    <h1>📷 Barkod Okut</h1>
-
-    <video id="video" width="300" height="200" autoplay></video>
-    <p id="result">Kod: -</p>
+    return """
+    <h2>📷 Barkod Oku</h2>
+    <video id="video" width="300" autoplay></video>
 
     <script src="https://unpkg.com/@zxing/library@latest"></script>
-
     <script>
     const codeReader = new ZXing.BrowserBarcodeReader()
-    const videoElement = document.getElementById('video')
-
-    codeReader.decodeFromVideoDevice(null, videoElement, (result, err) => {
+    codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
         if (result) {
-            let code = result.text
-            document.getElementById('result').innerText = "Kod: " + code
-            window.location.href = "/scan-result/" + code
+            window.location.href = "/scan-result/" + result.text
         }
     })
     </script>
     """
-    return html
 
 @app.route("/scan-result/<code>")
 def scan_result(code):
@@ -142,13 +122,4 @@ def scan_result(code):
     conn.commit()
     conn.close()
 
-    return f"<h2>{code} okutuldu ✔️ Stok düşürüldü</h2><a href='/'>Geri dön</a>"
-
-app = Flask(__name__)
-
-DB = "stok.db"
-BARCODE_FOLDER = "barcodes"
-
-os.makedirs(BARCODE_FOLDER, exist_ok=True)
-
-init_db()   # 🔥 BURAYA EKLE
+    return f"{code} okutuldu ✔️ <a href='/'>Geri</a>"
