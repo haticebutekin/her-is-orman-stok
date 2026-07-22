@@ -2,3 +2,5 @@ Flask
 gunicorn
 python-barcode
 pillow
+psycopg2-binary
+python-escpos
