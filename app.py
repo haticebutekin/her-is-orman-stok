@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, request, redirect, send_file
+from flask import Flask, render_template_string, request, send_file
 import sqlite3
 import pandas as pd
 import barcode
@@ -7,7 +7,6 @@ import os
 
 app = Flask(__name__)
 
-# klasör
 if not os.path.exists("barcodes"):
     os.makedirs("barcodes")
 
@@ -18,7 +17,7 @@ def init_db():
     c.execute("""
     CREATE TABLE IF NOT EXISTS stok (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        barkod TEXT,
+        barkod TEXT UNIQUE,
         cins TEXT,
         ebat TEXT,
         mm TEXT,
@@ -49,6 +48,8 @@ HTML = """
 body { font-family: Arial; padding:10px; background:#f5f5f5;}
 input,select,button { width:100%; padding:12px; margin:5px 0; font-size:16px;}
 .card { background:white; padding:10px; margin:5px 0; border-radius:8px;}
+.green {background:#28a745;color:white;}
+.red {background:#dc3545;color:white;}
 img { width:100%; }
 </style>
 </head>
@@ -57,18 +58,28 @@ img { width:100%; }
 <h2>📦 Barkod Stok Sistemi</h2>
 
 <form method="POST">
-<input name="barkod" placeholder="Barkod (boş bırak otomatik)">
+<input name="barkod" placeholder="Barkod okut / yaz">
 <input name="cins" placeholder="Malın Cinsi">
 <input name="ebat" placeholder="Ebat">
 <input name="mm" placeholder="MM">
+
 <select name="sinif">
 <option value="">Sınıf</option>
 <option>HG</option>
 <option>MAT</option>
 </select>
+
 <input name="renk" placeholder="Renk">
+
 <input name="adet" type="number" placeholder="Adet">
-<button type="submit">➕ Ekle & Barkod Oluştur</button>
+
+<select name="islem">
+<option value="ekle">Yeni Ürün Ekle</option>
+<option value="artir">Stok Artır (+)</option>
+<option value="azalt">Stok Azalt (-)</option>
+</select>
+
+<button type="submit">✔ İşlem Yap</button>
 </form>
 
 <hr>
@@ -83,13 +94,15 @@ img { width:100%; }
 {{item[2]}} | {{item[3]}} | {{item[4]}}<br>
 Sınıf: {{item[5]}}<br>
 Renk: {{item[6]}}<br>
-Adet: {{item[7]}}<br><br>
 
+{% if item[7] <= 0 %}
+<div class="red">Stok: {{item[7]}}</div>
+{% else %}
+<div class="green">Stok: {{item[7]}}</div>
+{% endif %}
+
+<br>
 <img src="/barcode/{{item[1]}}">
-<a href="/barcode/{{item[1]}}" download>
-<button>🖨️ Etiket İndir</button>
-</a>
-
 </div>
 {% endfor %}
 
@@ -103,22 +116,44 @@ def index():
     c = conn.cursor()
 
     if request.method == "POST":
-
         barkod = request.form["barkod"]
+        adet = int(request.form["adet"] or 0)
+        islem = request.form["islem"]
 
-        if barkod == "":
-            barkod = "URUN" + str(len(c.execute("SELECT * FROM stok").fetchall()) + 1)
+        # varsa getir
+        c.execute("SELECT * FROM stok WHERE barkod=?", (barkod,))
+        urun = c.fetchone()
 
-        barkod_uret(barkod)
+        if islem == "ekle":
+            if barkod == "":
+                barkod = "URUN" + str(len(c.execute("SELECT * FROM stok").fetchall()) + 1)
 
-        c.execute("INSERT INTO stok (barkod,cins,ebat,mm,sinif,renk,adet) VALUES (?,?,?,?,?,?,?)",
-                  (barkod,
-                   request.form["cins"],
-                   request.form["ebat"],
-                   request.form["mm"],
-                   request.form["sinif"],
-                   request.form["renk"],
-                   request.form["adet"]))
+            barkod_uret(barkod)
+
+            c.execute("""
+            INSERT OR IGNORE INTO stok 
+            (barkod,cins,ebat,mm,sinif,renk,adet)
+            VALUES (?,?,?,?,?,?,?)
+            """, (
+                barkod,
+                request.form["cins"],
+                request.form["ebat"],
+                request.form["mm"],
+                request.form["sinif"],
+                request.form["renk"],
+                adet
+            ))
+
+        elif urun:
+            mevcut = urun[7]
+
+            if islem == "artir":
+                yeni = mevcut + adet
+            elif islem == "azalt":
+                yeni = mevcut - adet
+
+            c.execute("UPDATE stok SET adet=? WHERE barkod=?", (yeni, barkod))
+
         conn.commit()
 
     c.execute("SELECT * FROM stok")
