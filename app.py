@@ -1,6 +1,5 @@
-from flask import Flask, request, redirect, render_template_string, session, send_file
-import sqlite3, os, random
-from reportlab.pdfgen import canvas
+from flask import Flask, request, redirect, render_template_string, session
+import sqlite3, random
 
 app = Flask(__name__)
 app.secret_key = "123"
@@ -49,14 +48,14 @@ def pos():
     toplam = sum(i["fiyat"] for i in session["sepet"])
 
     return render_template_string("""
-    <h1>🧾 KASA EKRANI</h1>
+    <h1>🧾 ORMAN KASA PRO</h1>
 
     <form method="post">
         Barkod: <input name="barkod" id="barkod">
         <button>Ekle</button>
     </form>
 
-    <button onclick="kamera()">📷 Kamera</button>
+    <button onclick="kamera()">📷 Kamera ile oku</button>
     <div id="reader"></div>
 
     <h2>Sepet</h2>
@@ -111,7 +110,6 @@ def ekle():
         return f"""
         KAYDEDİLDİ ✅ <br>
         Barkod: {barkod} <br>
-        <a href='/etiket/{barkod}'>📄 Etiket Yazdır</a><br>
         <a href='/'>Kasa</a>
         """
 
@@ -127,18 +125,6 @@ def ekle():
         <button>Kaydet</button>
     </form>
     """
-
-# 🏷️ ETİKET PDF
-@app.route("/etiket/<barkod>")
-def etiket(barkod):
-    file = "etiket.pdf"
-    c = canvas.Canvas(file)
-
-    c.drawString(100,750,"URUN BARKOD")
-    c.drawString(100,700,barkod)
-
-    c.save()
-    return send_file(file, as_attachment=True)
 
 if __name__ == "__main__":
     app.run()
