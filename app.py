@@ -3,11 +3,16 @@ import sqlite3
 import os
 import barcode
 from barcode.writer import ImageWriter
+from flask import send_from_directory
+
+@app.route('/barcodes/<path:filename>')
+def serve_barcode(filename):
+    return send_from_directory(BARCODE_FOLDER, filename)
 
 app = Flask(__name__)
 
 DB = "stok.db"
-BARCODE_FOLDER = "static/barcodes"
+BARCODE_FOLDER = "barcodes"
 
 os.makedirs(BARCODE_FOLDER, exist_ok=True)
 
@@ -56,7 +61,7 @@ def index():
             <b>{{p[1]}}</b><br>
             Barkod: {{p[2]}}<br>
             Stok: {{p[3]}}<br>
-            <img src="/static/barcodes/{{p[2]}}.png" width="200"><br><br>
+            <img src="/barcodes/{{p[2]}}.png" width="200"><br><br>
 
             <a href="/stock/{{p[2]}}/add">➕</a>
             <a href="/stock/{{p[2]}}/remove">➖</a>
