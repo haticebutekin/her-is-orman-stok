@@ -1,6 +1,6 @@
 import sqlite3
 import random
-from flask import Flask, request, session, redirect
+from flask import Flask, request, redirect, session
 
 app = Flask(__name__)
 app.secret_key = "HERIS2026"
@@ -8,13 +8,14 @@ app.secret_key = "HERIS2026"
 DB = "stok.db"
 
 
-def baglan():
+def db():
     return sqlite3.connect(DB)
 
 
-def kurulum():
-    con = baglan()
-    c = con.cursor()
+def setup():
+
+    con=db()
+    c=con.cursor()
 
     c.execute("""
     CREATE TABLE IF NOT EXISTS urun(
@@ -22,12 +23,9 @@ def kurulum():
         barkod TEXT,
         ad TEXT,
         cins TEXT,
-        marka TEXT,
         ebat TEXT,
         tip TEXT,
         sinif TEXT,
-        renk TEXT,
-        yuzey TEXT,
         stok INTEGER,
         fiyat REAL
     )
@@ -45,14 +43,14 @@ def kurulum():
     con.close()
 
 
-kurulum()
+setup()
 
 
-def yeni_barkod():
+def barkod():
     return str(random.randint(1000000000000,9999999999999))
 
 
-style = """
+CSS="""
 <style>
 body{
 background:#07111f;
@@ -69,9 +67,9 @@ width:220px;
 
 button{
 padding:12px;
-background:#16a34a;
-color:white;
+background:#22c55e;
 border:0;
+color:white;
 border-radius:8px;
 }
 
@@ -79,12 +77,9 @@ border-radius:8px;
 background:#111827;
 padding:15px;
 margin:10px;
-border-radius:12px;
+border-radius:10px;
 }
 
-h1{
-color:#22c55e;
-}
 </style>
 """
 
@@ -95,17 +90,19 @@ def admin():
     if request.method=="POST":
 
         if request.form["sifre"]=="1234":
+
             session["admin"]=True
             return redirect("/panel")
 
 
-    return style+"""
-    <h1>HER-İŞ STOK PRO</h1>
-    <h3>Admin Giriş</h3>
+    return CSS+"""
+    <h1>🌲 HER-İŞ STOK PRO</h1>
 
     <form method="post">
 
-    <input type="password" name="sifre" placeholder="Şifre">
+    <input type="password"
+    name="sifre"
+    placeholder="Şifre">
 
     <button>Giriş</button>
 
@@ -121,25 +118,22 @@ def panel():
         return redirect("/admin")
 
 
-    con=baglan()
+    con=db()
 
 
     if request.method=="POST":
 
         con.execute("""
         INSERT INTO urun
-        VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?,?)
+        VALUES(NULL,?,?,?,?,?,?,?,?)
         """,
         (
-        yeni_barkod(),
+        barkod(),
         request.form["ad"],
         request.form["cins"],
-        request.form["marka"],
         request.form["ebat"],
         request.form["tip"],
         request.form["sinif"],
-        request.form["renk"],
-        request.form["yuzey"],
         request.form["stok"],
         request.form["fiyat"]
         ))
@@ -147,14 +141,15 @@ def panel():
         con.commit()
 
 
+
     urunler=con.execute(
         "SELECT * FROM urun"
     ).fetchall()
 
 
-    html=style+"""
+    html=CSS+"""
 
-<h1>ÜRÜN PANELİ</h1>
+<h1>ÜRÜN EKLE</h1>
 
 
 <form method="post">
@@ -163,42 +158,33 @@ def panel():
 
 <input name="cins" placeholder="Cins">
 
-<input name="marka" placeholder="Marka">
-
 <input name="ebat" placeholder="Ebat mm">
 
-
 <select name="tip">
-
 <option>HG</option>
 <option>MAT</option>
-
 </select>
-
 
 <input name="sinif" placeholder="Sınıf">
 
-<input name="renk" placeholder="Renk">
-
-<input name="yuzey" placeholder="Yüzey">
-
 <input name="stok" placeholder="Stok">
 
-<input name="fiyat" placeholder="Satış fiyat">
+<input name="fiyat" placeholder="Fiyat">
 
 
-<button>Kaydet</button>
+<button>KAYDET</button>
 
 </form>
 
-<h2>Stok Listesi</h2>
+
+<h2>STOK</h2>
 
 """
 
 
     for u in urunler:
 
-        html += f"""
+        html+=f"""
 
 <div class="card">
 
@@ -208,17 +194,15 @@ Barkod: {u[1]}<br>
 
 Cins: {u[3]}<br>
 
-Ebat: {u[5]}<br>
+Ebat: {u[4]}<br>
 
-Tip: {u[6]}<br>
+Tip: {u[5]}<br>
 
-Sınıf: {u[7]}<br>
+Sınıf: {u[6]}<br>
 
-Renk: {u[8]}<br>
+Stok: {u[7]}<br>
 
-Stok: {u[10]}<br>
-
-Fiyat: {u[11]} TL
+Fiyat: {u[8]} TL
 
 </div>
 
@@ -231,7 +215,6 @@ Fiyat: {u[11]} TL
 
 
 
-
 sepet=[]
 
 
@@ -241,58 +224,52 @@ def pos():
 
     global sepet
 
-    con=baglan()
+    con=db()
 
 
     if request.method=="POST":
 
-        barkod=request.form["barkod"]
+        b=request.form["barkod"]
 
 
-        urun=con.execute(
+        u=con.execute(
         "SELECT * FROM urun WHERE barkod=?",
-        (barkod,)
+        (b,)
         ).fetchone()
 
 
-        if urun:
+        if u:
 
             sepet.append(
-            (urun[2],urun[11])
+            (u[2],u[8])
             )
 
             con.execute(
             "INSERT INTO satis VALUES(NULL,?,?)",
-            (urun[2],urun[11])
+            (u[2],u[8])
             )
 
             con.commit()
 
 
 
-    html=style+"""
+    html=CSS+"""
 
 <h1>🌲 ORMAN KASA PRO</h1>
 
 
-<button onclick="kamera()">📷 Kamera Barkod Oku</button>
-
-<div id="reader"></div>
-
-
 <form method="post">
 
-<input id="barkod"
+<input autofocus
 name="barkod"
 placeholder="Barkod okut">
-
 
 <button>EKLE</button>
 
 </form>
 
 
-<h2>Sepet</h2>
+<h2>SEPET</h2>
 
 """
 
@@ -317,37 +294,7 @@ placeholder="Barkod okut">
 
     html+=f"""
 
-<h1>TOPLAM: {toplam} TL</h1>
-
-
-<script src="https://unpkg.com/html5-qrcode"></script>
-
-
-<script>
-
-function kamera(){
-
-html += """
-let scanner =
-new Html5QrcodeScanner(
-"reader",
-{
-fps:10,
-qrbox:250
-});
-
-
-scanner.render(function(text){
-
-document.getElementById("barkod").value=text;
-
-scanner.clear();
-
-});
-
-}
-
-</script>
+<h1>TOPLAM {toplam} TL</h1>
 
 """
 
@@ -355,7 +302,3 @@ scanner.clear();
     con.close()
 
     return html
-
-
-
-# Render burada app.run istemez
