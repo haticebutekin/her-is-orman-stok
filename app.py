@@ -41,7 +41,8 @@ def login():
             return redirect("/pos")
     return """<h2>Giriş</h2>
     <form method=post>
-    <input name=k><input name=s type=password>
+    <input name=k placeholder="Kullanıcı">
+    <input name=s type=password placeholder="Şifre">
     <button>GİR</button></form>"""
 
 # KASA
@@ -51,17 +52,16 @@ def pos():
         return redirect("/")
 
     if request.method=="POST":
-        barkod=request.form["barkod"]
-        c.execute("SELECT * FROM urun WHERE barkod=?",(barkod,))
+        barkod_kod=request.form["barkod"]
+        c.execute("SELECT * FROM urun WHERE barkod=?",(barkod_kod,))
         u=c.fetchone()
 
-        if u:
-            if u[8]>0:
-                session["sepet"].append(u)
-                c.execute("UPDATE urun SET adet=adet-1 WHERE barkod=?",(barkod,))
-                c.execute("INSERT INTO satis (urun,fiyat,tarih) VALUES (?,?,?)",
-                          (u[2],u[9],str(datetime.date.today())))
-                db.commit()
+        if u and u[8]>0:
+            session["sepet"].append(u)
+            c.execute("UPDATE urun SET adet=adet-1 WHERE barkod=?",(barkod_kod,))
+            c.execute("INSERT INTO satis (urun,fiyat,tarih) VALUES (?,?,?)",
+                      (u[2],u[9],str(datetime.date.today())))
+            db.commit()
 
     toplam=sum([x[9] for x in session["sepet"]])
 
@@ -69,7 +69,7 @@ def pos():
 <html>
 <head>
 <meta name=viewport content="width=device-width, initial-scale=1">
-<script src="https#unpkg.com/html5-qrcode"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
 <style>
 body{background:#020617;color:white;font-family:Arial;text-align:center}
 .box{background:#111;padding:15px;margin:10px;border-radius:15px}
@@ -131,9 +131,10 @@ def ekle():
          float(request.form["fiyat"])
         ))
         db.commit()
-        return "OK"
+        return "KAYDEDİLDİ"
+
     return """
-    <h2>Ürün</h2>
+    <h2>Ürün Ekle</h2>
     <form method=post>
     Ad<input name=ad>
     Marka<input name=marka>
@@ -157,11 +158,3 @@ def rapor():
     for d in data:
         html+=f"<p>{d[0]} : {d[1]} ₺</p>"
     return html
-
-app.run()
-
-import os
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
