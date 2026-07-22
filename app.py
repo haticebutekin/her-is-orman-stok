@@ -1,9 +1,8 @@
 from flask import Flask, render_template_string, request, send_file
-import sqlite3
+import sqlite3, os
 import pandas as pd
 import barcode
 from barcode.writer import ImageWriter
-import os
 
 app = Flask(__name__)
 
@@ -16,8 +15,7 @@ def init_db():
     c = conn.cursor()
     c.execute("""
     CREATE TABLE IF NOT EXISTS stok (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        barkod TEXT UNIQUE,
+        barkod TEXT PRIMARY KEY,
         cins TEXT,
         ebat TEXT,
         mm TEXT,
@@ -35,76 +33,88 @@ init_db()
 def barkod_uret(kod):
     EAN = barcode.get_barcode_class('code128')
     ean = EAN(kod, writer=ImageWriter())
-    path = f"barcodes/{kod}"
-    ean.save(path)
-    return path + ".png"
+    ean.save(f"barcodes/{kod}")
 
 HTML = """
 <!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://unpkg.com/html5-qrcode"></script>
+
 <style>
-body { font-family: Arial; padding:10px; background:#f5f5f5;}
-input,select,button { width:100%; padding:12px; margin:5px 0; font-size:16px;}
-.card { background:white; padding:10px; margin:5px 0; border-radius:8px;}
-.green {background:#28a745;color:white;}
-.red {background:#dc3545;color:white;}
-img { width:100%; }
+body { font-family:Arial; padding:10px; background:#f5f5f5;}
+input,select,button { width:100%; padding:12px; margin:5px 0;}
+.card { background:white; padding:10px; margin:5px; border-radius:8px;}
+.red {background:#dc3545;color:white;padding:5px;}
+.green {background:#28a745;color:white;padding:5px;}
 </style>
 </head>
 <body>
 
-<h2>📦 Barkod Stok Sistemi</h2>
+<h2>📦 Barkod Stok</h2>
+
+<div id="reader"></div>
 
 <form method="POST">
-<input name="barkod" placeholder="Barkod okut / yaz">
-<input name="cins" placeholder="Malın Cinsi">
+<input id="barkod" name="barkod" placeholder="Barkod">
+<input name="cins" placeholder="Cins">
 <input name="ebat" placeholder="Ebat">
 <input name="mm" placeholder="MM">
 
 <select name="sinif">
-<option value="">Sınıf</option>
 <option>HG</option>
 <option>MAT</option>
 </select>
 
 <input name="renk" placeholder="Renk">
-
 <input name="adet" type="number" placeholder="Adet">
 
 <select name="islem">
-<option value="ekle">Yeni Ürün Ekle</option>
-<option value="artir">Stok Artır (+)</option>
-<option value="azalt">Stok Azalt (-)</option>
+<option value="ekle">Yeni</option>
+<option value="artir">Artır</option>
+<option value="azalt">Azalt</option>
 </select>
 
-<button type="submit">✔ İşlem Yap</button>
+<button>✔ Kaydet</button>
 </form>
 
+<audio id="bip">
+<source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg">
+</audio>
+
 <hr>
 
-<a href="/excel"><button>📊 Excel İndir</button></a>
+<a href="/etiket"><button>🧾 A4 Etiket Çıktı</button></a>
+<a href="/excel"><button>📊 Excel</button></a>
 
 <hr>
 
-{% for item in stok %}
+{% for i in stok %}
 <div class="card">
-<b>{{item[1]}}</b><br>
-{{item[2]}} | {{item[3]}} | {{item[4]}}<br>
-Sınıf: {{item[5]}}<br>
-Renk: {{item[6]}}<br>
+<b>{{i[0]}}</b><br>
+{{i[1]}} | {{i[2]}} | {{i[3]}}<br>
+{{i[4]}} | {{i[5]}}<br>
 
-{% if item[7] <= 0 %}
-<div class="red">Stok: {{item[7]}}</div>
+{% if i[6] <= 0 %}
+<div class="red">STOK BİTTİ</div>
 {% else %}
-<div class="green">Stok: {{item[7]}}</div>
+<div class="green">Stok: {{i[6]}}</div>
 {% endif %}
 
-<br>
-<img src="/barcode/{{item[1]}}">
+<img src="/barcode/{{i[0]}}" width="100%">
 </div>
 {% endfor %}
+
+<script>
+function onScanSuccess(decodedText) {
+document.getElementById('barkod').value = decodedText;
+document.getElementById('bip').play();
+}
+
+new Html5QrcodeScanner("reader",{fps:10,qrbox:250})
+.render(onScanSuccess);
+</script>
 
 </body>
 </html>
@@ -120,39 +130,27 @@ def index():
         adet = int(request.form["adet"] or 0)
         islem = request.form["islem"]
 
-        # varsa getir
         c.execute("SELECT * FROM stok WHERE barkod=?", (barkod,))
         urun = c.fetchone()
 
         if islem == "ekle":
-            if barkod == "":
-                barkod = "URUN" + str(len(c.execute("SELECT * FROM stok").fetchall()) + 1)
-
             barkod_uret(barkod)
-
-            c.execute("""
-            INSERT OR IGNORE INTO stok 
-            (barkod,cins,ebat,mm,sinif,renk,adet)
-            VALUES (?,?,?,?,?,?,?)
-            """, (
-                barkod,
-                request.form["cins"],
-                request.form["ebat"],
-                request.form["mm"],
-                request.form["sinif"],
-                request.form["renk"],
-                adet
-            ))
+            c.execute("INSERT OR IGNORE INTO stok VALUES (?,?,?,?,?,?,?)",
+                      (barkod,
+                       request.form["cins"],
+                       request.form["ebat"],
+                       request.form["mm"],
+                       request.form["sinif"],
+                       request.form["renk"],
+                       adet))
 
         elif urun:
-            mevcut = urun[7]
-
+            stok = urun[6]
             if islem == "artir":
-                yeni = mevcut + adet
-            elif islem == "azalt":
-                yeni = mevcut - adet
-
-            c.execute("UPDATE stok SET adet=? WHERE barkod=?", (yeni, barkod))
+                stok += adet
+            else:
+                stok -= adet
+            c.execute("UPDATE stok SET adet=? WHERE barkod=?", (stok, barkod))
 
         conn.commit()
 
@@ -163,16 +161,34 @@ def index():
     return render_template_string(HTML, stok=data)
 
 @app.route("/barcode/<kod>")
-def get_barcode(kod):
-    return send_file(f"barcodes/{kod}.png", mimetype='image/png')
+def barcode_img(kod):
+    return send_file(f"barcodes/{kod}.png")
 
 @app.route("/excel")
 def excel():
     conn = sqlite3.connect("stok.db")
     df = pd.read_sql_query("SELECT * FROM stok", conn)
-    file = "stok.xlsx"
-    df.to_excel(file, index=False)
+    df.to_excel("stok.xlsx", index=False)
     conn.close()
-    return send_file(file, as_attachment=True)
+    return send_file("stok.xlsx")
+
+@app.route("/etiket")
+def etiket():
+    conn = sqlite3.connect("stok.db")
+    c = conn.cursor()
+    c.execute("SELECT * FROM stok")
+    data = c.fetchall()
+    conn.close()
+
+    html = "<h1>Etiketler</h1>"
+    for i in data:
+        html += f"""
+        <div style='width:200px;float:left;border:1px solid #000;margin:5px;padding:5px;text-align:center'>
+        <b>{i[1]}</b><br>
+        <img src='/barcode/{i[0]}' width='180'><br>
+        {i[0]}
+        </div>
+        """
+    return html
 
 app.run(host="0.0.0.0", port=5000)
