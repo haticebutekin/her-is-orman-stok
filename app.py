@@ -2,19 +2,33 @@ from flask import Flask, request, redirect, session
 import sqlite3, random, datetime
 
 app = Flask(__name__)
-app.secret_key = "1234"
+app.secret_key = "secret"
 
 conn = sqlite3.connect("db.db", check_same_thread=False)
 c = conn.cursor()
 
 # TABLOLAR
-c.execute("CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, username TEXT, password TEXT, role TEXT)")
-c.execute("CREATE TABLE IF NOT EXISTS urun(id INTEGER PRIMARY KEY, barkod TEXT, ad TEXT, fiyat REAL, stok INTEGER)")
-c.execute("CREATE TABLE IF NOT EXISTS satis(id INTEGER PRIMARY KEY, barkod TEXT, adet INTEGER, tarih TEXT)")
+c.execute("""CREATE TABLE IF NOT EXISTS users(
+id INTEGER PRIMARY KEY, username TEXT, password TEXT, role TEXT)""")
+
+c.execute("""CREATE TABLE IF NOT EXISTS urun(
+id INTEGER PRIMARY KEY,
+barkod TEXT,
+ad TEXT,
+yuzey TEXT,
+fiyat REAL,
+stok INTEGER)""")
+
+c.execute("""CREATE TABLE IF NOT EXISTS satis(
+id INTEGER PRIMARY KEY,
+barkod TEXT,
+adet INTEGER,
+tarih TEXT)""")
+
 conn.commit()
 
-# ADMIN oluştur
-c.execute("INSERT OR IGNORE INTO users(id,username,password,role) VALUES (1,'admin','1234','admin')")
+# admin
+c.execute("INSERT OR IGNORE INTO users VALUES (1,'admin','1234','admin')")
 conn.commit()
 
 def barkod():
@@ -26,7 +40,6 @@ def login():
     if request.method == "POST":
         u = request.form["u"]
         p = request.form["p"]
-
         user = c.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p)).fetchone()
         if user:
             session["user"] = u
@@ -55,10 +68,10 @@ def pos():
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode"></script>
     <style>
     body{background:#0f172a;color:white;font-family:Arial;padding:20px;}
-    button{padding:10px;margin:5px;}
+    input,select,button{padding:10px;margin:5px;}
+    button{background:#22c55e;color:white;}
     </style>
     </head>
-
     <body>
 
     <h1>🛒 POS</h1>
@@ -76,9 +89,29 @@ def pos():
     '''
 
     for u in urunler:
-        html += f"{u[2]} - {u[3]} TL - stok:{u[4]}<br>"
+        html += f"{u[2]} - {u[3]} - {u[4]} TL - stok:{u[5]}<br>"
 
     html += '''
+
+    <hr>
+
+    <h2>➕ Ürün Ekle</h2>
+
+    <form method="POST" action="/ekle">
+    Barkod <input name="barkod" placeholder="boş bırak otomatik"><br>
+    Ad <input name="ad"><br>
+
+    Yüzey
+    <select name="yuzey">
+        <option value="HG">HG</option>
+        <option value="MAT">MAT</option>
+    </select><br>
+
+    Fiyat <input name="fiyat"><br>
+    Stok <input name="stok"><br>
+
+    <button>Kaydet</button>
+    </form>
 
     <script>
     function kamera(){
@@ -90,7 +123,8 @@ def pos():
     }
     </script>
 
-    </body></html>
+    </body>
+    </html>
     '''
     return html
 
@@ -99,25 +133,29 @@ def pos():
 def ekle():
     barkod_v = request.form.get("barkod") or barkod()
     ad = request.form.get("ad")
+    yuzey = request.form.get("yuzey")
     fiyat = request.form.get("fiyat")
     stok = request.form.get("stok")
 
-    c.execute("INSERT INTO urun (barkod,ad,fiyat,stok) VALUES (?,?,?,?)",(barkod_v,ad,fiyat,stok))
+    c.execute("INSERT INTO urun (barkod,ad,yuzey,fiyat,stok) VALUES (?,?,?,?,?)",
+              (barkod_v,ad,yuzey,fiyat,stok))
     conn.commit()
+
     return redirect("/pos")
 
-# SATIŞ
+# SATIŞ + STOK DÜŞME
 @app.route("/sat", methods=["POST"])
 def sat():
     barkod_v = request.form.get("barkod")
     adet = int(request.form.get("adet"))
 
-    urun = c.execute("SELECT * FROM urun WHERE barkod=?",(barkod_v,)).fetchone()
+    urun = c.execute("SELECT * FROM urun WHERE barkod=?", (barkod_v,)).fetchone()
 
     if urun:
-        yeni_stok = urun[4] - adet
-        c.execute("UPDATE urun SET stok=? WHERE barkod=?",(yeni_stok,barkod_v))
-        c.execute("INSERT INTO satis (barkod,adet,tarih) VALUES (?,?,?)",(barkod_v,adet,str(datetime.datetime.now())))
+        yeni_stok = urun[5] - adet
+        c.execute("UPDATE urun SET stok=? WHERE barkod=?", (yeni_stok, barkod_v))
+        c.execute("INSERT INTO satis (barkod,adet,tarih) VALUES (?,?,?)",
+                  (barkod_v,adet,str(datetime.datetime.now())))
         conn.commit()
 
     return redirect("/pos")
@@ -128,6 +166,15 @@ def rapor():
     data = c.execute("SELECT * FROM satis").fetchall()
     return "<br>".join([str(x) for x in data])
 
+# FİŞ
+@app.route("/fis")
+def fis():
+    return '''
+    <h3>FİŞ</h3>
+    <script>
+    window.print()
+    </script>
+    '''
 
 if __name__ == "__main__":
     app.run(debug=True)
