@@ -1,6 +1,5 @@
 from flask import Flask, render_template_string, request, send_file
 import sqlite3, os
-import pandas as pd
 import barcode
 from barcode.writer import ImageWriter
 
@@ -164,13 +163,6 @@ def index():
 def barcode_img(kod):
     return send_file(f"barcodes/{kod}.png")
 
-@app.route("/excel")
-def excel():
-    conn = sqlite3.connect("stok.db")
-    df = pd.read_sql_query("SELECT * FROM stok", conn)
-    df.to_excel("stok.xlsx", index=False)
-    conn.close()
-    return send_file("stok.xlsx")
 
 @app.route("/etiket")
 def etiket():
