@@ -1,13 +1,8 @@
-from flask import Flask, render_template_string, request, redirect
+from flask import Flask, render_template_string, request, redirect, send_from_directory
 import sqlite3
 import os
 import barcode
 from barcode.writer import ImageWriter
-from flask import send_from_directory
-
-@app.route('/barcodes/<path:filename>')
-def serve_barcode(filename):
-    return send_from_directory(BARCODE_FOLDER, filename)
 
 app = Flask(__name__)
 
@@ -34,45 +29,12 @@ def generate_barcode(code):
     path = os.path.join(BARCODE_FOLDER, code)
     ean = barcode.get('code128', code, writer=ImageWriter())
     ean.save(path)
-    return f"/{path}.png"
+    return f"/barcodes/{code}.png"
 
-@app.route("/scan")
-def scan():
-    html = """
-    <h1>📷 Barkod Okut</h1>
+@app.route('/barcodes/<path:filename>')
+def serve_barcode(filename):
+    return send_from_directory(BARCODE_FOLDER, filename)
 
-    <video id="video" width="300" height="200" autoplay></video>
-    <p id="result">Kod: -</p>
-
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
-
-    <script>
-    const codeReader = new ZXing.BrowserBarcodeReader()
-    const videoElement = document.getElementById('video')
-
-    codeReader.decodeFromVideoDevice(null, videoElement, (result, err) => {
-        if (result) {
-            let code = result.text
-            document.getElementById('result').innerText = "Kod: " + code
-
-            // otomatik stok düş
-            window.location.href = "/scan-result/" + code
-        }
-    })
-    </script>
-    """
-    return html
-
-@app.route("/scan-result/<code>")
-def scan_result(code):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("UPDATE products SET stock = stock - 1 WHERE barcode=?", (code,))
-    conn.commit()
-    conn.close()
-
-    return f"<h2>{code} okutuldu ✔️ Stok düşürüldü</h2><a href='/'>Geri dön</a>"
-    
 @app.route("/")
 def index():
     conn = sqlite3.connect(DB)
@@ -147,6 +109,41 @@ def stock_remove(code):
     conn.close()
     return redirect("/")
 
+@app.route("/scan")
+def scan():
+    html = """
+    <h1>📷 Barkod Okut</h1>
+
+    <video id="video" width="300" height="200" autoplay></video>
+    <p id="result">Kod: -</p>
+
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+
+    <script>
+    const codeReader = new ZXing.BrowserBarcodeReader()
+    const videoElement = document.getElementById('video')
+
+    codeReader.decodeFromVideoDevice(null, videoElement, (result, err) => {
+        if (result) {
+            let code = result.text
+            document.getElementById('result').innerText = "Kod: " + code
+            window.location.href = "/scan-result/" + code
+        }
+    })
+    </script>
+    """
+    return html
+
+@app.route("/scan-result/<code>")
+def scan_result(code):
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("UPDATE products SET stock = stock - 1 WHERE barcode=?", (code,))
+    conn.commit()
+    conn.close()
+
+    return f"<h2>{code} okutuldu ✔️ Stok düşürüldü</h2><a href='/'>Geri dön</a>"
+
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True)
