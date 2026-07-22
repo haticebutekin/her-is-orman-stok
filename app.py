@@ -144,6 +144,11 @@ def scan_result(code):
 
     return f"<h2>{code} okutuldu ✔️ Stok düşürüldü</h2><a href='/'>Geri dön</a>"
 
-if __name__ == "__main__":
-    init_db()
-    app.run(debug=True)
+app = Flask(__name__)
+
+DB = "stok.db"
+BARCODE_FOLDER = "barcodes"
+
+os.makedirs(BARCODE_FOLDER, exist_ok=True)
+
+init_db()   # 🔥 BURAYA EKLE
