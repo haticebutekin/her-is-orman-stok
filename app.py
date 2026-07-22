@@ -1,150 +1,176 @@
-from flask import Flask, render_template_string, request, redirect, session, jsonify
-import sqlite3, random, datetime
+import sqlite3
+import random
+from flask import Flask, render_template_string, request, redirect, session
+from escpos.printer import Usb
 
 app = Flask(__name__)
 app.secret_key = "1234"
 
-# DB
-def db():
-    return sqlite3.connect("db.sqlite")
+# -------- DATABASE --------
+conn = sqlite3.connect("kasa.db", check_same_thread=False)
+c = conn.cursor()
 
-with db() as con:
-    con.execute("CREATE TABLE IF NOT EXISTS urun (id INTEGER PRIMARY KEY, ad TEXT, marka TEXT, fiyat REAL, barkod TEXT)")
-    con.execute("CREATE TABLE IF NOT EXISTS satis (id INTEGER PRIMARY KEY, tarih TEXT, toplam REAL)")
+c.execute("""CREATE TABLE IF NOT EXISTS urun (
+id INTEGER PRIMARY KEY,
+ad TEXT,
+marka TEXT,
+sinif TEXT,
+fiyat REAL,
+barkod TEXT
+)""")
 
-# LOGIN
-@app.route("/", methods=["GET","POST"])
-def login():
+c.execute("""CREATE TABLE IF NOT EXISTS satis (
+id INTEGER PRIMARY KEY,
+urun TEXT,
+fiyat REAL
+)""")
+conn.commit()
+
+
+# -------- BARKOD --------
+def barkod_uret():
+    return str(random.randint(1000000000000, 9999999999999))
+
+
+# -------- FİŞ YAZDIR --------
+def fis_yaz(urunler):
+    try:
+        p = Usb(0x04b8, 0x0202)  # USB yazıcı ID (gerekirse değiştir)
+        p.text("=== SATIS FISI ===\n")
+        toplam = 0
+
+        for u in urunler:
+            p.text(f"{u[0]} - {u[1]} TL\n")
+            toplam += u[1]
+
+        p.text("-------------------\n")
+        p.text(f"TOPLAM: {toplam} TL\n")
+        p.cut()
+    except:
+        print("Yazıcı bağlanamadı")
+
+
+# -------- ADMIN --------
+@app.route("/admin", methods=["GET", "POST"])
+def admin():
     if request.method == "POST":
-        if request.form["user"]=="admin" and request.form["pass"]=="1234":
-            session["login"]=True
-            return redirect("/kasa")
-    return '''
+        if request.form["sifre"] == "1234":
+            session["admin"] = True
+            return redirect("/panel")
+
+    return """
     <h2>Admin Giriş</h2>
     <form method="post">
-    Kullanıcı: <input name="user"><br>
-    Şifre: <input name="pass" type="password"><br>
+    Şifre: <input type="password" name="sifre">
     <button>Giriş</button>
     </form>
-    '''
+    """
 
-# KASA
-@app.route("/kasa")
-def kasa():
-    if "login" not in session:
-        return redirect("/")
-    return render_template_string("""
-<h2>🛒 PRO KASA</h2>
 
-<input id="barkod" placeholder="Barkod okut">
-<button onclick="ekle()">Ekle</button>
+# -------- PANEL --------
+@app.route("/panel", methods=["GET", "POST"])
+def panel():
+    if not session.get("admin"):
+        return redirect("/admin")
 
-<ul id="liste"></ul>
-<h3 id="toplam">Toplam: 0 TL</h3>
+    if request.method == "POST":
+        barkod = barkod_uret()
 
-<button onclick="satis()">Satışı Bitir</button>
+        c.execute("INSERT INTO urun VALUES (NULL,?,?,?,?,?)", (
+            request.form["ad"],
+            request.form["marka"],
+            request.form["sinif"],
+            request.form["fiyat"],
+            barkod
+        ))
+        conn.commit()
 
-<script>
-let sepet=[];
+    urunler = c.execute("SELECT * FROM urun").fetchall()
 
-function ekle(){
- let kod=document.getElementById("barkod").value;
- fetch("/urun/"+kod)
- .then(r=>r.json())
- .then(d=>{
-    if(d.ad){
-        sepet.push(d);
-        goster();
-    } else alert("Ürün yok");
- });
-}
-
-function goster(){
- let html="";
- let toplam=0;
- sepet.forEach(x=>{
-   html+=x.ad+" ("+x.marka+") - "+x.fiyat+" TL<br>";
-   toplam+=x.fiyat;
- });
- document.getElementById("liste").innerHTML=html;
- document.getElementById("toplam").innerHTML="Toplam: "+toplam+" TL";
-}
-
-function satis(){
- fetch("/satis",{
-   method:"POST",
-   headers:{'Content-Type':'application/json'},
-   body:JSON.stringify(sepet)
- }).then(()=>location.reload());
-}
-</script>
-""")
-
-# ÜRÜN EKLE
-@app.route("/urun-ekle", methods=["GET","POST"])
-def urun_ekle():
-    if request.method=="POST":
-        barkod=str(random.randint(1000000000000,9999999999999))
-        with db() as con:
-            con.execute("INSERT INTO urun (ad,marka,fiyat,barkod) VALUES (?,?,?,?)",
-                        (request.form["ad"],request.form["marka"],request.form["fiyat"],barkod))
-        return "Kaydedildi Barkod:"+barkod
-
-    return '''
-    <h2>Ürün Ekle</h2>
+    html = """
+    <h2>ÜRÜN EKLE</h2>
     <form method="post">
     Ad: <input name="ad"><br>
     Marka: <input name="marka"><br>
+    Sınıf: <input name="sinif"><br>
     Fiyat: <input name="fiyat"><br>
-    <button>Kaydet</button>
+    <button>Ekle</button>
     </form>
-    '''
 
-# ÜRÜN GETİR
-@app.route("/urun/<kod>")
-def urun(kod):
-    with db() as con:
-        cur=con.execute("SELECT ad,marka,fiyat FROM urun WHERE barkod=?",(kod,))
-        r=cur.fetchone()
-        if r:
-            return jsonify({"ad":r[0],"marka":r[1],"fiyat":r[2]})
-    return jsonify({})
+    <h3>ÜRÜNLER</h3>
+    """
 
-# SATIŞ
-@app.route("/satis", methods=["POST"])
-def satis():
-    data=request.json
-    toplam=sum([x["fiyat"] for x in data])
-    with db() as con:
-        con.execute("INSERT INTO satis (tarih,toplam) VALUES (?,?)",
-                    (str(datetime.datetime.now()),toplam))
-    print("FIŞ -> TOPLAM:",toplam,"TL")  # yazıcı yerine
-    return "ok"
+    for u in urunler:
+        html += f"{u[1]} | {u[2]} | {u[3]} | {u[4]} TL | Barkod: {u[5]}<br>"
 
-# RAPOR
+    return html
+
+
+# -------- KASA --------
+sepet = []
+
+@app.route("/", methods=["GET", "POST"])
+def kasa():
+    global sepet
+
+    if request.method == "POST":
+        barkod = request.form["barkod"]
+
+        urun = c.execute("SELECT * FROM urun WHERE barkod=?", (barkod,)).fetchone()
+
+        if urun:
+            sepet.append((urun[1], urun[4]))
+            c.execute("INSERT INTO satis VALUES (NULL,?,?)", (urun[1], urun[4]))
+            conn.commit()
+
+    html = """
+    <h1>KASA</h1>
+
+    <form method="post">
+    Barkod: <input name="barkod" autofocus>
+    <button>EKLE</button>
+    </form>
+
+    <h3>SEPET</h3>
+    """
+
+    toplam = 0
+    for s in sepet:
+        html += f"{s[0]} - {s[1]} TL<br>"
+        toplam += s[1]
+
+    html += f"<h2>TOPLAM: {toplam} TL</h2>"
+
+    html += """
+    <form action="/odeme">
+    <button>SATIŞ TAMAMLA</button>
+    </form>
+    """
+
+    return html
+
+
+# -------- ÖDEME --------
+@app.route("/odeme")
+def odeme():
+    global sepet
+    fis_yaz(sepet)
+    sepet = []
+    return "<h2>Satış Tamamlandı</h2><a href='/'>Geri</a>"
+
+
+# -------- RAPOR --------
 @app.route("/rapor")
 def rapor():
-    with db() as con:
-        cur=con.execute("SELECT tarih,toplam FROM satis")
-        data=cur.fetchall()
+    data = c.execute("SELECT urun, COUNT(*) FROM satis GROUP BY urun").fetchall()
 
-    labels=[x[0][:10] for x in data]
-    values=[x[1] for x in data]
+    html = "<h2>Satış Raporu</h2>"
 
-    return render_template_string("""
-<h2>📊 Satış Rapor</h2>
-<canvas id="c"></canvas>
+    for d in data:
+        html += f"{d[0]} : {d[1]} adet<br>"
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-new Chart(document.getElementById("c"),{
- type:"line",
- data:{
-  labels:{{labels|safe}},
-  datasets:[{label:"Satış",data:{{values|safe}}}]
- }
-});
-</script>
-""",labels=labels,values=values)
+    return html
 
-app.run(debug=True)
+
+# -------- RUN --------
+app.run(host="0.0.0.0", port=5000)
