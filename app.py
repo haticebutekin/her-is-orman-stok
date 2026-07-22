@@ -97,7 +97,7 @@ def fis():
 
     return f"<pre>{text}</pre><script>window.print()</script>"
 
-# 📦 ÜRÜNLER + BARKOD GÖRSEL
+# 📦 ÜRÜNLER
 @app.route("/liste")
 def liste():
     with db() as conn:
@@ -112,15 +112,14 @@ def liste():
         <div style='border:1px solid #ccc;padding:10px;margin:10px'>
         <b>{i[2]}</b><br>
         Barkod: {i[1]}<br>
+        <img src='https://barcode.tec-it.com/barcode.ashx?data={i[1]}&code=EAN13'><br>
 
-        <img src='https://barcode.tec-it.com/barcode.ashx?data={i[1]}&code=EAN13&dpi=96'>
-
-        <br>Cins: {i[3]}
-        <br>Ebat: {i[4]}
-        <br>Renk: {i[5]}
-        <br>Yüzey: {i[6]}
-        <br><b>Sınıf: {i[7]}</b>
-        <br>Fiyat: {i[9]} TL
+        Cins: {i[3]}<br>
+        Ebat: {i[4]}<br>
+        Renk: {i[5]}<br>
+        Yüzey: {i[6]}<br>
+        <b>Marka: {i[7]}</b><br>
+        Fiyat: {i[9]} TL
         </div>
         """
 
@@ -141,7 +140,7 @@ def ekle():
             request.form["ebat"],
             request.form["renk"],
             request.form["yuzey"],
-            request.form["sinif"],
+            request.form["sinif"],  # MARKA
             request.form["adet"],
             request.form["fiyat"]
         )
@@ -153,8 +152,8 @@ def ekle():
         return f"""
         <h2>✅ ÜRÜN KAYDEDİLDİ</h2>
         <h1>BARKOD: {barkod}</h1>
-        <img src='https://barcode.tec-it.com/barcode.ashx?data={barkod}&code=EAN13'>
-        <br><a href='/liste'>📦 Ürünler</a>
+        <img src='https://barcode.tec-it.com/barcode.ashx?data={barkod}&code=EAN13'><br>
+        <a href='/liste'>📦 Ürünler</a>
         """
 
     return """
@@ -171,11 +170,8 @@ def ekle():
             <option>MAT</option>
         </select><br>
 
-        Sınıf:
-        <select name="sinif">
-            <option>1. Kalite</option>
-            <option>2. Kalite</option>
-        </select><br>
+        Marka:
+        <input name="sinif"><br>
 
         Adet: <input name="adet"><br>
         Fiyat: <input name="fiyat"><br>
