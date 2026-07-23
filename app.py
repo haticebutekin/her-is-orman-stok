@@ -1,188 +1,168 @@
 from flask import Flask, request, jsonify, render_template_string, send_file
-import sqlite3
-import cv2
-from pyzbar.pyzbar import decode
+import sqlite3, uuid, os
 from barcode import Code128
 from barcode.writer import ImageWriter
-from reportlab.pdfgen import canvas
-import uuid
-import os
+from reportlab.platypus import SimpleDocTemplate, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
 
 app = Flask(__name__)
 
-# -------------------- VERİTABANI --------------------
-def init_db():
-    conn = sqlite3.connect("stok.db")
-    c = conn.cursor()
+# ---------------- DB ----------------
+conn = sqlite3.connect("stok.db", check_same_thread=False)
+c = conn.cursor()
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS urunler (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        barkod TEXT UNIQUE,
-        ad TEXT,
-        cins TEXT,
-        ebat TEXT,
-        mm TEXT,
-        kalite TEXT,
-        renk TEXT,
-        stok INTEGER
-    )
-    """)
+c.execute("""
+CREATE TABLE IF NOT EXISTS urun (
+id INTEGER PRIMARY KEY,
+ad TEXT,
+barkod TEXT,
+stok INTEGER
+)
+""")
+conn.commit()
 
-    conn.commit()
-    conn.close()
+# ---------------- BARKOD ----------------
+def barkod_olustur(kod):
+    if not os.path.exists("static"):
+        os.makedirs("static")
+    Code128(kod, writer=ImageWriter()).save(f"static/{kod}")
 
-init_db()
+# ---------------- ETİKET ----------------
+def etiket_pdf(urun):
+    path = f"static/{urun['barkod']}.pdf"
+    doc = SimpleDocTemplate(path)
+    styles = getSampleStyleSheet()
 
-# -------------------- ÜRÜN EKLE --------------------
-def urun_ekle(data):
-    conn = sqlite3.connect("stok.db")
-    c = conn.cursor()
+    content = []
+    content.append(Paragraph(f"ÜRÜN: {urun['ad']}", styles["Normal"]))
+    content.append(Paragraph(f"BARKOD: {urun['barkod']}", styles["Normal"]))
+    content.append(Paragraph(f"STOK: {urun['stok']}", styles["Normal"]))
+
+    doc.build(content)
+    return path
+
+# ---------------- AI EŞLEŞME ----------------
+def urun_bul_ai(text):
+    c.execute("SELECT * FROM urun")
+    data = c.fetchall()
+
+    en = None
+    skor_max = 0
+
+    for i in data:
+        isim = i[1].lower()
+        skor = sum(1 for k in text.lower().split() if k in isim)
+
+        if skor > skor_max:
+            skor_max = skor
+            en = i
+
+    return en
+
+# ---------------- EKLE ----------------
+@app.route("/ekle", methods=["POST"])
+def ekle():
+    isim = request.json["isim"]
+
+    bulunan = urun_bul_ai(isim)
+
+    if bulunan:
+        c.execute("UPDATE urun SET stok=stok+1 WHERE id=?", (bulunan[0],))
+        conn.commit()
+        return jsonify({"ok":"stok arttı", "urun":bulunan[1]})
 
     barkod = str(uuid.uuid4())[:12]
 
-    c.execute("""
-    INSERT INTO urunler (barkod, ad, cins, ebat, mm, kalite, renk, stok)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        barkod,
-        data["ad"],
-        data["cins"],
-        data["ebat"],
-        data["mm"],
-        data["kalite"],
-        data["renk"],
-        1
-    ))
-
+    c.execute("INSERT INTO urun (ad,barkod,stok) VALUES (?,?,?)",
+              (isim, barkod, 1))
     conn.commit()
-    conn.close()
 
-    return barkod
-
-# -------------------- BARKOD OLUŞTUR --------------------
-def barkod_olustur(kod):
-    barcode = Code128(kod, writer=ImageWriter())
-    filename = f"static/{kod}"
-    barcode.save(filename)
-    return filename + ".png"
-
-# -------------------- ETİKET PDF --------------------
-def etiket_olustur(urun):
-    pdf_path = f"static/{urun['barkod']}.pdf"
-    c = canvas.Canvas(pdf_path)
-
-    c.drawString(50, 800, f"AD: {urun['ad']}")
-    c.drawString(50, 780, f"CINS: {urun['cins']}")
-    c.drawString(50, 760, f"EBAT: {urun['ebat']}")
-    c.drawString(50, 740, f"MM: {urun['mm']}")
-    c.drawString(50, 720, f"KALITE: {urun['kalite']}")
-    c.drawString(50, 700, f"RENK: {urun['renk']}")
-    c.drawString(50, 680, f"BARKOD: {urun['barkod']}")
-
-    c.save()
-    return pdf_path
-
-# -------------------- ÜRÜN BUL --------------------
-def urun_bul(barkod):
-    conn = sqlite3.connect("stok.db")
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM urunler WHERE barkod=?", (barkod,))
-    row = c.fetchone()
-
-    conn.close()
-
-    if row:
-        return {
-            "id": row[0],
-            "barkod": row[1],
-            "ad": row[2],
-            "cins": row[3],
-            "ebat": row[4],
-            "mm": row[5],
-            "kalite": row[6],
-            "renk": row[7],
-            "stok": row[8]
-        }
-    return None
-
-# -------------------- STOK GÜNCELLE --------------------
-def stok_arttir(barkod):
-    conn = sqlite3.connect("stok.db")
-    c = conn.cursor()
-
-    c.execute("UPDATE urunler SET stok = stok + 1 WHERE barkod=?", (barkod,))
-    conn.commit()
-    conn.close()
-
-# -------------------- ANA SAYFA --------------------
-@app.route("/")
-def index():
-    return render_template_string("""
-    <h2>Barkod Okut</h2>
-    <button onclick="baslat()">Kamera Aç</button>
-    <p id="sonuc"></p>
-
-    <script>
-    function baslat(){
-        fetch('/scan')
-        .then(res=>res.json())
-        .then(data=>{
-            document.getElementById("sonuc").innerText = JSON.stringify(data)
-        })
-    }
-    </script>
-    """)
-
-# -------------------- BARKOD OKUMA --------------------
-@app.route("/scan")
-def scan():
-    cap = cv2.VideoCapture(0)
-
-    while True:
-        _, frame = cap.read()
-        codes = decode(frame)
-
-        for code in codes:
-            barkod = code.data.decode("utf-8")
-            cap.release()
-
-            urun = urun_bul(barkod)
-
-            if urun:
-                stok_arttir(barkod)
-
-                if urun["stok"] <= 1:
-                    return jsonify({"UYARI": "STOK AZALDI!", "urun": urun})
-
-                return jsonify({"OK": "Stok Güncellendi", "urun": urun})
-
-            else:
-                return jsonify({"HATA": "ÜRÜN YOK"})
-
-# -------------------- YENİ ÜRÜN --------------------
-@app.route("/yeni", methods=["POST"])
-def yeni():
-    data = request.json
-
-    barkod = urun_ekle(data)
     barkod_olustur(barkod)
 
-    urun = urun_bul(barkod)
-    pdf = etiket_olustur(urun)
+    return jsonify({"ok":"yeni eklendi", "barkod":barkod})
 
-    return jsonify({
-        "barkod": barkod,
-        "etiket": pdf
-    })
+# ---------------- SCAN ----------------
+@app.route("/scan/<kod>")
+def scan(kod):
+    c.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
+    u = c.fetchone()
 
-# -------------------- ETİKET İNDİR --------------------
+    if u:
+        yeni = u[3] - 1
+        c.execute("UPDATE urun SET stok=? WHERE barkod=?", (yeni, kod))
+        conn.commit()
+
+        if yeni <= 2:
+            return jsonify({"uyari":"STOK AZ!", "urun":u[1]})
+
+        return jsonify({"ok":"stok düştü", "urun":u[1]})
+
+    return jsonify({"hata":"ürün yok"})
+
+# ---------------- ETİKET ----------------
 @app.route("/etiket/<kod>")
 def etiket(kod):
-    path = f"static/{kod}.pdf"
+    c.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
+    u = c.fetchone()
+
+    urun = {"ad":u[1], "barkod":u[2], "stok":u[3]}
+    path = etiket_pdf(urun)
+
     return send_file(path, as_attachment=True)
 
-# --------------------
+# ---------------- PANEL ----------------
+@app.route("/")
+def home():
+    return render_template_string("""
+
+<h2>STOK PRO MAX</h2>
+
+<input id="isim" placeholder="ürün adı">
+<button onclick="ekle()">EKLE</button>
+
+<br><br>
+
+<div id="reader" style="width:300px"></div>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<script>
+function ekle(){
+fetch("/ekle",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({isim:document.getElementById("isim").value})
+})
+.then(r=>r.json())
+.then(d=>alert(JSON.stringify(d)))
+}
+
+// KAMERA
+const scanner = new Html5Qrcode("reader")
+
+scanner.start(
+{ facingMode: "environment" },
+{ fps: 10 },
+(kod)=>{
+
+fetch("/scan/"+kod)
+.then(r=>r.json())
+.then(d=>{
+
+if(d.uyari){
+alert(d.uyari)
+var audio = new Audio("https://www.soundjay.com/button/beep-07.wav")
+audio.play()
+}else{
+alert("OK")
+}
+
+})
+})
+</script>
+
+""")
+
+# ---------------- RUN ----------------
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
