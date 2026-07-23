@@ -1,214 +1,258 @@
-from flask import Flask, request, jsonify, render_template_string, send_file
-import sqlite3, os
+from flask import Flask, render_template_string, request, redirect, session, jsonify
+import sqlite3
 from datetime import datetime
-import barcode
-from barcode.writer import ImageWriter
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
 
 app = Flask(__name__)
-DB="stok.db"
+app.secret_key = "secret123"
 
-# ---------------- DB ----------------
+# ================= DB =================
 def init_db():
-    conn=sqlite3.connect(DB)
-    c=conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS products(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT, barcode TEXT,
-    cins TEXT, ebat TEXT, mm TEXT,
-    hg TEXT, yuzey TEXT, sinif TEXT, renk TEXT
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS stock(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    product_id INTEGER, depo INTEGER, adet INTEGER
-    )''')
+    conn = sqlite3.connect("db.sqlite")
+    c = conn.cursor()
+
+    c.execute("""CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY,
+        username TEXT,
+        password TEXT
+    )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY,
+        name TEXT,
+        type TEXT,
+        size TEXT,
+        unit TEXT,      -- HG / MAT
+        class TEXT,
+        color TEXT,
+        barcode TEXT UNIQUE
+    )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS stock (
+        id INTEGER PRIMARY KEY,
+        product_id INTEGER,
+        depo TEXT,
+        quantity INTEGER
+    )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS logs (
+        id INTEGER PRIMARY KEY,
+        user TEXT,
+        action TEXT,
+        product TEXT,
+        depo TEXT,
+        quantity INTEGER,
+        date TEXT
+    )""")
+
+    c.execute("INSERT OR IGNORE INTO users VALUES (1,'admin','1234')")
     conn.commit()
     conn.close()
+
 init_db()
 
-# ---------------- BARKOD ----------------
-def generate_barcode(code):
-    if not os.path.exists("barcodes"):
-        os.makedirs("barcodes")
-    EAN=barcode.get_barcode_class('code128')
-    EAN(code, writer=ImageWriter()).save(f"barcodes/{code}")
+# ================= LOGIN =================
+@app.route("/", methods=["GET","POST"])
+def login():
+    if request.method == "POST":
+        u = request.form["u"]
+        p = request.form["p"]
 
-# ---------------- PANEL ----------------
-HTML="""
-<h2>ÜRÜN EKLE</h2>
-<form id=form>
-Adı:<input name=name><br>
-Cins:<input name=cins><br>
-Ebat:<input name=ebat><br>
-MM:<input name=mm><br>
-HG:<input name=hg><br>
-Yüzey:<input name=yuzey><br>
-Sınıf:<input name=sinif><br>
-Renk:<input name=renk><br>
-<button>EKLE</button>
-</form>
+        conn = sqlite3.connect("db.sqlite")
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p))
+        user = c.fetchone()
+        conn.close()
 
-<h2>STOK</h2>
-<form id=stok>
-ÜrünID:<input name=product_id><br>
-Depo(1-8):<input name=depo><br>
-Adet:<input name=adet><br>
-<button>EKLE</button>
-</form>
+        if user:
+            session["user"] = u
+            return redirect("/panel")
 
-<h2>KAMERA</h2>
-<div id=reader style="width:300px"></div>
-Depo:<input id=d><br>
-Adet:<input id=a value=1><br>
-<button onclick=baslat()>OKUT</button>
+    return """
+    <h2>Giriş</h2>
+    <form method="post">
+    Kullanıcı: <input name="u"><br>
+    Şifre: <input name="p" type="password"><br>
+    <button>Giriş</button>
+    </form>
+    """
 
-<h2>ETİKET</h2>
-ÜrünID:<input id=pid>
-<button onclick=tek()>TEK</button>
-<button onclick=cok()>TOPLU</button>
-
-<pre id=log></pre>
-
-<script src="https://unpkg.com/html5-qrcode"></script>
-<script>
-
-form.onsubmit=async e=>{
-e.preventDefault()
-let d=Object.fromEntries(new FormData(form))
-let r=await fetch("/add_product",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)})
-let j=await r.json()
-alert("BARKOD:"+j.barcode)
-}
-
-stok.onsubmit=async e=>{
-e.preventDefault()
-let d=Object.fromEntries(new FormData(stok))
-await fetch("/add_stock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)})
-alert("stok eklendi")
-}
-
-function baslat(){
-let qr=new Html5Qrcode("reader")
-qr.start({facingMode:"environment"},{fps:10,qrbox:250},
-async txt=>{
-await fetch("/scan",{method:"POST",headers:{"Content-Type":"application/json"},
-body:JSON.stringify({barcode:txt,depo:Number(d.value),adet:Number(a.value)})})
-alert("okundu:"+txt)
-qr.stop()
-})
-}
-
-function tek(){
-window.open("/label/"+pid.value)
-}
-
-function cok(){
-let adet=prompt("kaç adet?")
-window.open("/labels_bulk/"+pid.value+"/"+adet)
-}
-</script>
-"""
-
-@app.route("/")
+# ================= PANEL =================
+@app.route("/panel")
 def panel():
-    return render_template_string(HTML)
+    if "user" not in session:
+        return redirect("/")
 
-# ---------------- ÜRÜN ----------------
-@app.route("/add_product",methods=["POST"])
-def add_product():
-    d=request.json
-    code=str(int(datetime.now().timestamp()))
-    generate_barcode(code)
+    return render_template_string("""
+    <h2>Panel</h2>
 
-    conn=sqlite3.connect(DB)
-    c=conn.cursor()
-    c.execute("""INSERT INTO products
-    (name,barcode,cins,ebat,mm,hg,yuzey,sinif,renk)
-    VALUES(?,?,?,?,?,?,?,?,?)""",
-    (d["name"],code,d["cins"],d["ebat"],d["mm"],d["hg"],d["yuzey"],d["sinif"],d["renk"]))
-    conn.commit(); conn.close()
-    return jsonify({"barcode":code})
+    <a href="/add">➕ Ürün Ekle</a><br>
+    <a href="/stock">📦 Stok İşlem</a><br>
+    <a href="/labels">🖨 Etiket Bas</a><br>
 
-# ---------------- STOK ----------------
-@app.route("/add_stock",methods=["POST"])
-def add_stock():
-    d=request.json
-    conn=sqlite3.connect(DB)
-    c=conn.cursor()
-    c.execute("INSERT INTO stock(product_id,depo,adet) VALUES(?,?,?)",
-              (d["product_id"],d["depo"],d["adet"]))
-    conn.commit(); conn.close()
-    return jsonify({"ok":True})
+    <hr>
 
-# ---------------- SCAN ----------------
-@app.route("/scan",methods=["POST"])
-def scan():
-    d=request.json
-    conn=sqlite3.connect(DB)
-    c=conn.cursor()
-    c.execute("SELECT id,name FROM products WHERE barcode=?",(d["barcode"],))
-    p=c.fetchone()
-    if not p: return jsonify({"error":"ürün yok"})
-    pid,name=p
-    c.execute("UPDATE stock SET adet=adet-? WHERE product_id=? AND depo=?",
-              (d["adet"],pid,d["depo"]))
-    conn.commit(); conn.close()
-    return jsonify({"urun":name})
+    <video id="cam" width="300" autoplay></video><br>
+    <button onclick="startCam()">📷 Kamera Aç</button>
 
-# ---------------- TEK ETİKET ----------------
-@app.route("/label/<int:id>")
-def label(id):
-    conn=sqlite3.connect(DB)
-    c=conn.cursor()
-    c.execute("SELECT * FROM products WHERE id=?",(id,))
-    p=c.fetchone(); conn.close()
-    if not p: return "yok"
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script>
+    function startCam(){
+        const html5QrCode = new Html5Qrcode("cam");
+        html5QrCode.start(
+            { facingMode: "environment" },
+            { fps: 10 },
+            (decodedText) => {
+                alert("Barkod: " + decodedText);
+            }
+        );
+    }
+    </script>
+    """)
 
-    _,name,code,cins,ebat,mmv,hg,yuzey,sinif,renk=p
-    pdf=f"etiket_{id}.pdf"
-    c=canvas.Canvas(pdf,pagesize=(100*mm,60*mm))
+# ================= ÜRÜN EKLE =================
+@app.route("/add", methods=["GET","POST"])
+def add():
+    if request.method == "POST":
+        data = (
+            request.form["name"],
+            request.form["type"],
+            request.form["size"],
+            request.form["unit"],   # HG / MAT
+            request.form["class"],
+            request.form["color"],
+            request.form["barcode"]
+        )
 
-    c.setFont("Helvetica-Bold",12)
-    c.drawString(10,150,name)
-    c.setFont("Helvetica",8)
-    c.drawString(10,130,f"{cins}-{ebat}-{mmv}")
-    c.drawString(10,110,f"{hg}-{yuzey}-{sinif}-{renk}")
+        conn = sqlite3.connect("db.sqlite")
+        c = conn.cursor()
+        c.execute("""INSERT INTO products 
+        (name,type,size,unit,class,color,barcode)
+        VALUES (?,?,?,?,?,?,?)""", data)
+        conn.commit()
+        conn.close()
 
-    c.drawImage(f"barcodes/{code}.png",150,40,200,80)
-    c.drawString(150,20,code)
-    c.save()
-    return send_file(pdf,as_attachment=True)
+        return "OK"
 
-# ---------------- TOPLU ----------------
-@app.route("/labels_bulk/<int:id>/<int:adet>")
-def bulk(id,adet):
-    conn=sqlite3.connect(DB)
-    c=conn.cursor()
-    c.execute("SELECT * FROM products WHERE id=?",(id,))
-    p=c.fetchone(); conn.close()
-    if not p: return "yok"
+    return """
+    <h2>Ürün Ekle</h2>
+    <form method="post">
+    Ad: <input name="name"><br>
+    Cins: <input name="type"><br>
+    Ebat: <input name="size"><br>
 
-    _,name,code,cins,ebat,mmv,hg,yuzey,sinif,renk=p
-    pdf=f"cok_{id}.pdf"
-    c=canvas.Canvas(pdf,pagesize=A4)
+    Birim:
+    <select name="unit">
+        <option>HG</option>
+        <option>MAT</option>
+    </select><br>
 
-    x,y=20,800
-    for i in range(adet):
-        c.setFont("Helvetica",8)
-        c.drawString(x,y,name)
-        c.drawString(x,y-15,f"{cins}-{ebat}-{mmv}")
-        c.drawImage(f"barcodes/{code}.png",x,y-80,120,40)
+    Sınıf: <input name="class"><br>
+    Renk: <input name="color"><br>
+    Barkod: <input name="barcode"><br>
 
-        x+=140
-        if x>450: x=20; y-=120
-        if y<100: c.showPage(); x=20; y=800
+    <button>Kaydet</button>
+    </form>
+    """
 
-    c.save()
-    return send_file(pdf,as_attachment=True)
+# ================= STOK =================
+@app.route("/stock", methods=["GET","POST"])
+def stock():
+    if request.method == "POST":
+        barcode = request.form["barcode"]
+        depo = request.form["depo"]
+        qty = int(request.form["qty"])
 
-# ---------------- RUN ----------------
-if __name__=="__main__":
-    port=int(os.environ.get("PORT",5000))
-    app.run(host="0.0.0.0",port=port)
+        conn = sqlite3.connect("db.sqlite")
+        c = conn.cursor()
+
+        c.execute("SELECT id,name FROM products WHERE barcode=?", (barcode,))
+        p = c.fetchone()
+
+        if not p:
+            return "ÜRÜN YOK"
+
+        pid, pname = p
+
+        c.execute("SELECT id,quantity FROM stock WHERE product_id=? AND depo=?", (pid,depo))
+        s = c.fetchone()
+
+        if s:
+            c.execute("UPDATE stock SET quantity=quantity+? WHERE id=?", (qty,s[0]))
+        else:
+            c.execute("INSERT INTO stock (product_id,depo,quantity) VALUES (?,?,?)",(pid,depo,qty))
+
+        c.execute("""INSERT INTO logs 
+        (user,action,product,depo,quantity,date)
+        VALUES (?,?,?,?,?,?)""",
+        (session["user"],"EKLE",pname,depo,qty,str(datetime.now())))
+
+        conn.commit()
+        conn.close()
+
+        return "OK"
+
+    return """
+    <h2>Stok</h2>
+    <form method="post">
+    Barkod: <input name="barcode"><br>
+    Depo:
+    <select name="depo">
+        <option>Depo1</option>
+        <option>Depo2</option>
+        <option>Depo3</option>
+        <option>Depo4</option>
+        <option>Depo5</option>
+        <option>Depo6</option>
+        <option>Depo7</option>
+        <option>Depo8</option>
+    </select><br>
+
+    Adet: <input name="qty"><br>
+    <button>Kaydet</button>
+    </form>
+    """
+
+# ================= ETİKET =================
+@app.route("/labels", methods=["GET","POST"])
+def labels():
+    if request.method == "POST":
+        barcode = request.form["barcode"]
+        count = int(request.form["count"])
+
+        conn = sqlite3.connect("db.sqlite")
+        c = conn.cursor()
+        c.execute("SELECT * FROM products WHERE barcode=?", (barcode,))
+        p = c.fetchone()
+        conn.close()
+
+        if not p:
+            return "ÜRÜN YOK"
+
+        html = "<script>window.print()</script>"
+
+        for i in range(count):
+            html += f"""
+            <div style="border:1px solid #000; width:300px; margin:5px; padding:5px;">
+            <b>{p[1]}</b><br>
+            {p[2]} / {p[3]}<br>
+            {p[4]}<br>
+            {p[5]}<br>
+            {p[6]}<br>
+            <b>{p[7]}</b>
+            </div>
+            """
+
+        return html
+
+    return """
+    <h2>Etiket</h2>
+    <form method="post">
+    Barkod: <input name="barcode"><br>
+    Kaç Adet: <input name="count"><br>
+    <button>Bas</button>
+    </form>
+    """
+
+# ================= RUN =================
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
