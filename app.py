@@ -40,8 +40,15 @@ def login():
         password=request.form.get("pass")
 
         if user in USERS and USERS[user]==password:
-            session["user"]=user
-            return redirect("/panel")
+    session["user"]=user
+    return redirect("/panel")
+else:
+    return """
+    <h3 style='color:red'>
+    Kullanıcı adı veya şifre yanlış
+    </h3>
+    <a href='/'>Geri dön</a>
+    """
 
 
     return """
