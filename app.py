@@ -128,7 +128,7 @@ def barkod_olustur(kod):
 
     yol=os.path.join("static", kod)
 
-  from barcode.writer import ImageWriter
+from barcode.writer import ImageWriter
 
 yazar = ImageWriter()
 
