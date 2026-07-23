@@ -119,16 +119,30 @@ def yeni_barkod():
     return "HER-"+str(sayi+1).zfill(6)
 
 
-
-
-
 def barkod_olustur(kod):
 
     os.makedirs("static", exist_ok=True)
 
-    yol=os.path.join("static", kod)
 
-from barcode.writer import ImageWriter
+    yazar = ImageWriter()
+
+    yazar.set_options({
+        "module_width": 0.6,
+        "module_height": 40,
+        "font_size": 18,
+        "text_distance": 8
+    })
+
+    img = barcode.get(
+        "code128",
+        kod,
+        writer=yazar
+    )
+
+    yol = "static/" + kod
+
+    img.save(yol)
+
 
 yazar = ImageWriter()
 
