@@ -739,7 +739,6 @@ def etiket(kod):
 
 <a href="/toplu_etiket" target="_blank">
 <button style="background:black;color:white;padding:10px;">
-🧾 TOPLU ETİKET
 </button>
 </a>
 
