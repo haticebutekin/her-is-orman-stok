@@ -902,7 +902,6 @@ hareketler=hareketler
 
 
 
-
 @app.route("/kamera")
 def kamera():
 
@@ -911,18 +910,30 @@ def kamera():
 
 
     return render_template_string("""
-
 <!DOCTYPE html>
-
 <html>
 
 <head>
 
-<meta name="viewport" content="width=device-width,initial-scale=1">
-
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 
+<style>
+
+body{
+font-family:Arial;
+text-align:center;
+background:#f1f5f9;
+}
+
+#reader{
+width:100%;
+max-width:400px;
+margin:auto;
+}
+
+</style>
 
 </head>
 
@@ -931,26 +942,33 @@ def kamera():
 
 
 <h2>
-Telefon Barkod Okuyucu
+📱 Barkod Okut
 </h2>
 
 
 <div id="reader"></div>
 
 
-
 <script>
 
 
-let scanner =
+function baslat(){
+
+
+const scanner =
 new Html5QrcodeScanner(
 
 "reader",
 
 {
-fps:10,
-qrbox:250
+fps:15,
+qrbox:{
+width:300,
+height:150
 }
+},
+
+false
 
 );
 
@@ -962,9 +980,19 @@ function(kod){
 
 window.location="/barkod/"+kod;
 
+},
+
+function(hata){
+
 }
 
 );
+
+
+}
+
+
+baslat();
 
 
 </script>
@@ -972,12 +1000,8 @@ window.location="/barkod/"+kod;
 
 </body>
 
-
 </html>
-
-
 """)
-
 
 
 
