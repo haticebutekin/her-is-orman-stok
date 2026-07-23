@@ -2,35 +2,34 @@ from flask import Flask, request, render_template_string, redirect, send_file
 import sqlite3
 import random
 import pandas as pd
+import os
 
 app = Flask(__name__)
 
-# DB oluştur
+# ---------------- DB ----------------
 def init_db():
-    conn = sqlite3.connect("stok.db")
-    c = conn.cursor()
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS urunler (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        urun TEXT,
-        depo TEXT,
-        adet INTEGER,
-        barkod TEXT
-    )
-    """)
-    conn.commit()
-    conn.close()
-
+    with sqlite3.connect("stok.db") as conn:
+        c = conn.cursor()
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS urunler (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            urun TEXT,
+            depo TEXT,
+            adet INTEGER,
+            barkod TEXT UNIQUE
+        )
+        """)
 init_db()
 
 def barkod_olustur():
     return str(random.randint(100000000000, 999999999999))
 
+# ---------------- HTML ----------------
 HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-<title>DEPO YÖNETİM</title>
+<title>DEPO PRO</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
@@ -46,12 +45,14 @@ button { background:#22c55e; color:white; cursor:pointer; }
 .card {
     background:#1e293b; margin:10px; padding:15px; border-radius:10px;
 }
+.kirmizi { background:#ef4444; }
+.mavi { background:#3b82f6; }
 </style>
 </head>
 
 <body>
 
-<h1>📦 STOK YÖNETİM</h1>
+<h1>📦 STOK YÖNETİM PRO</h1>
 
 <form method="POST" action="/ekle">
 <input name="urun" placeholder="Ürün adı" required><br>
@@ -78,7 +79,7 @@ button { background:#22c55e; color:white; cursor:pointer; }
 </form>
 
 <button onclick="window.print()">YAZDIR</button>
-<a href="/excel"><button>EXCEL İNDİR</button></a>
+<a href="/excel"><button>EXCEL</button></a>
 
 <h2>ÜRÜNLER</h2>
 
@@ -89,7 +90,9 @@ button { background:#22c55e; color:white; cursor:pointer; }
 🔢 {{u[3]}}<br>
 🏷 {{u[4]}}<br>
 
-<a href="/sil/{{u[0]}}"><button>SİL</button></a>
+<a href="/arttir/{{u[0]}}"><button class="mavi">+ ARTIR</button></a>
+<a href="/azalt/{{u[0]}}"><button class="kirmizi">- AZALT</button></a>
+<a href="/sil/{{u[0]}}"><button class="kirmizi">SİL</button></a>
 </div>
 {% endfor %}
 
@@ -97,65 +100,77 @@ button { background:#22c55e; color:white; cursor:pointer; }
 </html>
 """
 
+# ---------------- DB ----------------
 def get_all():
-    conn = sqlite3.connect("stok.db")
-    c = conn.cursor()
-    c.execute("SELECT * FROM urunler")
-    data = c.fetchall()
-    conn.close()
-    return data
+    with sqlite3.connect("stok.db") as conn:
+        return conn.execute("SELECT * FROM urunler").fetchall()
 
+# ---------------- ROUTES ----------------
 @app.route("/")
 def index():
     return render_template_string(HTML, urunler=get_all())
 
 @app.route("/ekle", methods=["POST"])
 def ekle():
-    conn = sqlite3.connect("stok.db")
-    c = conn.cursor()
-
-    c.execute("INSERT INTO urunler (urun,depo,adet,barkod) VALUES (?,?,?,?)", (
-        request.form["urun"],
-        request.form["depo"],
-        request.form["adet"],
-        barkod_olustur()
-    ))
-
-    conn.commit()
-    conn.close()
+    try:
+        with sqlite3.connect("stok.db") as conn:
+            conn.execute(
+                "INSERT INTO urunler (urun,depo,adet,barkod) VALUES (?,?,?,?)",
+                (
+                    request.form["urun"],
+                    request.form["depo"],
+                    int(request.form["adet"]),
+                    barkod_olustur()
+                )
+            )
+    except:
+        pass
     return redirect("/")
 
 @app.route("/sil/<int:id>")
 def sil(id):
-    conn = sqlite3.connect("stok.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM urunler WHERE id=?", (id,))
-    conn.commit()
-    conn.close()
+    with sqlite3.connect("stok.db") as conn:
+        conn.execute("DELETE FROM urunler WHERE id=?", (id,))
+    return redirect("/")
+
+@app.route("/arttir/<int:id>")
+def arttir(id):
+    with sqlite3.connect("stok.db") as conn:
+        conn.execute("UPDATE urunler SET adet = adet + 1 WHERE id=?", (id,))
+    return redirect("/")
+
+@app.route("/azalt/<int:id>")
+def azalt(id):
+    with sqlite3.connect("stok.db") as conn:
+        conn.execute("UPDATE urunler SET adet = CASE WHEN adet>0 THEN adet-1 ELSE 0 END WHERE id=?", (id,))
     return redirect("/")
 
 @app.route("/ara")
 def ara():
-    q = request.args.get("q")
+    q = request.args.get("q", "")
 
-    conn = sqlite3.connect("stok.db")
-    c = conn.cursor()
-    c.execute("SELECT * FROM urunler WHERE barkod LIKE ?", ("%"+q+"%",))
-    data = c.fetchall()
-    conn.close()
+    with sqlite3.connect("stok.db") as conn:
+        data = conn.execute(
+            "SELECT * FROM urunler WHERE barkod LIKE ?",
+            ("%" + q + "%",)
+        ).fetchall()
 
     return render_template_string(HTML, urunler=data)
 
 @app.route("/excel")
 def excel():
-    conn = sqlite3.connect("stok.db")
-    df = pd.read_sql_query("SELECT * FROM urunler", conn)
-    conn.close()
-
     file = "stok.xlsx"
+
+    with sqlite3.connect("stok.db") as conn:
+        df = pd.read_sql_query("SELECT * FROM urunler", conn)
+
+    if os.path.exists(file):
+        os.remove(file)
+
     df.to_excel(file, index=False)
 
     return send_file(file, as_attachment=True)
 
+# ---------------- RUN ----------------
 if __name__ == "__main__":
     app.run(debug=True)
