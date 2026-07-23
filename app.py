@@ -139,11 +139,24 @@ yazar.set_options({
     "text_distance": 8
 })
 
+yazar = ImageWriter()
+
+yazar.set_options({
+    "module_width": 0.6,
+    "module_height": 40,
+    "font_size": 18,
+    "text_distance": 8
+})
+
 img = barcode.get(
     "code128",
     kod,
     writer=yazar
 )
+
+yol = "static/" + kod
+
+img.save(yol)
 
     img.save(yol)
 
