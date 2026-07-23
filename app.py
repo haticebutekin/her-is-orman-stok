@@ -1,252 +1,196 @@
-from flask import Flask, request, redirect, session, send_file
-import sqlite3, os
-from datetime import datetime
-import barcode
+from flask import Flask, render_template_string, request, jsonify
+import re, uuid, sqlite3, os
+from barcode import Code128
 from barcode.writer import ImageWriter
-from PIL import Image, ImageDraw
 
 app = Flask(__name__)
-app.secret_key = "1234"
-DB = "stok.db"
 
-# ---------------- ÜRÜN LİSTESİ ----------------
-URUNLER = [
-    {"marka":"VARIO","seri":"AİRLAM","model":"ATLANTİK ÇAM","yuzey":"MAT"},
-    {"marka":"VARIO","seri":"AİRLAM","model":"BAMBU","yuzey":"MAT"},
-    {"marka":"STRWD","seri":"MEGALAM","model":"AFRİKA","yuzey":"MAT"},
-    {"marka":"STRWD","seri":"MEGALAM","model":"ATLAS","yuzey":"MAT"},
-    {"marka":"STRWD","seri":"MEGALAM","model":"ANTRASİT GRİ","yuzey":"MAT"},
-    {"marka":"VARIO","seri":"SMARTLAM","model":"KARBON GRİ","yuzey":"NATURAL"},
-    {"marka":"VARIO","seri":"SMARTLAM","model":"TEAK","yuzey":"MAT"},
-]
+# 📦 DB
+conn = sqlite3.connect("stok.db", check_same_thread=False)
+c = conn.cursor()
 
-# ---------------- DB ----------------
-def init_db():
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
+c.execute("""
+CREATE TABLE IF NOT EXISTS stok (
+id INTEGER PRIMARY KEY,
+isim TEXT,
+mm TEXT,
+renk TEXT,
+yuzey TEXT,
+barkod TEXT,
+adet INTEGER
+)
+""")
+conn.commit()
 
-    c.execute("""CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY, username TEXT, password TEXT)""")
+# 🔍 ANALİZ
+def analiz_et(metin):
+    mm = re.search(r'(\d+)\s*mm', metin.lower())
+    renkler = ["beyaz","siyah","gri","kırmızı","mavi"]
+    yuzey = ["mat","parlak","hg"]
 
-    c.execute("""CREATE TABLE IF NOT EXISTS stok (
-        id INTEGER PRIMARY KEY,
-        barkod TEXT,
-        urun TEXT,
-        mm TEXT,
-        ebat TEXT,
-        yuzey TEXT,
-        adet INTEGER)""")
+    return {
+        "isim": metin,
+        "mm": mm.group(1) if mm else "",
+        "renk": next((r for r in renkler if r in metin.lower()), ""),
+        "yuzey": next((y for y in yuzey if y in metin.lower()), "")
+    }
 
-    c.execute("""CREATE TABLE IF NOT EXISTS hareket (
-        id INTEGER PRIMARY KEY,
-        barkod TEXT,
-        islem TEXT,
-        adet INTEGER,
-        personel TEXT,
-        tarih TEXT)""")
+# ➕ EKLE / ARTIR
+@app.route("/ekle", methods=["POST"])
+def ekle():
+    veri = request.json
+    analiz = analiz_et(veri["isim"])
 
-    c.execute("INSERT OR IGNORE INTO users VALUES (1,'admin','1234')")
-    conn.commit()
-    conn.close()
+    # aynı ürün var mı?
+    c.execute("SELECT * FROM stok WHERE isim=?", (analiz["isim"],))
+    urun = c.fetchone()
 
-init_db()
+    if urun:
+        c.execute("UPDATE stok SET adet = adet + 1 WHERE id=?", (urun[0],))
+        conn.commit()
+        barkod = urun[5]
+    else:
+        barkod = str(uuid.uuid4())[:12]
+        c.execute("INSERT INTO stok (isim,mm,renk,yuzey,barkod,adet) VALUES (?,?,?,?,?,?)",
+                  (analiz["isim"], analiz["mm"], analiz["renk"], analiz["yuzey"], barkod, 1))
+        conn.commit()
 
-# ---------------- BARKOD ----------------
-def barkod_olustur():
-    return str(int(datetime.now().timestamp()))
+        if not os.path.exists("static"):
+            os.makedirs("static")
 
-def barkod_png(kod):
-    ean = barcode.get('code128', kod, writer=ImageWriter())
-    path = f"static/{kod}"
-    ean.save(path)
-    return path + ".png"
+        Code128(barkod, writer=ImageWriter()).save(f"static/{barkod}")
 
-# ---------------- ETIKET ----------------
-def etiket_yap(kod, urun, mm, ebat, yuzey):
-    barkod_path = barkod_png(kod)
+    return jsonify({"ok": True, "barkod": barkod})
 
-    img = Image.new('RGB', (600,350), "white")
-    draw = ImageDraw.Draw(img)
-
-    draw.text((20,20), urun, fill="black")
-    draw.text((20,70), f"{mm}mm  {ebat}", fill="black")
-    draw.text((20,110), f"Yüzey: {yuzey}", fill="black")
-
-    barkod_img = Image.open(barkod_path)
-    img.paste(barkod_img.resize((450,130)), (70,180))
-
-    path = f"static/etiket_{kod}.png"
-    img.save(path)
-    return path
-
-# ---------------- LOGIN ----------------
-@app.route("/", methods=["GET","POST"])
-def login():
-    if request.method == "POST":
-        u = request.form["user"]
-        p = request.form["pass"]
-
-        conn = sqlite3.connect(DB)
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p))
-        if c.fetchone():
-            session["user"] = u
-            return redirect("/panel")
-
-    return """
-    <h2>Giriş</h2>
-    <form method="post">
-    Kullanıcı <input name=user><br>
-    Şifre <input name=pass type=password><br>
-    <button>Giriş</button>
-    </form>
-    """
-
-# ---------------- PANEL ----------------
-@app.route("/panel")
-def panel():
-    if "user" not in session:
-        return redirect("/")
-
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
+# 📦 STOK LİSTE
+@app.route("/stok")
+def stok():
     c.execute("SELECT * FROM stok")
     data = c.fetchall()
-    conn.close()
 
-    html = """
-    <h2>Stok Panel</h2>
+    sonuc = []
+    for i in data:
+        sonuc.append({
+            "id": i[0],
+            "isim": i[1],
+            "mm": i[2],
+            "renk": i[3],
+            "yuzey": i[4],
+            "barkod": i[5],
+            "adet": i[6]
+        })
+    return jsonify(sonuc)
 
-    <button onclick="startScanner()">📷 Barkod Oku</button>
-    <video id="reader" width="300"></video>
-
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <script>
-    function startScanner(){
-        const html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start(
-            { facingMode: "environment" },
-            { fps: 10 },
-            (decodedText) => {
-                beep();
-                window.location="/scan/"+decodedText;
-            }
-        );
-    }
-
-    function beep(){
-        let ctx=new AudioContext();
-        let o=ctx.createOscillator();
-        o.connect(ctx.destination);
-        o.start();
-        o.stop(ctx.currentTime+0.1);
-    }
-    </script>
-
-    <br><a href="/ekle">+ Ürün</a>
-    <table border=1>
-    <tr>
-    <th>Barkod</th><th>Ürün</th><th>MM</th><th>Ebat</th><th>Yüzey</th><th>Adet</th><th>İşlem</th>
-    </tr>
-    """
-
-    for d in data:
-        html += f"""
-        <tr>
-        <td>{d[1]}</td>
-        <td>{d[2]}</td>
-        <td>{d[3]}</td>
-        <td>{d[4]}</td>
-        <td>{d[5]}</td>
-        <td>{d[6]}</td>
-        <td>
-            <a href="/art/{d[1]}">+</a>
-            <a href="/azal/{d[1]}">-</a>
-            <a href="/etiket/{d[1]}">🧾 Etiket</a>
-        </td>
-        </tr>
-        """
-
-    html += "</table>"
-    return html
-
-# ---------------- ÜRÜN EKLE ----------------
-@app.route("/ekle", methods=["GET","POST"])
-def ekle():
-    if request.method == "POST":
-        barkod = barkod_olustur()
-        secilen = int(request.form["urun"])
-        u = URUNLER[secilen]
-
-        urun_ad = f"{u['marka']} {u['model']} ({u['seri']})"
-
-        mm = "18"
-        ebat = "210x280"
-        adet = int(request.form["adet"])
-
-        conn = sqlite3.connect(DB)
-        c = conn.cursor()
-
-        c.execute("INSERT INTO stok VALUES(NULL,?,?,?,?,?,?)",
-                  (barkod,urun_ad,mm,ebat,u["yuzey"],adet))
-
-        conn.commit()
-        conn.close()
-
-        return redirect("/panel")
-
-    html = "<h2>Ürün Ekle</h2><form method=post>"
-
-    html += "<select name='urun'>"
-    for i,u in enumerate(URUNLER):
-        html += f"<option value='{i}'>{u['marka']} - {u['model']} ({u['seri']})</option>"
-    html += "</select><br>"
-
-    html += "Adet <input name=adet><br>"
-    html += "<button>Ekle</button></form>"
-
-    return html
-
-# ---------------- STOK ----------------
-def stok_degistir(kod, miktar):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-
-    c.execute("UPDATE stok SET adet = adet + ? WHERE barkod=?", (miktar,kod))
-    c.execute("INSERT INTO hareket VALUES(NULL,?,?,?,?,?)",
-              (kod,"degisim",miktar,session["user"],str(datetime.now())))
-    conn.commit()
-    conn.close()
-
-@app.route("/art/<kod>")
-def art(kod):
-    stok_degistir(kod,1)
-    return redirect("/panel")
-
-@app.route("/azal/<kod>")
-def azal(kod):
-    stok_degistir(kod,-1)
-    return redirect("/panel")
-
-# ---------------- SCAN ----------------
-@app.route("/scan/<kod>")
-def scan(kod):
-    stok_degistir(kod,-1)
-    return redirect("/panel")
-
-# ---------------- ETIKET ----------------
-@app.route("/etiket/<kod>")
-def etiket(kod):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
+# ➖ AZALT (stok çıkışı)
+@app.route("/dus/<kod>")
+def dus(kod):
     c.execute("SELECT * FROM stok WHERE barkod=?", (kod,))
-    d = c.fetchone()
-    conn.close()
+    urun = c.fetchone()
 
-    path = etiket_yap(kod,d[2],d[3],d[4],d[5])
-    return send_file(path, as_attachment=True)
+    if urun:
+        yeni = urun[6] - 1
+        c.execute("UPDATE stok SET adet=? WHERE barkod=?", (yeni, kod))
+        conn.commit()
 
-# ---------------- RUN ----------------
+        return jsonify({"adet": yeni, "uyari": yeni <= 2})
+    return jsonify({"hata":"yok"})
+
+# 🔍 BUL
+@app.route("/bul/<kod>")
+def bul(kod):
+    c.execute("SELECT * FROM stok WHERE barkod=?", (kod,))
+    i = c.fetchone()
+    if i:
+        return jsonify({
+            "isim": i[1],
+            "adet": i[6]
+        })
+    return jsonify({"hata":"yok"})
+
+# 🌐 ARAYÜZ
+@app.route("/")
+def index():
+    return render_template_string("""
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+
+<body>
+
+<h2>📦 Stok Sistemi</h2>
+
+<input id="isim" placeholder="örn: 60mm beyaz mat PVC">
+<button onclick="ekle()">Ekle</button>
+
+<h3>📋 Stok</h3>
+<ul id="liste"></ul>
+
+<h3>📷 Barkod Okut</h3>
+<div id="reader" style="width:300px"></div>
+
+<script>
+function ekle(){
+fetch("/ekle",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body: JSON.stringify({isim:isim.value})
+}).then(r=>r.json()).then(d=>{
+alert("Barkod: "+d.barkod)
+liste()
+})
+}
+
+function liste(){
+fetch("/stok").then(r=>r.json()).then(data=>{
+let html=""
+data.forEach(i=>{
+html+=`
+<li>
+${i.isim} | Adet:${i.adet}
+<br>
+<img src="/static/${i.barkod}.png" width="120">
+<button onclick="yazdir('${i.barkod}')">🖨</button>
+</li><hr>`
+})
+liste.innerHTML=html
+})
+}
+
+function yazdir(kod){
+let w=window.open("")
+w.document.write(`<img src="/static/${kod}.png">`)
+w.print()
+}
+
+function barkod(){
+const scanner = new Html5Qrcode("reader")
+scanner.start(
+{ facingMode:"environment"},
+{ fps:15 },
+(kod)=>{
+fetch("/dus/"+kod)
+.then(r=>r.json())
+.then(d=>{
+if(d.uyari){
+alert("⚠️ STOK AZALDI!")
+}else{
+alert("OK. Kalan: "+d.adet)
+}
+liste()
+})
+})
+}
+
+liste()
+barkod()
+</script>
+
+</body>
+</html>
+""")
+
 if __name__ == "__main__":
-    os.makedirs("static", exist_ok=True)
     app.run(host="0.0.0.0", port=5000)
