@@ -575,21 +575,21 @@ KAYDET
 
 <img src="/static/{{x[1]}}.png" style="width:250px;">
 
-</td>
-
-
-<td>{{x[2]}}</td>
-
-<td>{{x[3]}}</td>
-
-<td>{{x[4]}}</td>
-
-<td>{{x[8]}}</td>
-
-<td>{{x[9]}}</td>
-
-<td>{{x[10]}}</td>
 <td>
+
+<a href="/stok/{{x[0]}}/arttir">
+<button style="background:green">+</button>
+</a>
+
+<a href="/stok/{{x[0]}}/azalt">
+<button style="background:red">-</button>
+</a>
+
+<a href="/etiket/{{x[1]}}" target="_blank">
+<button style="background:black">YAZDIR</button>
+</a>
+
+</td>
 
 <a href="/stok/{{x[0]}}/arttir">
 <button style="background:green">
@@ -630,6 +630,86 @@ SİL
 """,
 urunler=urunler,
 depolar=DEPOLAR)
+
+@app.route("/etiket/<kod>")
+def etiket(kod):
+
+    if "user" not in session:
+        return redirect("/")
+
+    return render_template_string("""
+    <html>
+    <head>
+    <style>
+    body{text-align:center;font-family:Arial;}
+    .etiket{width:300px;border:1px solid #000;padding:10px;margin:20px auto;}
+    img{width:100%;}
+    </style>
+    </head>
+    <body>
+
+    <div class="etiket">
+        <h3>{{kod}}</h3>
+        <img src="/static/{{kod}}.png">
+    </div>
+
+    <button onclick="window.print()">🖨️ Yazdır</button>
+
+    </body>
+    </html>
+    """, kod=kod)
+
+@app.route("/stok/<int:id>/azalt")
+def azalt(id):
+
+    if "user" not in session:
+        return redirect("/")
+
+    con = baglan()
+
+    con.execute("""
+    UPDATE urunler
+    SET adet = adet - 1
+    WHERE id=?
+    """,(id,))
+
+    con.execute("""
+    INSERT INTO hareketler
+    VALUES(NULL,?,?,?,?)
+    """,(id,"AZALT",1,
+    datetime.now().strftime("%d.%m.%Y %H:%M")
+    ))
+
+    con.commit()
+    con.close()
+
+    return redirect("/panel")
+
+@app.route("/stok/<int:id>/arttir")
+def arttir(id):
+
+    if "user" not in session:
+        return redirect("/")
+
+    con = baglan()
+
+    con.execute("""
+    UPDATE urunler
+    SET adet = adet + 1
+    WHERE id=?
+    """,(id,))
+
+    con.execute("""
+    INSERT INTO hareketler
+    VALUES(NULL,?,?,?,?)
+    """,(id,"ARTTIR",1,
+    datetime.now().strftime("%d.%m.%Y %H:%M")
+    ))
+
+    con.commit()
+    con.close()
+
+    return redirect("/panel")
 
 @app.route("/stok/<int:id>/<islem>")
 def stok(id,islem):
@@ -862,7 +942,6 @@ Toplam Stok:
 <tr>
 
 <th>Ürün ID</th>
-<th>İşlem</th>
 <th>Adet</th>
 <th>Tarih</th>
 
