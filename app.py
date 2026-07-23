@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, request, redirect, session, jsonify
+from flask import Flask, render_template_string, request, redirect, session
 import sqlite3
 from datetime import datetime
 
@@ -21,7 +21,7 @@ def init_db():
         name TEXT,
         type TEXT,
         size TEXT,
-        unit TEXT,      -- HG / MAT
+        unit TEXT,
         class TEXT,
         color TEXT,
         barcode TEXT UNIQUE
@@ -50,6 +50,22 @@ def init_db():
 
 init_db()
 
+# ================= STYLE =================
+style = """
+<style>
+body { font-family: Arial; background:#f4f6f9; margin:0; }
+.container { max-width:900px; margin:auto; padding:20px; }
+.card { background:white; padding:20px; border-radius:10px; box-shadow:0 5px 15px rgba(0,0,0,0.1); margin-bottom:20px;}
+input,select,button { width:100%; padding:10px; margin:5px 0; border-radius:6px; border:1px solid #ccc;}
+button { background:#007bff; color:white; border:none; cursor:pointer;}
+button:hover { background:#0056b3;}
+h2 { margin-top:0;}
+.menu a { display:block; padding:10px; background:#007bff; color:white; text-decoration:none; margin:5px 0; border-radius:6px;}
+.menu a:hover { background:#0056b3;}
+.label { border:1px solid #000; width:300px; padding:5px; margin:5px;}
+</style>
+"""
+
 # ================= LOGIN =================
 @app.route("/", methods=["GET","POST"])
 def login():
@@ -67,13 +83,17 @@ def login():
             session["user"] = u
             return redirect("/panel")
 
-    return """
-    <h2>Giriş</h2>
-    <form method="post">
-    Kullanıcı: <input name="u"><br>
-    Şifre: <input name="p" type="password"><br>
-    <button>Giriş</button>
-    </form>
+    return style + """
+    <div class="container">
+        <div class="card">
+        <h2>Giriş</h2>
+        <form method="post">
+        <input name="u" placeholder="Kullanıcı">
+        <input name="p" type="password" placeholder="Şifre">
+        <button>Giriş</button>
+        </form>
+        </div>
+    </div>
     """
 
 # ================= PANEL =================
@@ -82,32 +102,18 @@ def panel():
     if "user" not in session:
         return redirect("/")
 
-    return render_template_string("""
-    <h2>Panel</h2>
-
-    <a href="/add">➕ Ürün Ekle</a><br>
-    <a href="/stock">📦 Stok İşlem</a><br>
-    <a href="/labels">🖨 Etiket Bas</a><br>
-
-    <hr>
-
-    <video id="cam" width="300" autoplay></video><br>
-    <button onclick="startCam()">📷 Kamera Aç</button>
-
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <script>
-    function startCam(){
-        const html5QrCode = new Html5Qrcode("cam");
-        html5QrCode.start(
-            { facingMode: "environment" },
-            { fps: 10 },
-            (decodedText) => {
-                alert("Barkod: " + decodedText);
-            }
-        );
-    }
-    </script>
-    """)
+    return style + """
+    <div class="container">
+        <div class="card">
+        <h2>Panel</h2>
+        <div class="menu">
+            <a href="/add">➕ Ürün Ekle</a>
+            <a href="/stock">📦 Stok İşlem</a>
+            <a href="/labels">🖨 Etiket Bas</a>
+        </div>
+        </div>
+    </div>
+    """
 
 # ================= ÜRÜN EKLE =================
 @app.route("/add", methods=["GET","POST"])
@@ -117,7 +123,7 @@ def add():
             request.form["name"],
             request.form["type"],
             request.form["size"],
-            request.form["unit"],   # HG / MAT
+            request.form["unit"],
             request.form["class"],
             request.form["color"],
             request.form["barcode"]
@@ -131,30 +137,44 @@ def add():
         conn.commit()
         conn.close()
 
-        return "OK"
+        return redirect("/panel")
 
-    return """
+    return style + """
+    <div class="container">
+    <div class="card">
     <h2>Ürün Ekle</h2>
     <form method="post">
-    Ad: <input name="name"><br>
-    Cins: <input name="type"><br>
-    Ebat: <input name="size"><br>
+    <input name="name" placeholder="Ürün adı">
+    <input name="type" placeholder="Cins">
+    <input name="size" placeholder="Ebat">
 
-    Birim:
     <select name="unit">
         <option>HG</option>
         <option>MAT</option>
-    </select><br>
+    </select>
 
-    Sınıf: <input name="class"><br>
-    Renk: <input name="color"><br>
-    Barkod: <input name="barcode"><br>
+    <input name="class" placeholder="Sınıf">
+    <input name="color" placeholder="Renk">
+    <input name="barcode" placeholder="Barkod">
 
     <button>Kaydet</button>
     </form>
+    </div>
+    </div>
     """
 
 # ================= STOK =================
+depolar = [
+"1.MDF SATIŞ DEPOSU",
+"2.LAMİNANT DEPOSU",
+"3.KAPI DEPOSU",
+"4.HGLOSS DEPOSU (MORAYIN YANI)",
+"5.SÜTÇÜ YANI DEPO",
+"6.HELVACI YANI DEPO",
+"7.RÖTBALANS YANI DEPO",
+"8.KESİMHANE DEPOSU"
+]
+
 @app.route("/stock", methods=["GET","POST"])
 def stock():
     if request.method == "POST":
@@ -173,7 +193,7 @@ def stock():
 
         pid, pname = p
 
-        c.execute("SELECT id,quantity FROM stock WHERE product_id=? AND depo=?", (pid,depo))
+        c.execute("SELECT id FROM stock WHERE product_id=? AND depo=?", (pid,depo))
         s = c.fetchone()
 
         if s:
@@ -189,27 +209,26 @@ def stock():
         conn.commit()
         conn.close()
 
-        return "OK"
+        return redirect("/panel")
 
-    return """
-    <h2>Stok</h2>
+    options = "".join([f"<option>{d}</option>" for d in depolar])
+
+    return style + f"""
+    <div class="container">
+    <div class="card">
+    <h2>Stok İşlem</h2>
     <form method="post">
-    Barkod: <input name="barcode"><br>
-    Depo:
-    <select name="depo">
-        <option>Depo1</option>
-        <option>Depo2</option>
-        <option>Depo3</option>
-        <option>Depo4</option>
-        <option>Depo5</option>
-        <option>Depo6</option>
-        <option>Depo7</option>
-        <option>Depo8</option>
-    </select><br>
+    <input name="barcode" placeholder="Barkod">
 
-    Adet: <input name="qty"><br>
+    <select name="depo">
+    {options}
+    </select>
+
+    <input name="qty" placeholder="Adet">
     <button>Kaydet</button>
     </form>
+    </div>
+    </div>
     """
 
 # ================= ETİKET =================
@@ -225,14 +244,11 @@ def labels():
         p = c.fetchone()
         conn.close()
 
-        if not p:
-            return "ÜRÜN YOK"
-
-        html = "<script>window.print()</script>"
+        html = "<script>window.print()</script><div style='display:flex;flex-wrap:wrap;'>"
 
         for i in range(count):
             html += f"""
-            <div style="border:1px solid #000; width:300px; margin:5px; padding:5px;">
+            <div class="label">
             <b>{p[1]}</b><br>
             {p[2]} / {p[3]}<br>
             {p[4]}<br>
@@ -242,15 +258,20 @@ def labels():
             </div>
             """
 
+        html += "</div>"
         return html
 
-    return """
-    <h2>Etiket</h2>
+    return style + """
+    <div class="container">
+    <div class="card">
+    <h2>Etiket Bas</h2>
     <form method="post">
-    Barkod: <input name="barcode"><br>
-    Kaç Adet: <input name="count"><br>
+    <input name="barcode" placeholder="Barkod">
+    <input name="count" placeholder="Kaç adet">
     <button>Bas</button>
     </form>
+    </div>
+    </div>
     """
 
 # ================= RUN =================
