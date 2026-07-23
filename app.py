@@ -270,13 +270,14 @@ def rapor():
 <h2>Toplam Stok: {{ toplam }}</h2>
 
 .etiket {
-    border: 1px solid black;
+border: 1px solid black;
     width: 200px;
     padding: 10px;
     margin: 5px;
     text-align: center;
 }
 
+<link rel="stylesheet" href="/static/style.css">
 .urun-adi {
     font-weight: bold;
     font-size: 14px;
