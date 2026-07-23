@@ -568,7 +568,15 @@ KAYDET
 <tr>
 
 
-<td>{{x[1]}}</td>
+<td style="
+{% if x[6]|int < 5 %}
+background:red;
+color:white;
+font-weight:bold;
+{% endif %}
+">
+{{x[6]}}
+</td>
 
 
 <td>
@@ -1041,7 +1049,7 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
     if (result) {
         alert("OKUNAN: " + result.text);
 
-        window.location.href = "/panel?ara=" + result.text;
+        window.location.href = "/stok_bul/" + result.text;
     }
 });
 
@@ -1268,6 +1276,39 @@ if __name__=="__main__":
 
     )
 
+@app.route("/stok_bul/<kod>")
+def stok_bul(kod):
+
+    if "user" not in session:
+        return redirect("/")
+
+    con = baglan()
+
+    urun = con.execute("""
+    SELECT id FROM urunler WHERE barkod=?
+    """,(kod,)).fetchone()
+
+    if urun:
+
+        con.execute("""
+        UPDATE urunler
+        SET adet = adet - 1
+        WHERE id=?
+        """,(urun[0],))
+
+        con.execute("""
+        INSERT INTO hareketler
+        VALUES(NULL,?,?,?,?)
+        """,(urun[0],"OTOMATIK AZALT",1,
+        datetime.now().strftime("%d.%m.%Y %H:%M")
+        ))
+
+        con.commit()
+
+    con.close()
+
+    return redirect("/panel")
+    
 @app.route("/excel")
 def excel():
 
