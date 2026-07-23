@@ -535,6 +535,7 @@ KAYDET
 <th>Renk</th>
 <th>Adet</th>
 <th>Depo</th>
+<th>İşlem</th>
 
 </tr>
 
@@ -567,6 +568,30 @@ KAYDET
 <td>{{x[9]}}</td>
 
 <td>{{x[10]}}</td>
+<td>
+
+<a href="/stok/{{x[0]}}/arttir">
+<button style="background:green">
++
+</button>
+</a>
+
+
+<a href="/stok/{{x[0]}}/azalt">
+<button style="background:red">
+-
+</button>
+</a>
+
+
+<a href="/sil/{{x[0]}}">
+<button style="background:black">
+SİL
+</button>
+</a>
+
+
+</td>
 
 
 </tr>
@@ -587,6 +612,72 @@ depolar=DEPOLAR)
 
 @app.route("/stok/<int:id>/<islem>")
 def stok(id,islem):
+
+    if "user" not in session:
+        return redirect("/")
+
+
+    con=baglan()
+
+
+    urun=con.execute(
+        "SELECT adet,isim FROM urunler WHERE id=?",
+        (id,)
+    ).fetchone()
+
+
+
+    if urun:
+
+        eski=urun[0]
+
+
+        if islem=="arttir":
+
+            yeni=eski+1
+            hareket="STOK GİRİŞ"
+
+
+        elif islem=="azalt":
+
+            yeni=max(0,eski-1)
+            hareket="STOK ÇIKIŞ"
+
+
+        con.execute(
+        """
+        UPDATE urunler
+        SET adet=?
+        WHERE id=?
+        """,
+        (
+        yeni,
+        id
+        ))
+
+
+
+        con.execute(
+        """
+        INSERT INTO hareketler
+        VALUES(NULL,?,?,?,?)
+        """,
+        (
+        id,
+        hareket,
+        1,
+        datetime.now().strftime("%d.%m.%Y %H:%M")
+        ))
+
+
+        con.commit()
+
+
+
+    con.close()
+
+
+    return redirect("/panel")
 
     if "user" not in session:
         return redirect("/")
