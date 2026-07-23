@@ -9,6 +9,17 @@ app = Flask(__name__)
 app.secret_key = "1234"
 DB = "stok.db"
 
+# ---------------- ÜRÜN LİSTESİ ----------------
+URUNLER = [
+    {"marka":"VARIO","seri":"AİRLAM","model":"ATLANTİK ÇAM","yuzey":"MAT"},
+    {"marka":"VARIO","seri":"AİRLAM","model":"BAMBU","yuzey":"MAT"},
+    {"marka":"STRWD","seri":"MEGALAM","model":"AFRİKA","yuzey":"MAT"},
+    {"marka":"STRWD","seri":"MEGALAM","model":"ATLAS","yuzey":"MAT"},
+    {"marka":"STRWD","seri":"MEGALAM","model":"ANTRASİT GRİ","yuzey":"MAT"},
+    {"marka":"VARIO","seri":"SMARTLAM","model":"KARBON GRİ","yuzey":"NATURAL"},
+    {"marka":"VARIO","seri":"SMARTLAM","model":"TEAK","yuzey":"MAT"},
+]
+
 # ---------------- DB ----------------
 def init_db():
     conn = sqlite3.connect(DB)
@@ -20,7 +31,7 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS stok (
         id INTEGER PRIMARY KEY,
         barkod TEXT,
-        cins TEXT,
+        urun TEXT,
         mm TEXT,
         ebat TEXT,
         yuzey TEXT,
@@ -51,18 +62,18 @@ def barkod_png(kod):
     return path + ".png"
 
 # ---------------- ETIKET ----------------
-def etiket_yap(kod, cins, mm, ebat, yuzey):
+def etiket_yap(kod, urun, mm, ebat, yuzey):
     barkod_path = barkod_png(kod)
 
-    img = Image.new('RGB', (500,300), "white")
+    img = Image.new('RGB', (600,350), "white")
     draw = ImageDraw.Draw(img)
 
-    draw.text((20,20), f"{cins}", fill="black")
-    draw.text((20,60), f"{mm}mm - {ebat}", fill="black")
-    draw.text((20,100), f"{yuzey}", fill="black")
+    draw.text((20,20), urun, fill="black")
+    draw.text((20,70), f"{mm}mm  {ebat}", fill="black")
+    draw.text((20,110), f"Yüzey: {yuzey}", fill="black")
 
     barkod_img = Image.open(barkod_path)
-    img.paste(barkod_img.resize((400,120)), (50,150))
+    img.paste(barkod_img.resize((450,130)), (70,180))
 
     path = f"static/etiket_{kod}.png"
     img.save(path)
@@ -135,7 +146,7 @@ def panel():
     <br><a href="/ekle">+ Ürün</a>
     <table border=1>
     <tr>
-    <th>Barkod</th><th>Cins</th><th>MM</th><th>Ebat</th><th>Yüzey</th><th>Adet</th><th>İşlem</th>
+    <th>Barkod</th><th>Ürün</th><th>MM</th><th>Ebat</th><th>Yüzey</th><th>Adet</th><th>İşlem</th>
     </tr>
     """
 
@@ -159,53 +170,42 @@ def panel():
     html += "</table>"
     return html
 
-# ---------------- EKLE ----------------
+# ---------------- ÜRÜN EKLE ----------------
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
     if request.method == "POST":
         barkod = barkod_olustur()
-        cins = request.form["cins"]
-        mm = request.form["mm"]
-        ebat = request.form["ebat"]
-        yuzey = request.form["yuzey"]
+        secilen = int(request.form["urun"])
+        u = URUNLER[secilen]
+
+        urun_ad = f"{u['marka']} {u['model']} ({u['seri']})"
+
+        mm = "18"
+        ebat = "210x280"
         adet = int(request.form["adet"])
 
         conn = sqlite3.connect(DB)
         c = conn.cursor()
+
         c.execute("INSERT INTO stok VALUES(NULL,?,?,?,?,?,?)",
-                  (barkod,cins,mm,ebat,yuzey,adet))
+                  (barkod,urun_ad,mm,ebat,u["yuzey"],adet))
+
         conn.commit()
         conn.close()
 
         return redirect("/panel")
 
-    return """
-    <h2>Ürün Ekle</h2>
-    <form method=post>
-    Cins:
-    <select name=cins>
-    <option>Glosslak</option>
-    <option>Vario</option>
-    <option>Kapı</option>
-    <option>MDF Lam</option>
-    <option>Ham MDF</option>
-    <option>Arkalık</option>
-    </select><br>
+    html = "<h2>Ürün Ekle</h2><form method=post>"
 
-    MM <input name=mm><br>
-    Ebat <input name=ebat><br>
+    html += "<select name='urun'>"
+    for i,u in enumerate(URUNLER):
+        html += f"<option value='{i}'>{u['marka']} - {u['model']} ({u['seri']})</option>"
+    html += "</select><br>"
 
-    Yüzey:
-    <select name=yuzey>
-    <option>HG</option>
-    <option>Mat</option>
-    </select><br>
+    html += "Adet <input name=adet><br>"
+    html += "<button>Ekle</button></form>"
 
-    Adet <input name=adet><br>
-
-    <button>Ekle</button>
-    </form>
-    """
+    return html
 
 # ---------------- STOK ----------------
 def stok_degistir(kod, miktar):
