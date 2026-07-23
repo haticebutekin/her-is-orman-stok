@@ -125,15 +125,6 @@ def barkod_olustur(kod):
 
     from barcode import Code128
 
-    writer = ImageWriter()
-
-    options = {
-        "module_width": 0.5,
-        "module_height": 35,
-        "font_size": 18,
-        "text_distance": 10,
-        "quiet_zone": 6
-    }
 
     barcode_class = Code128(kod, writer=writer)
 
