@@ -7,6 +7,11 @@ from datetime import datetime
 import barcode
 from barcode.writer import ImageWriter
 
+<a href="/toplu_etiket" target="_blank">
+<button style="background:black;color:white;padding:10px;">
+🧾 TOPLU ETİKET
+</button>
+</a>
 
 app = Flask(__name__)
 app.config["PROPAGATE_EXCEPTIONS"] = True
@@ -258,7 +263,77 @@ GİRİŞ
 """)
 
 
+@app.route("/toplu_etiket")
+def toplu_etiket():
 
+    if "user" not in session:
+        return redirect("/")
+
+    con = baglan()
+
+    urunler = con.execute("""
+    SELECT barkod FROM urunler
+    ORDER BY id DESC
+    LIMIT 30
+    """).fetchall()
+
+    con.close()
+
+    return render_template_string("""
+
+    <html>
+    <head>
+    <style>
+
+    body{
+        font-family:Arial;
+    }
+
+    .sayfa{
+        display:flex;
+        flex-wrap:wrap;
+    }
+
+    .etiket{
+        width:30%;
+        border:1px solid #000;
+        margin:5px;
+        text-align:center;
+        padding:5px;
+    }
+
+    img{
+        width:100%;
+    }
+
+    @media print{
+        button{display:none;}
+    }
+
+    </style>
+    </head>
+
+    <body>
+
+    <button onclick="window.print()">🖨️ Yazdır</button>
+
+    <div class="sayfa">
+
+    {% for x in urunler %}
+
+        <div class="etiket">
+            <b>{{x[0]}}</b>
+            <img src="/static/{{x[0]}}.png">
+        </div>
+
+    {% endfor %}
+
+    </div>
+
+    </body>
+    </html>
+
+    """, urunler=urunler)
 
 
 @app.route("/panel",methods=["GET","POST"])
