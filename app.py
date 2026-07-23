@@ -1,184 +1,194 @@
-from flask import Flask, render_template_string, request, redirect, session, jsonify
-import sqlite3, random, datetime
+from flask import Flask, request, session, redirect
+import sqlite3
+import pandas as pd
+from reportlab.platypus import SimpleDocTemplate, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
 
 app = Flask(__name__)
-app.secret_key = "123"
+app.secret_key = "1234"
 
-# ================= DB =================
+PERSONELLER = {
+    "BEHİÇ": "123",
+    "RAMAZAN": "123",
+    "ORHAN": "123"
+}
+
 def db():
-    return sqlite3.connect("db.sqlite3")
+    return sqlite3.connect("stok.db")
 
-with db() as con:
-    con.execute("""CREATE TABLE IF NOT EXISTS urun(
-        id INTEGER PRIMARY KEY,
-        barkod TEXT,
+# DB oluştur
+def init_db():
+    con = db()
+    cur = con.cursor()
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS urun(
+        barkod TEXT PRIMARY KEY,
         ad TEXT,
         cins TEXT,
         ebat TEXT,
-        yuzey TEXT,
         sinif TEXT,
-        renk TEXT
+        renk TEXT,
+        yuzey TEXT
     )""")
 
-    con.execute("""CREATE TABLE IF NOT EXISTS stok(
-        id INTEGER PRIMARY KEY,
+    cur.execute("""CREATE TABLE IF NOT EXISTS hareket(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         barkod TEXT,
-        depo TEXT,
-        adet INTEGER
-    )""")
-
-    con.execute("""CREATE TABLE IF NOT EXISTS log(
-        id INTEGER PRIMARY KEY,
-        barkod TEXT,
-        islem TEXT,
-        adet INTEGER,
         personel TEXT,
-        tarih TEXT
+        depo TEXT,
+        miktar INTEGER
     )""")
 
-# ================= DEPOLAR =================
-DEPOLAR = [
-"1.MDF SATIŞ DEPOSU",
-"2.LAMİNANT DEPOSU",
-"3.KAPI DEPOSU",
-"4.HGLOSS DEPOSU",
-"5.MORAYIN YANINDAKİ DEPO",
-"6.SÜTÇÜNÜN YANINDAKİ DEPO",
-"7.RÖTBALANSÇININ ORDAKİ DEPO",
-"8.KESİMHANEDEKİ DEPO"
-]
+    con.commit()
+    con.close()
 
-# ================= HTML =================
-HTML = """
-<html>
-<head>
-<title>Stok Sistemi PRO</title>
-<script src="https://unpkg.com/html5-qrcode"></script>
-<style>
-body{font-family:Arial;background:#111;color:#fff;padding:20px}
-.card{background:#1e1e1e;padding:15px;margin:10px;border-radius:10px}
-input,select,button{padding:8px;margin:5px;border-radius:5px;border:none}
-button{background:#0a84ff;color:white}
-</style>
-</head>
-<body>
+init_db()
 
-<h2>📦 STOK SİSTEMİ PRO</h2>
+# LOGIN
+@app.route("/", methods=["GET","POST"])
+def login():
+    if request.method == "POST":
+        user = request.form["user"]
+        sifre = request.form["sifre"]
 
-<div class="card">
-<form method="POST" action="/urun">
-<h3>Ürün Ekle</h3>
-<input name="ad" placeholder="Ürün Adı" required>
-<input name="cins" placeholder="Cinsi">
-<input name="ebat" placeholder="Ebat (mm)">
-<select name="yuzey">
-<option>HG</option>
-<option>MAT</option>
-</select>
-<input name="sinif" placeholder="Sınıf">
-<input name="renk" placeholder="Renk">
-<button>Ekle</button>
-</form>
-</div>
+        if user in PERSONELLER and PERSONELLER[user] == sifre:
+            session["user"] = user
+            return redirect("/panel")
+        return "HATALI GİRİŞ"
 
-<div class="card">
-<form method="POST" action="/stok">
-<h3>Stok İşlem</h3>
-<input name="barkod" id="barkod" placeholder="Barkod" required>
-<input name="adet" placeholder="Adet" required>
-<select name="depo">
-{% for d in depolar %}
-<option>{{d}}</option>
-{% endfor %}
-</select>
-<select name="islem">
-<option>giris</option>
-<option>cikis</option>
-</select>
-<input name="personel" placeholder="Personel" required>
-<button>Kaydet</button>
-</form>
-</div>
+    return """
+    <h2>Personel Giriş</h2>
+    <form method="post">
+    Kullanıcı: <select name="user">
+    <option>BEHİÇ</option>
+    <option>RAMAZAN</option>
+    <option>ORHAN</option>
+    </select><br>
+    Şifre: <input type="password" name="sifre"><br>
+    <button>Giriş</button>
+    </form>
+    """
 
-<div class="card">
-<h3>📷 Barkod Oku</h3>
-<div id="reader" style="width:300px"></div>
-</div>
+# PANEL
+@app.route("/panel")
+def panel():
+    if "user" not in session:
+        return redirect("/")
 
-<div class="card">
-<h3>📊 Stoklar</h3>
-{% for s in stok %}
-<div>{{s[0]}} | {{s[1]}} | {{s[2]}}</div>
-{% endfor %}
-</div>
+    return """
+    <h2>Stok Panel</h2>
 
-<div class="card">
-<h3>📜 Hareketler</h3>
-{% for l in log %}
-<div>{{l[0]}} | {{l[1]}} | {{l[2]}} | {{l[3]}}</div>
-{% endfor %}
-</div>
+    <form method="post" action="/ekle">
+    Barkod: <input name="barkod"><br>
+    Ad: <input name="ad"><br>
+    Cins: <input name="cins"><br>
+    Ebat: <input name="ebat"><br>
+    Sınıf: <input name="sinif"><br>
+    Renk: <input name="renk"><br>
+    Yüzey(mm/hg/mat): <input name="yuzey"><br>
+    <button>Ürün Ekle</button>
+    </form>
 
-<script>
-function onScanSuccess(decodedText){
-document.getElementById("barkod").value = decodedText;
-}
-new Html5QrcodeScanner("reader",{fps:10}).render(onScanSuccess);
-</script>
+    <hr>
 
-</body>
-</html>
-"""
+    <form method="post" action="/stok">
+    Barkod: <input name="barkod" id="barkod"><br>
+    Depo:
+    <select name="depo">
+    <option>ANA DEPO</option>
+    <option>ŞANTİYE</option>
+    </select><br>
+    Miktar: <input name="miktar"><br>
+    <button>Stok Hareketi</button>
+    </form>
 
-# ================= ROUTES =================
-@app.route("/")
-def index():
-    with db() as con:
-        stok = con.execute("SELECT barkod,depo,adet FROM stok").fetchall()
-        log = con.execute("SELECT barkod,islem,adet,personel FROM log ORDER BY id DESC LIMIT 20").fetchall()
-    return render_template_string(HTML, stok=stok, log=log, depolar=DEPOLAR)
+    <hr>
 
-@app.route("/urun", methods=["POST"])
-def urun():
-    barkod = str(random.randint(1000000000,9999999999))
-    with db() as con:
-        con.execute("INSERT INTO urun(barkod,ad,cins,ebat,yuzey,sinif,renk) VALUES(?,?,?,?,?,?,?)",
-        (barkod,
-         request.form["ad"],
-         request.form["cins"],
-         request.form["ebat"],
-         request.form["yuzey"],
-         request.form["sinif"],
-         request.form["renk"]))
-    return redirect("/")
+    <video id="video" width="300" height="200" autoplay></video>
 
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script>
+    const codeReader = new ZXing.BrowserBarcodeReader();
+    codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+        if (result) {
+            document.getElementById('barkod').value = result.text;
+        }
+    });
+    </script>
+
+    <hr>
+    <a href="/rapor">Excel Rapor</a>
+    """
+
+# ÜRÜN EKLE
+@app.route("/ekle", methods=["POST"])
+def ekle():
+    con = db()
+    con.execute("INSERT INTO urun VALUES (?,?,?,?,?,?,?)", (
+        request.form["barkod"],
+        request.form["ad"],
+        request.form["cins"],
+        request.form["ebat"],
+        request.form["sinif"],
+        request.form["renk"],
+        request.form["yuzey"]
+    ))
+    con.commit()
+    return "ÜRÜN EKLENDİ"
+
+# STOK HAREKET
 @app.route("/stok", methods=["POST"])
 def stok():
+    if "user" not in session:
+        return redirect("/")
+
     barkod = request.form["barkod"]
-    adet = int(request.form["adet"])
+    miktar = request.form["miktar"]
     depo = request.form["depo"]
-    islem = request.form["islem"]
-    personel = request.form["personel"]
+    personel = session["user"]
 
-    with db() as con:
-        mevcut = con.execute("SELECT adet FROM stok WHERE barkod=? AND depo=?",(barkod,depo)).fetchone()
+    con = db()
+    urun = con.execute("SELECT * FROM urun WHERE barkod=?", (barkod,)).fetchone()
 
-        if islem=="giris":
-            if mevcut:
-                con.execute("UPDATE stok SET adet=adet+? WHERE barkod=? AND depo=?",(adet,barkod,depo))
-            else:
-                con.execute("INSERT INTO stok(barkod,depo,adet) VALUES(?,?,?)",(barkod,depo,adet))
+    if not urun:
+        return "BU BARKOD YOK!"
 
-        if islem=="cikis":
-            if not mevcut or mevcut[0] < adet:
-                return "YETERSİZ STOK!"
-            con.execute("UPDATE stok SET adet=adet-? WHERE barkod=? AND depo=?",(adet,barkod,depo))
+    con.execute("INSERT INTO hareket (barkod,personel,depo,miktar) VALUES (?,?,?,?)",
+                (barkod,personel,depo,miktar))
+    con.commit()
 
-        con.execute("INSERT INTO log(barkod,islem,adet,personel,tarih) VALUES(?,?,?,?,?)",
-        (barkod,islem,adet,personel,str(datetime.datetime.now())))
+    return f"OK -> {urun[1]} | {personel}"
 
-    return redirect("/")
+# PDF ETİKET
+@app.route("/etiket/<barkod>")
+def etiket(barkod):
+    con = db()
+    urun = con.execute("SELECT * FROM urun WHERE barkod=?", (barkod,)).fetchone()
 
-# ================= RUN =================
-if __name__ == "__main__":
-    app.run(debug=True)
+    if not urun:
+        return "ÜRÜN YOK"
+
+    dosya = f"{barkod}.pdf"
+    doc = SimpleDocTemplate(dosya)
+    styles = getSampleStyleSheet()
+
+    content = []
+    for i in urun:
+        content.append(Paragraph(str(i), styles["Normal"]))
+
+    doc.build(content)
+
+    return f"PDF oluşturuldu: {dosya}"
+
+# EXCEL RAPOR
+@app.route("/rapor")
+def rapor():
+    con = db()
+    data = con.execute("SELECT * FROM hareket").fetchall()
+
+    df = pd.DataFrame(data, columns=["ID","Barkod","Personel","Depo","Miktar"])
+    df.to_excel("rapor.xlsx", index=False)
+
+    return "Excel hazır: rapor.xlsx"
+
+app.run(debug=True)
