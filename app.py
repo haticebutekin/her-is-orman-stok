@@ -737,10 +737,6 @@ def etiket(kod):
     </html>
     """, kod=kod)
 
-<a href="/toplu_etiket" target="_blank">
-<button style="background:black;color:white;padding:10px;">
-</button>
-</a>
 
 @app.route("/stok/<int:id>/azalt")
 def azalt(id):
@@ -998,6 +994,12 @@ def rapor():
 
 
     return render_template_string("""
+
+    <a href="/toplu_etiket" target="_blank">
+<button style="background:black;color:white;padding:10px;">
+TOPLU ETIKET
+</button>
+</a>
 
 <h1>
 HER İŞ STOK RAPOR
