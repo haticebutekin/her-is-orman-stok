@@ -1,17 +1,14 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, render_template_string
 import sqlite3
 import os
 from datetime import datetime
 import barcode
 from barcode.writer import ImageWriter
-from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
 DB = "stok.db"
 
-# -----------------------------
-# VERİTABANI
-# -----------------------------
+# ---------------- DB ----------------
 def init_db():
     conn = sqlite3.connect(DB)
     c = conn.cursor()
@@ -19,13 +16,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
-        barcode TEXT,
-        cins TEXT,
-        ebat TEXT,
-        mm TEXT,
-        hg TEXT,
-        yuzey TEXT,
-        renk TEXT
+        barcode TEXT
     )''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS stock (
@@ -35,73 +26,148 @@ def init_db():
         adet INTEGER
     )''')
 
-    c.execute('''CREATE TABLE IF NOT EXISTS logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user TEXT,
-        action TEXT,
-        product_id INTEGER,
-        depo INTEGER,
-        adet INTEGER,
-        tarih TEXT
-    )''')
-
     conn.commit()
     conn.close()
 
 init_db()
 
-# -----------------------------
-# BARKOD OLUŞTUR
-# -----------------------------
+# ---------------- HTML PANEL ----------------
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+<title>STOK PANEL</title>
+</head>
+<body>
+
+<h2>ÜRÜN EKLE</h2>
+<form id="form">
+İsim: <input name="name"><br>
+<button type="submit">EKLE</button>
+</form>
+
+<h2>STOK EKLE</h2>
+<form id="stokForm">
+Ürün ID: <input name="product_id"><br>
+Depo: <input name="depo"><br>
+Adet: <input name="adet"><br>
+<button type="submit">EKLE</button>
+</form>
+
+<h2>BARKOD OKUT</h2>
+<div id="reader" style="width:300px"></div>
+
+Depo: <input id="scanDepo"><br>
+Adet: <input id="scanAdet" value="1"><br>
+
+<button onclick="startScanner()">KAMERAYI AÇ</button>
+
+<pre id="log"></pre>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<script>
+document.getElementById("form").onsubmit = async (e)=>{
+e.preventDefault()
+let data = Object.fromEntries(new FormData(e.target))
+
+let res = await fetch("/add_product",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify(data)
+})
+
+let json = await res.json()
+alert("BARKOD: " + json.barcode)
+}
+
+document.getElementById("stokForm").onsubmit = async (e)=>{
+e.preventDefault()
+let data = Object.fromEntries(new FormData(e.target))
+
+await fetch("/add_stock",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify(data)
+})
+
+alert("stok eklendi")
+}
+
+function startScanner(){
+
+const html5QrCode = new Html5Qrcode("reader");
+
+html5QrCode.start(
+{ facingMode: "environment" },
+{ fps: 10, qrbox: 250 },
+
+async (decodedText) => {
+
+let depo = Number(document.getElementById("scanDepo").value)
+let adet = Number(document.getElementById("scanAdet").value)
+
+let res = await fetch("/scan",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+barcode: decodedText,
+depo: depo,
+adet: adet
+})
+})
+
+let data = await res.json()
+
+document.getElementById("log").innerText = JSON.stringify(data,null,2)
+
+alert("OKUTULDU: " + decodedText)
+
+html5QrCode.stop()
+
+},
+(err)=>{}
+)
+}
+</script>
+
+</body>
+</html>
+"""
+
+# ---------------- ANA SAYFA ----------------
+@app.route("/")
+def panel():
+    return render_template_string(HTML)
+
+# ---------------- BARKOD ----------------
 def generate_barcode(code):
     EAN = barcode.get_barcode_class('code128')
     ean = EAN(code, writer=ImageWriter())
-    filename = f"barcodes/{code}"
     if not os.path.exists("barcodes"):
         os.makedirs("barcodes")
-    ean.save(filename)
-    return filename + ".png"
+    ean.save(f"barcodes/{code}")
 
-# -----------------------------
-# ÜRÜN EKLE
-# -----------------------------
+# ---------------- ÜRÜN EKLE ----------------
 @app.route("/add_product", methods=["POST"])
 def add_product():
     data = request.json
-
     code = str(int(datetime.now().timestamp()))
-    barcode_img = generate_barcode(code)
+
+    generate_barcode(code)
 
     conn = sqlite3.connect(DB)
     c = conn.cursor()
 
-    c.execute("""
-    INSERT INTO products (name, barcode, cins, ebat, mm, hg, yuzey, renk)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        data["name"], code,
-        data.get("cins"),
-        data.get("ebat"),
-        data.get("mm"),
-        data.get("hg"),
-        data.get("yuzey"),
-        data.get("renk")
-    ))
-
-    product_id = c.lastrowid
+    c.execute("INSERT INTO products (name, barcode) VALUES (?, ?)",
+              (data["name"], code))
 
     conn.commit()
     conn.close()
 
-    return jsonify({
-        "product_id": product_id,
-        "barcode": code,
-        "barcode_img": barcode_img
-    })
+    return jsonify({"barcode": code})
 
-# -----------------------------
-# STOK GİR (DEPO BAZLI)
-# -----------------------------
+# ---------------- STOK EKLE ----------------
 @app.route("/add_stock", methods=["POST"])
 def add_stock():
     data = request.json
@@ -109,32 +175,15 @@ def add_stock():
     conn = sqlite3.connect(DB)
     c = conn.cursor()
 
-    c.execute("""
-    INSERT INTO stock (product_id, depo, adet)
-    VALUES (?, ?, ?)
-    """, (data["product_id"], data["depo"], data["adet"]))
-
-    # LOG
-    c.execute("""
-    INSERT INTO logs (user, action, product_id, depo, adet, tarih)
-    VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        data.get("user", "admin"),
-        "stok_ekle",
-        data["product_id"],
-        data["depo"],
-        data["adet"],
-        datetime.now().strftime("%Y-%m-%d %H:%M")
-    ))
+    c.execute("INSERT INTO stock (product_id, depo, adet) VALUES (?, ?, ?)",
+              (data["product_id"], data["depo"], data["adet"]))
 
     conn.commit()
     conn.close()
 
-    return jsonify({"status": "ok"})
+    return jsonify({"ok": True})
 
-# -----------------------------
-# BARKOD OKUT (DEPOCU TELEFON)
-# -----------------------------
+# ---------------- SCAN (HATA FIXLİ) ----------------
 @app.route("/scan", methods=["POST"])
 def scan():
     data = request.json
@@ -142,91 +191,30 @@ def scan():
     conn = sqlite3.connect(DB)
     c = conn.cursor()
 
-    c.execute("SELECT id FROM products WHERE barcode=?", (data["barcode"],))
+    c.execute("SELECT id, name FROM products WHERE barcode=?", (data["barcode"],))
     product = c.fetchone()
 
     if not product:
-        return jsonify({"error": "ürün yok"})
+        return jsonify({"error": "ÜRÜN YOK"}), 404
 
-    product_id = product[0]
+    product_id, name = product
 
-    # stok düş
     c.execute("""
     UPDATE stock
     SET adet = adet - ?
     WHERE product_id=? AND depo=?
     """, (data["adet"], product_id, data["depo"]))
 
-    # LOG
-    c.execute("""
-    INSERT INTO logs (user, action, product_id, depo, adet, tarih)
-    VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        data.get("user", "depocu"),
-        "stok_dus",
-        product_id,
-        data["depo"],
-        data["adet"],
-        datetime.now().strftime("%Y-%m-%d %H:%M")
-    ))
-
     conn.commit()
     conn.close()
 
-    return jsonify({"status": "stok düşüldü"})
+    return jsonify({
+        "ok": True,
+        "urun": name,
+        "dusen": data["adet"]
+    })
 
-# -----------------------------
-# ETİKET PDF
-# -----------------------------
-@app.route("/label/<int:product_id>")
-def label(product_id):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-
-    c.execute("SELECT name, barcode FROM products WHERE id=?", (product_id,))
-    p = c.fetchone()
-
-    conn.close()
-
-    if not p:
-        return "ürün yok"
-
-    name, code = p
-    barcode_path = f"barcodes/{code}.png"
-
-    pdf_file = f"label_{product_id}.pdf"
-    c = canvas.Canvas(pdf_file)
-
-    c.drawString(100, 750, name)
-    c.drawImage(barcode_path, 100, 600, width=300, height=100)
-
-    c.save()
-
-    return send_file(pdf_file, as_attachment=True)
-
-# -----------------------------
-# STOK GÖR (8 DEPO)
-# -----------------------------
-@app.route("/stock/<int:product_id>")
-def stock(product_id):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-
-    c.execute("""
-    SELECT depo, SUM(adet)
-    FROM stock
-    WHERE product_id=?
-    GROUP BY depo
-    """, (product_id,))
-
-    data = c.fetchall()
-    conn.close()
-
-    return jsonify(data)
-
-# -----------------------------
-# SERVER
-# -----------------------------
+# ---------------- RUN ----------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
