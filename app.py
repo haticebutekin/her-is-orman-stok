@@ -32,7 +32,8 @@ DEPOLAR=[
 ]
 
 
-os.makedirs("static",exist_ok=True)
+if not os.path.exists("static"):
+    os.mkdir("static")
 
 
 
