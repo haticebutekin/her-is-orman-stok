@@ -155,6 +155,16 @@ def login():
 
     return render_template_string("""
 
+    <a href="/depolar">
+📦 Depolar
+</a>
+
+<br><br>
+
+<a href="/excel">
+📊 Excel İndir
+</a>
+
 <style>
 
 body{
@@ -1269,11 +1279,3 @@ def excel():
     )
 
 <a href="/depolar">
-📦 Depolar
-</a>
-
-<br>
-
-<a href="/excel">
-📊 Excel İndir
-</a>
