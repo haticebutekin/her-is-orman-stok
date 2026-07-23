@@ -1195,4 +1195,147 @@ if __name__=="__main__":
         )
 
     )
-    
+
+@app.route("/excel")
+def excel():
+
+    if "user" not in session:
+        return redirect("/")
+
+
+    con=baglan()
+
+
+    urunler=con.execute(
+    "SELECT * FROM urunler"
+    ).fetchall()
+
+
+    con.close()
+
+
+
+    wb=Workbook()
+
+    ws=wb.active
+
+    ws.title="Stok"
+
+
+
+    ws.append([
+    "Barkod",
+    "Ürün",
+    "Cins",
+    "Ebat",
+    "Kalınlık",
+    "Sınıf",
+    "Yüzey",
+    "Renk",
+    "Adet",
+    "Depo",
+    "Tarih"
+    ])
+
+
+
+    for x in urunler:
+
+        ws.append([
+        x[1],
+        x[2],
+        x[3],
+        x[4],
+        x[5],
+        x[6],
+        x[7],
+        x[8],
+        x[9],
+        x[10],
+        x[11]
+        ])
+
+
+
+    dosya="stok_rapor.xlsx"
+
+
+    wb.save(dosya)
+
+
+    return send_file(
+        dosya,
+        as_attachment=True
+    )
+
+@app.route("/excel")
+def excel():
+
+    if "user" not in session:
+        return redirect("/")
+
+
+    con=baglan()
+
+
+    urunler=con.execute(
+    "SELECT * FROM urunler"
+    ).fetchall()
+
+
+    con.close()
+
+
+
+    wb=Workbook()
+
+    ws=wb.active
+
+    ws.title="Stok"
+
+
+
+    ws.append([
+    "Barkod",
+    "Ürün",
+    "Cins",
+    "Ebat",
+    "Kalınlık",
+    "Sınıf",
+    "Yüzey",
+    "Renk",
+    "Adet",
+    "Depo",
+    "Tarih"
+    ])
+
+
+
+    for x in urunler:
+
+        ws.append([
+        x[1],
+        x[2],
+        x[3],
+        x[4],
+        x[5],
+        x[6],
+        x[7],
+        x[8],
+        x[9],
+        x[10],
+        x[11]
+        ])
+
+
+
+    dosya="stok_rapor.xlsx"
+
+
+    wb.save(dosya)
+
+
+    return send_file(
+        dosya,
+        as_attachment=True
+    )
