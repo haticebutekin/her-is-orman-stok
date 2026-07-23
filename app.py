@@ -917,7 +917,7 @@ def kamera():
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://unpkg.com/@zxing/library@latest"></script>
 
 <style>
 
@@ -927,10 +927,10 @@ text-align:center;
 background:#f1f5f9;
 }
 
-#reader{
+video{
 width:100%;
 max-width:400px;
-margin:auto;
+margin-top:20px;
 }
 
 </style>
@@ -940,60 +940,40 @@ margin:auto;
 
 <body>
 
+<h2>📱 Barkod Okut</h2>
 
-<h2>
-📱 Barkod Okut
-</h2>
-
-
-<div id="reader"></div>
+<video id="video"></video>
 
 
 <script>
 
+const codeReader = new ZXing.BrowserBarcodeReader();
 
-function baslat(){
+codeReader.getVideoInputDevices()
+.then((devices) => {
 
+    const deviceId = devices[0].deviceId;
 
-const scanner =
-new Html5QrcodeScanner(
+    codeReader.decodeFromVideoDevice(
 
-"reader",
+        deviceId,
 
-{
-fps:15,
-qrbox:{
-width:300,
-height:150
-}
-},
+        'video',
 
-false
+        (result, err) => {
 
-);
+            if(result){
 
+                window.location="/barkod/" + result.text;
 
+            }
 
-scanner.render(
+        }
 
-function(kod){
+    );
 
-window.location="/barkod/"+kod;
-
-},
-
-function(hata){
-
-}
-
-);
-
-
-}
-
-
-baslat();
-
+})
+.catch(err => console.error(err));
 
 </script>
 
@@ -1002,9 +982,6 @@ baslat();
 
 </html>
 """)
-
-
-
 
 @app.route("/barkod/<kod>")
 def barkod_bul(kod):
