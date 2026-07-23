@@ -121,10 +121,19 @@ def yeni_barkod():
 
 def barkod_olustur(kod):
 
-    os.makedirs("static", exist_ok=True)
-
+    from barcode.writer import ImageWriter
     from barcode import Code128
 
+    os.makedirs("static", exist_ok=True)
+
+    writer = ImageWriter()
+
+    options = {
+        "module_width": 0.4,
+        "module_height": 40,
+        "font_size": 18,
+        "text_distance": 5
+    }
 
     barcode_class = Code128(kod, writer=writer)
 
