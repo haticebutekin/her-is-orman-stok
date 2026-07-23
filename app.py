@@ -1,75 +1,87 @@
-from flask import Flask, render_template_string, request, redirect, session, send_file
-from reportlab.pdfgen import canvas
-from io import BytesIO
-import datetime
+from flask import Flask,request,redirect,session,render_template_string
+import sqlite3
 import os
-import csv
+from datetime import datetime
 
-app = Flask(__name__)
-app.secret_key = "heris_stok_guvenli_key"
+app=Flask(__name__)
+app.secret_key="her_is_orman_guvenlik"
 
 
-USERS = {
-    "behic": "123",
-    "ramazan": "123",
-    "orhan": "123"
+DB="stok.db"
+
+
+USERS={
+    "behic":"123",
+    "ramazan":"123",
+    "orhan":"123"
 }
 
 
-DEPOS = [
-    "MDF SATIŞ DEPOSU",
-    "LAMİNANT DEPOSU",
-    "KAPI DEPOSU",
-    "HGLOSS DEPOSU",
-    "SÜTÇÜ YANI",
-    "HELVACI YANI",
-    "RÖTBALANSÇI YANI",
-    "KESİMHANE"
+DEPOLAR=[
+"MDF SATIŞ DEPOSU",
+"LAMİNANT DEPOSU",
+"KAPI DEPOSU",
+"HGLOSS DEPOSU",
+"KESİMHANE"
 ]
 
 
-DATA = []
+def db():
+
+    con=sqlite3.connect(DB)
+
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS urunler(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tarih TEXT,
+    barkod TEXT,
+    isim TEXT,
+    cins TEXT,
+    ebat TEXT,
+    kalinlik TEXT,
+    sinif TEXT,
+    yuzey TEXT,
+    renk TEXT,
+    adet INTEGER,
+    depo TEXT
+    )
+    """)
+
+    con.commit()
+
+    return con
 
 
-@app.route("/", methods=["GET","POST"])
+
+@app.route("/",methods=["GET","POST"])
 def login():
 
     if request.method=="POST":
 
-        user=request.form.get("user")
-        password=request.form.get("pass")
+        u=request.form["user"]
+        p=request.form["pass"]
 
-        if user in USERS and USERS[user]==password:
-    session["user"]=user
-    return redirect("/panel")
-else:
-    return """
-    <h3 style='color:red'>
-    Kullanıcı adı veya şifre yanlış
-    </h3>
-    <a href='/'>Geri dön</a>
-    """
+        if u in USERS and USERS[u]==p:
+
+            session["user"]=u
+
+            return redirect("/panel")
 
 
     return """
     <html>
-    <body>
+    <body style="font-family:Arial;text-align:center">
 
-    <h1>HER İŞ STOK PRO</h1>
-
-    <h3>Personel Giriş</h3>
+    <h1>HER İŞ ORMAN ÜRÜNLERİ
+    STOK TAKİBİ</h1>
 
     <form method="post">
 
-    Kullanıcı:
-    <input name="user">
+    Kullanıcı<br>
+    <input name="user"><br><br>
 
-    <br><br>
-
-    Şifre:
-    <input name="pass" type="password">
-
-    <br><br>
+    Şifre<br>
+    <input name="pass" type="password"><br><br>
 
     <button>GİRİŞ</button>
 
@@ -81,226 +93,205 @@ else:
 
 
 
-@app.route("/panel", methods=["GET","POST"])
+
+
+@app.route("/panel",methods=["GET","POST"])
 def panel():
 
     if "user" not in session:
         return redirect("/")
 
 
+    con=db()
+
+
     if request.method=="POST":
 
-        DATA.append({
+        con.execute("""
+        INSERT INTO urunler
+        VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (
+        datetime.now().strftime("%d.%m.%Y %H:%M"),
+        request.form["barkod"],
+        request.form["isim"],
+        request.form["cins"],
+        request.form["ebat"],
+        request.form["kalinlik"],
+        request.form["sinif"],
+        request.form["yuzey"],
+        request.form["renk"],
+        request.form["adet"],
+        request.form["depo"]
+        ))
 
-        "tarih":
-        datetime.datetime.now().strftime("%d.%m.%Y %H:%M"),
+        con.commit()
 
-        "personel":
-        session["user"],
 
-        "barkod":
-        request.form.get("barkod",""),
 
-        "urun":
-        request.form.get("urun",""),
+    rows=con.execute(
+    "SELECT * FROM urunler ORDER BY id DESC"
+    ).fetchall()
 
-        "cins":
-        request.form.get("cins",""),
 
-        "ebat":
-        request.form.get("ebat",""),
+    con.close()
 
-        "yuzey":
-        request.form.get("yuzey",""),
-
-        "renk":
-        request.form.get("renk",""),
-
-        "depo":
-        request.form.get("depo","")
-
-        })
 
 
     return render_template_string("""
+    
+    <style>
 
-<h1>HER İŞ STOK PRO</h1>
+    body{
+    font-family:Arial;
+    background:#f2f2f2;
+    padding:20px;
+    }
 
-<h3>Personel: {{user}}</h3>
+    .box{
+    background:white;
+    padding:20px;
+    border-radius:15px;
+    }
 
+    input,select{
+    padding:8px;
+    margin:5px;
+    }
 
-<form method="post">
+    button{
+    padding:12px;
+    background:#0066cc;
+    color:white;
+    border:0;
+    border-radius:8px;
+    }
 
-Barkod:
-<input name="barkod">
+    table{
+    width:100%;
+    background:white;
+    border-collapse:collapse;
+    }
 
-<br>
+    td,th{
+    border:1px solid #ddd;
+    padding:8px;
+    }
 
-Ürün:
-<input name="urun">
+    </style>
 
-<br>
 
-Mal Cinsi:
-<input name="cins">
 
-<br>
+    <div class="box">
 
-Ebat:
-<input name="ebat">
+    <h1>
+    HER İŞ ORMAN ÜRÜNLERİ STOK TAKİBİ
+    </h1>
 
-<br>
 
-Yüzey:
+    Personel: {{user}}
 
-<select name="yuzey">
-<option>HG</option>
-<option>MAT</option>
-</select>
 
-<br>
+    <form method="post">
 
-Renk:
-<input name="renk">
+    Barkod
+    <input name="barkod">
 
-<br>
+    Ürün Adı
+    <input name="isim">
 
-Depo:
+    Mal Cinsi
+    <input name="cins">
 
-<select name="depo">
+    Ebat
+    <input name="ebat">
 
-{% for d in depos %}
-<option>{{d}}</option>
-{% endfor %}
 
-</select>
+    Kalınlık
+    <input name="kalinlik">
 
 
-<br><br>
+    Sınıf
+    <input name="sinif">
 
-<button>KAYDET</button>
 
-</form>
+    Yüzey
 
+    <select name="yuzey">
+    <option>HG</option>
+    <option>MAT</option>
+    </select>
 
-<br>
 
-<a href="/pdf">PDF</a>
+    Renk
+    <input name="renk">
 
-|
 
-<a href="/csv">CSV</a>
+    Adet
+    <input name="adet" type="number">
 
-|
 
-<a href="/logout">ÇIKIŞ</a>
+    Depo
 
+    <select name="depo">
 
+    {% for d in depolar %}
+    <option>{{d}}</option>
+    {% endfor %}
 
-<h2>Kayıtlar</h2>
+    </select>
 
 
-<table border="1">
+    <br>
 
-<tr>
-<th>Tarih</th>
-<th>Barkod</th>
-<th>Ürün</th>
-<th>Cins</th>
-<th>Ebat</th>
-<th>Yüzey</th>
-<th>Renk</th>
-<th>Depo</th>
-</tr>
+    <button>KAYDET</button>
 
+    </form>
 
-{% for x in data %}
 
-<tr>
+    <hr>
 
-<td>{{x.tarih}}</td>
-<td>{{x.barkod}}</td>
-<td>{{x.urun}}</td>
-<td>{{x.cins}}</td>
-<td>{{x.ebat}}</td>
-<td>{{x.yuzey}}</td>
-<td>{{x.renk}}</td>
-<td>{{x.depo}}</td>
 
-</tr>
+    <table>
 
-{% endfor %}
+    <tr>
+    <th>Barkod</th>
+    <th>Ürün</th>
+    <th>Cins</th>
+    <th>Ebat</th>
+    <th>Adet</th>
+    <th>Depo</th>
+    </tr>
 
 
-</table>
+    {% for r in rows %}
 
-""",
-user=session["user"],
-data=DATA,
-depos=DEPOS)
+    <tr>
 
+    <td>{{r[2]}}</td>
+    <td>{{r[3]}}</td>
+    <td>{{r[4]}}</td>
+    <td>{{r[5]}}</td>
+    <td>{{r[10]}}</td>
+    <td>{{r[11]}}</td>
 
+    </tr>
 
-@app.route("/pdf")
-def pdf():
+    {% endfor %}
 
-    file=BytesIO()
 
-    c=canvas.Canvas(file)
+    </table>
 
-    y=800
 
+    </div>
 
-    for x in DATA:
 
-        c.drawString(
-        30,
-        y,
-        f"{x['urun']} {x['barkod']} {x['depo']}"
-        )
+    """,
+    user=session["user"],
+    rows=rows,
+    depolar=DEPOLAR)
 
-        y-=20
 
-        if y<50:
-            c.showPage()
-            y=800
-
-
-    c.save()
-
-    file.seek(0)
-
-
-    return send_file(
-        file,
-        as_attachment=True,
-        download_name="stok.pdf"
-    )
-
-
-
-@app.route("/csv")
-def csv():
-
-    file=BytesIO()
-
-    text="Tarih,Barkod,Urun,Cins,Ebat,Yuzey,Renk,Depo\n"
-
-    for x in DATA:
-
-        text+=f"{x['tarih']},{x['barkod']},{x['urun']},{x['cins']},{x['ebat']},{x['yuzey']},{x['renk']},{x['depo']}\n"
-
-
-    file.write(text.encode("utf-8-sig"))
-
-    file.seek(0)
-
-
-    return send_file(
-        file,
-        as_attachment=True,
-        download_name="stok.csv"
-    )
 
 
 
@@ -313,9 +304,11 @@ def logout():
 
 
 
+
+
 if __name__=="__main__":
 
     app.run(
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT",10000))
+    host="0.0.0.0",
+    port=int(os.environ.get("PORT",10000))
     )
