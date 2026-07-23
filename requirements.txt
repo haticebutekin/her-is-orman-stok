@@ -1,5 +1,5 @@
 flask
-python-barcode
+pandas
 reportlab
 gunicorn
-pandas
+openpyxl
