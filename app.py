@@ -7,11 +7,6 @@ from datetime import datetime
 import barcode
 from barcode.writer import ImageWriter
 
-<a href="/toplu_etiket" target="_blank">
-<button style="background:black;color:white;padding:10px;">
-🧾 TOPLU ETİKET
-</button>
-</a>
 
 app = Flask(__name__)
 app.config["PROPAGATE_EXCEPTIONS"] = True
@@ -741,6 +736,12 @@ def etiket(kod):
     </body>
     </html>
     """, kod=kod)
+
+<a href="/toplu_etiket" target="_blank">
+<button style="background:black;color:white;padding:10px;">
+🧾 TOPLU ETİKET
+</button>
+</a>
 
 @app.route("/stok/<int:id>/azalt")
 def azalt(id):
