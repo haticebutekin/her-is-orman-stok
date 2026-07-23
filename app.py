@@ -1170,8 +1170,8 @@ Panele Dön
 liste=liste)
 
 
-@app.route("/logout")
-def logout():
+@app.route("/cikis")
+def cikis():
 
     session.clear()
 
@@ -1277,8 +1277,8 @@ def excel():
         dosya,
         as_attachment=True
     )
-@app.route("/logout")
-def logout():
+@app.route("/cikis")
+def cikis():
 
     session.clear()
 
