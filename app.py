@@ -1,49 +1,69 @@
-from flask import Flask,request,redirect,session,render_template_string
+from flask import Flask, request, redirect, session, render_template_string
 import sqlite3
 import os
 from datetime import datetime
 
-app=Flask(__name__)
-app.secret_key="her_is_orman_guvenlik"
+
+app = Flask(__name__)
+app.secret_key = "her_is_orman_stok"
 
 
-DB="stok.db"
+
+DB = "stok.db"
 
 
-USERS={
+USERS = {
     "behic":"123",
     "ramazan":"123",
     "orhan":"123"
 }
 
 
-DEPOLAR=[
-"MDF SATIŞ DEPOSU",
-"LAMİNANT DEPOSU",
-"KAPI DEPOSU",
-"HGLOSS DEPOSU",
-"KESİMHANE"
+
+DEPOLAR = [
+    "MDF SATIŞ DEPOSU",
+    "LAMİNANT DEPOSU",
+    "KAPI DEPOSU",
+    "HGLOSS DEPOSU (MORAY YANI)",
+    "SÜTÇÜ YANI",
+    "HELVACI YANI",
+    "RÖTBALANSÇI YANI",
+    "KESİMHANE"
 ]
 
 
-def db():
 
-    con=sqlite3.connect(DB)
+def baglan():
+
+    con = sqlite3.connect(DB)
 
     con.execute("""
     CREATE TABLE IF NOT EXISTS urunler(
+
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tarih TEXT,
+
     barkod TEXT,
+
     isim TEXT,
+
     cins TEXT,
+
     ebat TEXT,
+
     kalinlik TEXT,
+
     sinif TEXT,
+
     yuzey TEXT,
+
     renk TEXT,
+
     adet INTEGER,
-    depo TEXT
+
+    depo TEXT,
+
+    tarih TEXT
+
     )
     """)
 
@@ -53,13 +73,33 @@ def db():
 
 
 
+
+def barkod_uret():
+
+    con=baglan()
+
+    sayi=con.execute(
+        "SELECT COUNT(*) FROM urunler"
+    ).fetchone()[0]
+
+    con.close()
+
+
+    return "HERIS"+str(sayi+1).zfill(6)
+
+
+
+
+
 @app.route("/",methods=["GET","POST"])
 def login():
+
 
     if request.method=="POST":
 
         u=request.form["user"]
         p=request.form["pass"]
+
 
         if u in USERS and USERS[u]==p:
 
@@ -68,28 +108,59 @@ def login():
             return redirect("/panel")
 
 
-    return """
-    <html>
-    <body style="font-family:Arial;text-align:center">
 
-    <h1>HER İŞ ORMAN ÜRÜNLERİ
-    STOK TAKİBİ</h1>
+    return """
+
+    <html>
+
+    <body style="text-align:center;font-family:Arial">
+
+
+    <h1>
+    HER İŞ ORMAN ÜRÜNLERİ
+    STOK TAKİBİ
+    </h1>
+
 
     <form method="post">
 
-    Kullanıcı<br>
-    <input name="user"><br><br>
 
-    Şifre<br>
-    <input name="pass" type="password"><br><br>
+    Kullanıcı
 
-    <button>GİRİŞ</button>
+    <br>
+
+    <input name="user">
+
+
+    <br><br>
+
+
+    Şifre
+
+    <br>
+
+    <input name="pass" type="password">
+
+
+    <br><br>
+
+
+    <button>
+
+    GİRİŞ
+
+    </button>
+
 
     </form>
 
+
     </body>
+
     </html>
+
     """
+
 
 
 
@@ -98,40 +169,67 @@ def login():
 @app.route("/panel",methods=["GET","POST"])
 def panel():
 
+
     if "user" not in session:
+
         return redirect("/")
 
 
-    con=db()
+
+    con=baglan()
+
 
 
     if request.method=="POST":
 
+
+        barkod=barkod_uret()
+
+
+
         con.execute("""
+
         INSERT INTO urunler
+
         VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?)
+
         """,
+
         (
-        datetime.now().strftime("%d.%m.%Y %H:%M"),
-        request.form["barkod"],
+
+        barkod,
+
         request.form["isim"],
+
         request.form["cins"],
+
         request.form["ebat"],
+
         request.form["kalinlik"],
+
         request.form["sinif"],
+
         request.form["yuzey"],
+
         request.form["renk"],
+
         request.form["adet"],
-        request.form["depo"]
+
+        request.form["depo"],
+
+        datetime.now().strftime("%d.%m.%Y %H:%M")
+
         ))
+
 
         con.commit()
 
 
 
-    rows=con.execute(
-    "SELECT * FROM urunler ORDER BY id DESC"
+    urunler=con.execute(
+        "SELECT * FROM urunler ORDER BY id DESC"
     ).fetchall()
+
 
 
     con.close()
@@ -139,168 +237,222 @@ def panel():
 
 
     return render_template_string("""
-    
-    <style>
 
-    body{
-    font-family:Arial;
-    background:#f2f2f2;
-    padding:20px;
-    }
+<style>
 
-    .box{
-    background:white;
-    padding:20px;
-    border-radius:15px;
-    }
+body{
 
-    input,select{
-    padding:8px;
-    margin:5px;
-    }
+font-family:Arial;
 
-    button{
-    padding:12px;
-    background:#0066cc;
-    color:white;
-    border:0;
-    border-radius:8px;
-    }
+background:#eef2f3;
 
-    table{
-    width:100%;
-    background:white;
-    border-collapse:collapse;
-    }
+padding:20px;
 
-    td,th{
-    border:1px solid #ddd;
-    padding:8px;
-    }
-
-    </style>
+}
 
 
+.kutu{
 
-    <div class="box">
+background:white;
 
-    <h1>
-    HER İŞ ORMAN ÜRÜNLERİ STOK TAKİBİ
-    </h1>
+padding:20px;
 
+border-radius:15px;
 
-    Personel: {{user}}
-
-
-    <form method="post">
-
-    Barkod
-    <input name="barkod">
-
-    Ürün Adı
-    <input name="isim">
-
-    Mal Cinsi
-    <input name="cins">
-
-    Ebat
-    <input name="ebat">
+}
 
 
-    Kalınlık
-    <input name="kalinlik">
+input,select{
+
+padding:8px;
+
+margin:5px;
+
+}
 
 
-    Sınıf
-    <input name="sinif">
+button{
+
+padding:10px;
+
+background:#0b63ce;
+
+color:white;
+
+border:0;
+
+}
 
 
-    Yüzey
+table{
 
-    <select name="yuzey">
-    <option>HG</option>
-    <option>MAT</option>
-    </select>
+width:100%;
 
+border-collapse:collapse;
 
-    Renk
-    <input name="renk">
+}
 
 
-    Adet
-    <input name="adet" type="number">
+td,th{
+
+border:1px solid #ccc;
+
+padding:8px;
+
+}
 
 
-    Depo
-
-    <select name="depo">
-
-    {% for d in depolar %}
-    <option>{{d}}</option>
-    {% endfor %}
-
-    </select>
-
-
-    <br>
-
-    <button>KAYDET</button>
-
-    </form>
-
-
-    <hr>
-
-
-    <table>
-
-    <tr>
-    <th>Barkod</th>
-    <th>Ürün</th>
-    <th>Cins</th>
-    <th>Ebat</th>
-    <th>Adet</th>
-    <th>Depo</th>
-    </tr>
-
-
-    {% for r in rows %}
-
-    <tr>
-
-    <td>{{r[2]}}</td>
-    <td>{{r[3]}}</td>
-    <td>{{r[4]}}</td>
-    <td>{{r[5]}}</td>
-    <td>{{r[10]}}</td>
-    <td>{{r[11]}}</td>
-
-    </tr>
-
-    {% endfor %}
-
-
-    </table>
-
-
-    </div>
-
-
-    """,
-    user=session["user"],
-    rows=rows,
-    depolar=DEPOLAR)
+</style>
 
 
 
+<div class="kutu">
 
 
-@app.route("/logout")
-def logout():
+<h1>
+HER İŞ ORMAN ÜRÜNLERİ STOK TAKİBİ
+</h1>
 
-    session.clear()
 
-    return redirect("/")
+Personel:
+{{user}}
+
+
+
+<form method="post">
+
+
+Ürün Adı
+
+<input name="isim">
+
+
+Mal Cinsi
+
+<input name="cins">
+
+
+Ebat
+
+<input name="ebat">
+
+
+Kalınlık
+
+<input name="kalinlik">
+
+
+Sınıf
+
+<input name="sinif">
+
+
+Yüzey
+
+<select name="yuzey">
+
+<option>HG</option>
+
+<option>MAT</option>
+
+</select>
+
+
+
+Renk
+
+<input name="renk">
+
+
+
+Adet
+
+<input name="adet" type="number">
+
+
+
+Depo
+
+<select name="depo">
+
+{%for d in depolar%}
+
+<option>{{d}}</option>
+
+{%endfor%}
+
+</select>
+
+
+<br>
+
+
+<button>
+
+KAYDET
+
+</button>
+
+
+</form>
+
+
+
+<hr>
+
+
+
+<table>
+
+
+<tr>
+
+<th>Barkod</th>
+<th>Ürün</th>
+<th>Cins</th>
+<th>Ebat</th>
+<th>Renk</th>
+<th>Adet</th>
+<th>Depo</th>
+
+</tr>
+
+
+{%for x in urunler%}
+
+<tr>
+
+<td>{{x[1]}}</td>
+
+<td>{{x[2]}}</td>
+
+<td>{{x[3]}}</td>
+
+<td>{{x[4]}}</td>
+
+<td>{{x[8]}}</td>
+
+<td>{{x[9]}}</td>
+
+<td>{{x[10]}}</td>
+
+
+</tr>
+
+
+{%endfor%}
+
+
+</table>
+
+
+</div>
+
+
+""",
+user=session["user"],
+urunler=urunler,
+depolar=DEPOLAR)
 
 
 
@@ -309,6 +461,9 @@ def logout():
 if __name__=="__main__":
 
     app.run(
+
     host="0.0.0.0",
+
     port=int(os.environ.get("PORT",10000))
+
     )
