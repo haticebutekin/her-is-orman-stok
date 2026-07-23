@@ -7,6 +7,7 @@ from barcode.writer import ImageWriter
 
 
 app = Flask(__name__)
+app.config["PROPAGATE_EXCEPTIONS"] = True
 app.secret_key = "her_is_orman_stok_pro"
 
 
