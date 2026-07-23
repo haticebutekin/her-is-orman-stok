@@ -1,194 +1,175 @@
-from flask import Flask, request, session, redirect
-import sqlite3
+from flask import Flask, render_template_string, request, redirect, session, send_file
 import pandas as pd
-from reportlab.platypus import SimpleDocTemplate, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.pdfgen import canvas
+from io import BytesIO
+import datetime
+import os
 
 app = Flask(__name__)
-app.secret_key = "1234"
+app.secret_key = "secret123"
 
-PERSONELLER = {
-    "BEHİÇ": "123",
-    "RAMAZAN": "123",
-    "ORHAN": "123"
+# PERSONELLER
+USERS = {
+    "behic": "123",
+    "ramazan": "123",
+    "orhan": "123"
 }
 
-def db():
-    return sqlite3.connect("stok.db")
+# DEPOLAR
+DEPOS = [
+    "MDF SATIŞ DEPOSU",
+    "LAMİNANT DEPOSU",
+    "KAPI DEPOSU",
+    "HGLOSS DEPOSU (MORAY YANI)",
+    "SÜTÇÜ YANI",
+    "HELVACI YANI",
+    "RÖTBALANSÇI YANI",
+    "KESİMHANE"
+]
 
-# DB oluştur
-def init_db():
-    con = db()
-    cur = con.cursor()
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS urun(
-        barkod TEXT PRIMARY KEY,
-        ad TEXT,
-        cins TEXT,
-        ebat TEXT,
-        sinif TEXT,
-        renk TEXT,
-        yuzey TEXT
-    )""")
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS hareket(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        barkod TEXT,
-        personel TEXT,
-        depo TEXT,
-        miktar INTEGER
-    )""")
-
-    con.commit()
-    con.close()
-
-init_db()
+DATA = []
 
 # LOGIN
-@app.route("/", methods=["GET","POST"])
+@app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        user = request.form["user"]
-        sifre = request.form["sifre"]
-
-        if user in PERSONELLER and PERSONELLER[user] == sifre:
-            session["user"] = user
+        u = request.form["user"]
+        p = request.form["pass"]
+        if u in USERS and USERS[u] == p:
+            session["user"] = u
             return redirect("/panel")
-        return "HATALI GİRİŞ"
-
-    return """
+    return render_template_string("""
     <h2>Personel Giriş</h2>
     <form method="post">
-    Kullanıcı: <select name="user">
-    <option>BEHİÇ</option>
-    <option>RAMAZAN</option>
-    <option>ORHAN</option>
-    </select><br>
-    Şifre: <input type="password" name="sifre"><br>
-    <button>Giriş</button>
+        Kullanıcı: <input name="user"><br>
+        Şifre: <input name="pass" type="password"><br>
+        <button>Giriş</button>
     </form>
-    """
+    """)
 
 # PANEL
-@app.route("/panel")
+@app.route("/panel", methods=["GET", "POST"])
 def panel():
     if "user" not in session:
         return redirect("/")
 
-    return """
-    <h2>Stok Panel</h2>
+    if request.method == "POST":
+        barkod = request.form["barkod"]
+        urun = request.form["urun"]
+        cins = request.form["cins"]
+        ebat = request.form["ebat"]
+        yuzey = request.form["yuzey"]
+        renk = request.form["renk"]
+        depo = request.form["depo"]
 
-    <form method="post" action="/ekle">
-    Barkod: <input name="barkod"><br>
-    Ad: <input name="ad"><br>
-    Cins: <input name="cins"><br>
-    Ebat: <input name="ebat"><br>
-    Sınıf: <input name="sinif"><br>
-    Renk: <input name="renk"><br>
-    Yüzey(mm/hg/mat): <input name="yuzey"><br>
-    <button>Ürün Ekle</button>
+        DATA.append({
+            "tarih": datetime.datetime.now(),
+            "personel": session["user"],
+            "barkod": barkod,
+            "urun": urun,
+            "cins": cins,
+            "ebat": ebat,
+            "yuzey": yuzey,
+            "renk": renk,
+            "depo": depo
+        })
+
+    return render_template_string("""
+    <h2>Hoşgeldin {{user}}</h2>
+
+    <video id="cam" width="300" autoplay></video>
+    <button onclick="startCam()">Kamera Aç</button>
+
+    <form method="post">
+        Barkod: <input name="barkod" id="barkod"><br>
+        Ürün Adı: <input name="urun"><br>
+        Mal Cinsi: <input name="cins"><br>
+        Ebat: <input name="ebat"><br>
+
+        Yüzey:
+        <select name="yuzey">
+            <option>HG</option>
+            <option>MAT</option>
+        </select><br>
+
+        Renk: <input name="renk"><br>
+
+        Depo:
+        <select name="depo">
+            {% for d in depos %}
+            <option>{{d}}</option>
+            {% endfor %}
+        </select><br>
+
+        <button>Kaydet</button>
     </form>
 
-    <hr>
+    <br>
+    <a href="/pdf">PDF Yazdır</a> |
+    <a href="/excel">Excel Al</a>
 
-    <form method="post" action="/stok">
-    Barkod: <input name="barkod" id="barkod"><br>
-    Depo:
-    <select name="depo">
-    <option>ANA DEPO</option>
-    <option>ŞANTİYE</option>
-    </select><br>
-    Miktar: <input name="miktar"><br>
-    <button>Stok Hareketi</button>
-    </form>
+    <h3>Kayıtlar</h3>
+    <table border=1>
+        <tr>
+            <th>Tarih</th><th>Personel</th><th>Barkod</th>
+            <th>Ürün</th><th>Cins</th><th>Ebat</th>
+            <th>Yüzey</th><th>Renk</th><th>Depo</th>
+        </tr>
+        {% for d in data %}
+        <tr>
+            <td>{{d.tarih}}</td>
+            <td>{{d.personel}}</td>
+            <td>{{d.barkod}}</td>
+            <td>{{d.urun}}</td>
+            <td>{{d.cins}}</td>
+            <td>{{d.ebat}}</td>
+            <td>{{d.yuzey}}</td>
+            <td>{{d.renk}}</td>
+            <td>{{d.depo}}</td>
+        </tr>
+        {% endfor %}
+    </table>
 
-    <hr>
-
-    <video id="video" width="300" height="200" autoplay></video>
-
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
     <script>
-    const codeReader = new ZXing.BrowserBarcodeReader();
-    codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
-        if (result) {
-            document.getElementById('barkod').value = result.text;
-        }
-    });
+    function startCam(){
+        navigator.mediaDevices.getUserMedia({video:true})
+        .then(stream => {
+            document.getElementById('cam').srcObject = stream;
+        });
+    }
     </script>
+    """, user=session["user"], data=DATA, depos=DEPOS)
 
-    <hr>
-    <a href="/rapor">Excel Rapor</a>
-    """
+# PDF
+@app.route("/pdf")
+def pdf():
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer)
 
-# ÜRÜN EKLE
-@app.route("/ekle", methods=["POST"])
-def ekle():
-    con = db()
-    con.execute("INSERT INTO urun VALUES (?,?,?,?,?,?,?)", (
-        request.form["barkod"],
-        request.form["ad"],
-        request.form["cins"],
-        request.form["ebat"],
-        request.form["sinif"],
-        request.form["renk"],
-        request.form["yuzey"]
-    ))
-    con.commit()
-    return "ÜRÜN EKLENDİ"
+    y = 800
+    for d in DATA:
+        c.drawString(30, y, f"{d['urun']} - {d['barkod']} - {d['depo']}")
+        y -= 20
 
-# STOK HAREKET
-@app.route("/stok", methods=["POST"])
-def stok():
-    if "user" not in session:
-        return redirect("/")
+    c.save()
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, download_name="etiket.pdf")
 
-    barkod = request.form["barkod"]
-    miktar = request.form["miktar"]
-    depo = request.form["depo"]
-    personel = session["user"]
+# EXCEL
+@app.route("/excel")
+def excel():
+    df = pd.DataFrame(DATA)
+    file = BytesIO()
+    df.to_excel(file, index=False)
+    file.seek(0)
+    return send_file(file, as_attachment=True, download_name="rapor.xlsx")
 
-    con = db()
-    urun = con.execute("SELECT * FROM urun WHERE barkod=?", (barkod,)).fetchone()
+# LOGOUT
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
 
-    if not urun:
-        return "BU BARKOD YOK!"
-
-    con.execute("INSERT INTO hareket (barkod,personel,depo,miktar) VALUES (?,?,?,?)",
-                (barkod,personel,depo,miktar))
-    con.commit()
-
-    return f"OK -> {urun[1]} | {personel}"
-
-# PDF ETİKET
-@app.route("/etiket/<barkod>")
-def etiket(barkod):
-    con = db()
-    urun = con.execute("SELECT * FROM urun WHERE barkod=?", (barkod,)).fetchone()
-
-    if not urun:
-        return "ÜRÜN YOK"
-
-    dosya = f"{barkod}.pdf"
-    doc = SimpleDocTemplate(dosya)
-    styles = getSampleStyleSheet()
-
-    content = []
-    for i in urun:
-        content.append(Paragraph(str(i), styles["Normal"]))
-
-    doc.build(content)
-
-    return f"PDF oluşturuldu: {dosya}"
-
-# EXCEL RAPOR
-@app.route("/rapor")
-def rapor():
-    con = db()
-    data = con.execute("SELECT * FROM hareket").fetchall()
-
-    df = pd.DataFrame(data, columns=["ID","Barkod","Personel","Depo","Miktar"])
-    df.to_excel("rapor.xlsx", index=False)
-
-    return "Excel hazır: rapor.xlsx"
-
-app.run(debug=True)
+# RENDER FIX
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
