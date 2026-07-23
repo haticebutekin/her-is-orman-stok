@@ -1077,6 +1077,86 @@ Tekrar dene
 </a>
 
 """
+@app.route("/depolar")
+def depolar():
+
+    if "user" not in session:
+        return redirect("/")
+
+
+    con=baglan()
+
+
+    liste=[]
+
+
+    for d in DEPOLAR:
+
+        sonuc=con.execute(
+        """
+        SELECT SUM(adet)
+        FROM urunler
+        WHERE depo=?
+        """,
+        (d,)
+        ).fetchone()[0]
+
+
+        liste.append(
+        (
+        d,
+        sonuc or 0
+        )
+        )
+
+
+    con.close()
+
+
+
+    return render_template_string("""
+
+<h1>
+DEPO STOK DURUMU
+</h1>
+
+
+<table border="1" width="100%">
+
+
+<tr>
+<th>Depo</th>
+<th>Toplam Adet</th>
+</tr>
+
+
+{% for x in liste %}
+
+<tr>
+
+<td>{{x[0]}}</td>
+
+<td>{{x[1]}}</td>
+
+</tr>
+
+
+{% endfor %}
+
+
+</table>
+
+
+<br>
+
+<a href="/panel">
+Panele Dön
+</a>
+
+
+""",
+liste=liste)
+
 
 @app.route("/logout")
 def logout():
