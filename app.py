@@ -1277,5 +1277,17 @@ def excel():
         dosya,
         as_attachment=True
     )
+@app.route("/logout")
+def logout():
 
-<a href="/depolar">
+    session.clear()
+
+    return redirect("/")
+
+
+if __name__=="__main__":
+
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT",10000))
+    )
