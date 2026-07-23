@@ -1,197 +1,184 @@
-from flask import Flask, request, render_template_string, redirect, session, send_file
-import sqlite3, random, pandas as pd, os
+from flask import Flask, render_template_string, request, redirect, session, jsonify
+import sqlite3, random, datetime
 
 app = Flask(__name__)
-app.secret_key = "secret123"
+app.secret_key = "123"
 
-# ---------------- DB ----------------
-def init_db():
-    with sqlite3.connect("db.db") as conn:
-        c = conn.cursor()
+# ================= DB =================
+def db():
+    return sqlite3.connect("db.sqlite3")
 
-        c.execute("""CREATE TABLE IF NOT EXISTS users(
-            id INTEGER PRIMARY KEY,
-            username TEXT,
-            password TEXT,
-            role TEXT
-        )""")
+with db() as con:
+    con.execute("""CREATE TABLE IF NOT EXISTS urun(
+        id INTEGER PRIMARY KEY,
+        barkod TEXT,
+        ad TEXT,
+        cins TEXT,
+        ebat TEXT,
+        yuzey TEXT,
+        sinif TEXT,
+        renk TEXT
+    )""")
 
-        c.execute("""CREATE TABLE IF NOT EXISTS urunler(
-            id INTEGER PRIMARY KEY,
-            urun TEXT,
-            depo TEXT,
-            adet INTEGER,
-            barkod TEXT UNIQUE
-        )""")
+    con.execute("""CREATE TABLE IF NOT EXISTS stok(
+        id INTEGER PRIMARY KEY,
+        barkod TEXT,
+        depo TEXT,
+        adet INTEGER
+    )""")
 
-        c.execute("""CREATE TABLE IF NOT EXISTS satis(
-            id INTEGER PRIMARY KEY,
-            barkod TEXT,
-            adet INTEGER
-        )""")
+    con.execute("""CREATE TABLE IF NOT EXISTS log(
+        id INTEGER PRIMARY KEY,
+        barkod TEXT,
+        islem TEXT,
+        adet INTEGER,
+        personel TEXT,
+        tarih TEXT
+    )""")
 
-        # default kullanıcı
-        c.execute("INSERT OR IGNORE INTO users VALUES (1,'admin','1234','admin')")
+# ================= DEPOLAR =================
+DEPOLAR = [
+"1.MDF SATIŞ DEPOSU",
+"2.LAMİNANT DEPOSU",
+"3.KAPI DEPOSU",
+"4.HGLOSS DEPOSU",
+"5.MORAYIN YANINDAKİ DEPO",
+"6.SÜTÇÜNÜN YANINDAKİ DEPO",
+"7.RÖTBALANSÇININ ORDAKİ DEPO",
+"8.KESİMHANEDEKİ DEPO"
+]
 
-init_db()
-
-def barkod():
-    return str(random.randint(100000000000,999999999999))
-
-# ---------------- LOGIN ----------------
-LOGIN = """
-<h2>Giriş</h2>
-<form method="POST">
-<input name="u" placeholder="Kullanıcı"><br>
-<input name="p" placeholder="Şifre"><br>
-<button>GİRİŞ</button>
-</form>
-"""
-
-@app.route("/login", methods=["GET","POST"])
-def login():
-    if request.method=="POST":
-        with sqlite3.connect("db.db") as conn:
-            c = conn.cursor()
-            user = c.execute("SELECT * FROM users WHERE username=? AND password=?",
-                             (request.form["u"], request.form["p"])).fetchone()
-            if user:
-                session["user"]=user[1]
-                session["role"]=user[3]
-                return redirect("/")
-    return LOGIN
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect("/login")
-
-# ---------------- MAIN UI ----------------
+# ================= HTML =================
 HTML = """
-<h1>📦 STOK PRO</h1>
-<a href="/logout">Çıkış</a>
-
-<form method="POST" action="/ekle">
-<input name="urun" placeholder="Ürün"><br>
-
-<select name="depo">
-<option>1.MDF</option>
-<option>2.LAMİNANT</option>
-<option>3.KAPI</option>
-</select><br>
-
-<input name="adet" type="number"><br>
-<button>EKLE</button>
-</form>
-
-<form method="GET" action="/satis">
-<input name="barkod" id="barcode" placeholder="Barkod">
-<button>SAT</button>
-</form>
-
-<button onclick="startScan()">📷 OKUT</button>
-
+<html>
+<head>
+<title>Stok Sistemi PRO</title>
 <script src="https://unpkg.com/html5-qrcode"></script>
+<style>
+body{font-family:Arial;background:#111;color:#fff;padding:20px}
+.card{background:#1e1e1e;padding:15px;margin:10px;border-radius:10px}
+input,select,button{padding:8px;margin:5px;border-radius:5px;border:none}
+button{background:#0a84ff;color:white}
+</style>
+</head>
+<body>
+
+<h2>📦 STOK SİSTEMİ PRO</h2>
+
+<div class="card">
+<form method="POST" action="/urun">
+<h3>Ürün Ekle</h3>
+<input name="ad" placeholder="Ürün Adı" required>
+<input name="cins" placeholder="Cinsi">
+<input name="ebat" placeholder="Ebat (mm)">
+<select name="yuzey">
+<option>HG</option>
+<option>MAT</option>
+</select>
+<input name="sinif" placeholder="Sınıf">
+<input name="renk" placeholder="Renk">
+<button>Ekle</button>
+</form>
+</div>
+
+<div class="card">
+<form method="POST" action="/stok">
+<h3>Stok İşlem</h3>
+<input name="barkod" id="barkod" placeholder="Barkod" required>
+<input name="adet" placeholder="Adet" required>
+<select name="depo">
+{% for d in depolar %}
+<option>{{d}}</option>
+{% endfor %}
+</select>
+<select name="islem">
+<option>giris</option>
+<option>cikis</option>
+</select>
+<input name="personel" placeholder="Personel" required>
+<button>Kaydet</button>
+</form>
+</div>
+
+<div class="card">
+<h3>📷 Barkod Oku</h3>
+<div id="reader" style="width:300px"></div>
+</div>
+
+<div class="card">
+<h3>📊 Stoklar</h3>
+{% for s in stok %}
+<div>{{s[0]}} | {{s[1]}} | {{s[2]}}</div>
+{% endfor %}
+</div>
+
+<div class="card">
+<h3>📜 Hareketler</h3>
+{% for l in log %}
+<div>{{l[0]}} | {{l[1]}} | {{l[2]}} | {{l[3]}}</div>
+{% endfor %}
+</div>
+
 <script>
-function startScan(){
-    const scanner = new Html5Qrcode("reader");
-    scanner.start({ facingMode: "environment" }, { fps: 10 },
-    (txt)=>{
-        document.getElementById("barcode").value = txt;
-        scanner.stop();
-    });
+function onScanSuccess(decodedText){
+document.getElementById("barkod").value = decodedText;
 }
+new Html5QrcodeScanner("reader",{fps:10}).render(onScanSuccess);
 </script>
 
-<div id="reader"></div>
-
-<a href="/excel">EXCEL</a>
-
-<hr>
-
-{% for u in urunler %}
-<div>
-{{u[1]}} | {{u[2]}} | {{u[3]}} | {{u[4]}}
-
-<a href="/arttir/{{u[0]}}">+</a>
-<a href="/azalt/{{u[0]}}">-</a>
-
-{% if session['role']=="admin" %}
-<a href="/sil/{{u[0]}}">SİL</a>
-{% endif %}
-</div>
-{% endfor %}
+</body>
+</html>
 """
 
-# ---------------- ROUTES ----------------
-def get_all():
-    with sqlite3.connect("db.db") as conn:
-        return conn.execute("SELECT * FROM urunler").fetchall()
-
+# ================= ROUTES =================
 @app.route("/")
-def home():
-    if "user" not in session:
-        return redirect("/login")
-    return render_template_string(HTML, urunler=get_all(), session=session)
+def index():
+    with db() as con:
+        stok = con.execute("SELECT barkod,depo,adet FROM stok").fetchall()
+        log = con.execute("SELECT barkod,islem,adet,personel FROM log ORDER BY id DESC LIMIT 20").fetchall()
+    return render_template_string(HTML, stok=stok, log=log, depolar=DEPOLAR)
 
-@app.route("/ekle", methods=["POST"])
-def ekle():
-    with sqlite3.connect("db.db") as conn:
-        conn.execute("INSERT INTO urunler (urun,depo,adet,barkod) VALUES (?,?,?,?)",
-                     (request.form["urun"], request.form["depo"],
-                      request.form["adet"], barkod()))
+@app.route("/urun", methods=["POST"])
+def urun():
+    barkod = str(random.randint(1000000000,9999999999))
+    with db() as con:
+        con.execute("INSERT INTO urun(barkod,ad,cins,ebat,yuzey,sinif,renk) VALUES(?,?,?,?,?,?,?)",
+        (barkod,
+         request.form["ad"],
+         request.form["cins"],
+         request.form["ebat"],
+         request.form["yuzey"],
+         request.form["sinif"],
+         request.form["renk"]))
     return redirect("/")
 
-@app.route("/arttir/<int:id>")
-def arttir(id):
-    with sqlite3.connect("db.db") as conn:
-        conn.execute("UPDATE urunler SET adet=adet+1 WHERE id=?", (id,))
-    return redirect("/")
+@app.route("/stok", methods=["POST"])
+def stok():
+    barkod = request.form["barkod"]
+    adet = int(request.form["adet"])
+    depo = request.form["depo"]
+    islem = request.form["islem"]
+    personel = request.form["personel"]
 
-@app.route("/azalt/<int:id>")
-def azalt(id):
-    with sqlite3.connect("db.db") as conn:
-        conn.execute("UPDATE urunler SET adet=adet-1 WHERE id=? AND adet>0", (id,))
-    return redirect("/")
+    with db() as con:
+        mevcut = con.execute("SELECT adet FROM stok WHERE barkod=? AND depo=?",(barkod,depo)).fetchone()
 
-@app.route("/sil/<int:id>")
-def sil(id):
-    if session.get("role")!="admin":
-        return "Yetki yok"
-    with sqlite3.connect("db.db") as conn:
-        conn.execute("DELETE FROM urunler WHERE id=?", (id,))
-    return redirect("/")
+        if islem=="giris":
+            if mevcut:
+                con.execute("UPDATE stok SET adet=adet+? WHERE barkod=? AND depo=?",(adet,barkod,depo))
+            else:
+                con.execute("INSERT INTO stok(barkod,depo,adet) VALUES(?,?,?)",(barkod,depo,adet))
 
-# ---------------- SATIŞ ----------------
-@app.route("/satis")
-def satis():
-    barkod = request.args.get("barkod")
+        if islem=="cikis":
+            if not mevcut or mevcut[0] < adet:
+                return "YETERSİZ STOK!"
+            con.execute("UPDATE stok SET adet=adet-? WHERE barkod=? AND depo=?",(adet,barkod,depo))
 
-    with sqlite3.connect("db.db") as conn:
-        c = conn.cursor()
-
-        urun = c.execute("SELECT * FROM urunler WHERE barkod=?", (barkod,)).fetchone()
-
-        if urun and urun[3] > 0:
-            c.execute("UPDATE urunler SET adet=adet-1 WHERE barkod=?", (barkod,))
-            c.execute("INSERT INTO satis (barkod,adet) VALUES (?,1)", (barkod,))
-            conn.commit()
+        con.execute("INSERT INTO log(barkod,islem,adet,personel,tarih) VALUES(?,?,?,?,?)",
+        (barkod,islem,adet,personel,str(datetime.datetime.now())))
 
     return redirect("/")
 
-# ---------------- EXCEL ----------------
-@app.route("/excel")
-def excel():
-    file="stok.xlsx"
-    with sqlite3.connect("db.db") as conn:
-        df = pd.read_sql_query("SELECT * FROM urunler", conn)
-
-    if os.path.exists(file):
-        os.remove(file)
-
-    df.to_excel(file, index=False)
-    return send_file(file, as_attachment=True)
-
-# ---------------- RUN ----------------
+# ================= RUN =================
 if __name__ == "__main__":
     app.run(debug=True)
