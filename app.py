@@ -129,10 +129,11 @@ def barkod_olustur(kod):
     writer = ImageWriter()
 
     options = {
-        "module_width": 0.4,
-        "module_height": 40,
-        "font_size": 18,
-        "text_distance": 5
+        "module_width": 0.8,   # 🔥 DAHA KALIN
+        "module_height": 60,   # 🔥 DAHA UZUN
+        "font_size": 22,
+        "text_distance": 8,
+        "quiet_zone": 10       # 🔥 BOŞLUK (çok önemli)
     }
 
     barcode_class = Code128(kod, writer=writer)
@@ -572,7 +573,7 @@ KAYDET
 
 <td>
 
-<img src="/static/{{x[1]}}.png">
+<img src="/static/{{x[1]}}.png" style="width:250px;">
 
 </td>
 
@@ -957,34 +958,15 @@ margin-top:20px;
 
 const codeReader = new ZXing.BrowserBarcodeReader();
 
-codeReader.getVideoInputDevices()
-.then((devices) => {
+codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+    if (result) {
+        alert("OKUNAN: " + result.text);
 
-    const deviceId = devices[0].deviceId;
-
-    codeReader.decodeFromVideoDevice(
-
-        deviceId,
-
-        'video',
-
-        (result, err) => {
-
-            if(result){
-
-                window.location="/barkod/" + result.text;
-
-            }
-
-        }
-
-    );
-
-})
-.catch(err => console.error(err));
+        window.location.href = "/panel?ara=" + result.text;
+    }
+});
 
 </script>
-
 
 </body>
 
