@@ -1,265 +1,151 @@
-from flask import Flask, render_template_string, request, redirect, session
-import sqlite3, random
-from datetime import datetime
+from flask import Flask, request, render_template_string, send_file
+import barcode
+from barcode.writer import ImageWriter
+import os
 
 app = Flask(__name__)
-app.secret_key = "secret123"
 
-# ================= DB =================
-def db():
-    return sqlite3.connect("db.sqlite")
-
-def init():
-    conn = db()
-    c = conn.cursor()
-
-    c.execute("CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,username TEXT,password TEXT)")
-    c.execute("""CREATE TABLE IF NOT EXISTS products(
-    id INTEGER PRIMARY KEY,
-    name TEXT,type TEXT,size TEXT,unit TEXT,class TEXT,color TEXT,
-    barcode TEXT UNIQUE,min_stock INTEGER)""")
-    c.execute("CREATE TABLE IF NOT EXISTS stock(id INTEGER PRIMARY KEY,product_id INTEGER,depo TEXT,quantity INTEGER)")
-    c.execute("CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY,user TEXT,action TEXT,product TEXT,depo TEXT,qty INTEGER,date TEXT)")
-
-    c.execute("INSERT OR IGNORE INTO users VALUES (1,'admin','1234')")
-    conn.commit()
-    conn.close()
-
-init()
-
-# ================= BARKOD =================
-def generate_barcode():
-    conn = db()
-    c = conn.cursor()
-    while True:
-        code = "869" + "".join([str(random.randint(0,9)) for _ in range(9)])
-        c.execute("SELECT * FROM products WHERE barcode=?", (code,))
-        if not c.fetchone():
-            return code
-
-# ================= STYLE =================
-style = """
-<style>
-body {font-family:Arial;background:#f4f6f9;margin:0;}
-.container {max-width:1200px;margin:auto;padding:20px;}
-.card {background:white;padding:20px;border-radius:10px;margin-bottom:20px;box-shadow:0 5px 15px rgba(0,0,0,0.1);}
-input,select,button {padding:10px;margin:5px;border-radius:6px;border:1px solid #ccc;}
-button {background:#007bff;color:white;border:none;}
-.menu a {display:block;background:#007bff;color:white;padding:10px;margin:5px 0;text-decoration:none;border-radius:6px;}
-table {width:100%;border-collapse:collapse;}
-th,td {padding:10px;border-bottom:1px solid #ddd;}
-th {background:#007bff;color:white;}
-.label {border:1px solid #000;width:280px;padding:5px;margin:5px;display:inline-block;}
-</style>
-"""
-
-depolar = [
-"1.MDF SATIŞ DEPOSU",
-"2.LAMİNANT DEPOSU",
-"3.KAPI DEPOSU",
-"4.HGLOSS DEPOSU (MORAY YANI)",
-"5.SÜTÇÜ YANI DEPO",
-"6.HELVACI YANI DEPO",
-"7.RÖTBALANS YANI DEPO",
-"8.KESİMHANE DEPOSU"
+# Depolar
+depots = [
+    "1. MDF SATIŞ DEPOSU",
+    "2. LAMİNANT DEPOSU",
+    "3. KAPI DEPOSU",
+    "4. HGLOSS DEPOSU (MORAYIN YANI)",
+    "5. SÜTÇÜNÜN YANI",
+    "6. HELVACININ ORASI",
+    "7. RÖTBALANSÇI YANI",
+    "8. KESİMHANE DEPOSU"
 ]
 
-# ================= LOGIN =================
-@app.route("/", methods=["GET","POST"])
-def login():
-    if request.method == "POST":
-        u = request.form["u"]
-        p = request.form["p"]
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Stok Yönetim</title>
 
-        c = db().cursor()
-        c.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p))
-        if c.fetchone():
-            session["user"] = u
-            return redirect("/panel")
+<script src="https://unpkg.com/html5-qrcode"></script>
 
-    return style + """
-    <div class=container><div class=card>
-    <h2>Giriş</h2>
-    <form method=post>
-    <input name=u placeholder=Kullanıcı>
-    <input name=p type=password placeholder=Şifre>
-    <button>Giriş</button>
-    </form></div></div>
-    """
+<style>
+body {
+    font-family: Arial;
+    background: #0f172a;
+    color: white;
+    text-align: center;
+}
+.card {
+    background: #1e293b;
+    padding: 20px;
+    margin: 20px auto;
+    width: 400px;
+    border-radius: 15px;
+}
+input, select {
+    width: 90%;
+    padding: 10px;
+    margin: 5px;
+    border-radius: 10px;
+    border: none;
+}
+button {
+    background: #22c55e;
+    border: none;
+    padding: 10px;
+    width: 95%;
+    border-radius: 10px;
+    color: white;
+    font-size: 16px;
+}
+#reader {
+    width: 300px;
+    margin: auto;
+}
+</style>
 
-# ================= PANEL =================
-@app.route("/panel")
-def panel():
-    if "user" not in session: return redirect("/")
-    return style + """
-    <div class=container><div class=card>
-    <h2>Panel</h2>
-    <div class=menu>
-    <a href=/add>➕ Ürün</a>
-    <a href=/stock_in>📥 Stok Giriş</a>
-    <a href=/stock_out>📤 Stok Çıkış</a>
-    <a href=/list>📊 Stok</a>
-    <a href=/labels>🖨 Etiket</a>
-    </div></div></div>
-    """
+</head>
+<body>
 
-# ================= ÜRÜN =================
-@app.route("/add", methods=["GET","POST"])
-def add():
-    if request.method == "POST":
-        barcode = request.form["barcode"]
-        if barcode == "":
-            barcode = generate_barcode()
+<h1>📦 Stok Yönetim Paneli</h1>
 
-        data = (
-            request.form["name"],
-            request.form["type"],
-            request.form["size"],
-            request.form["unit"],
-            request.form["class"],
-            request.form["color"],
-            barcode,
-            request.form["min"]
-        )
+<div class="card">
+<form method="POST" action="/generate">
 
-        conn = db()
-        c = conn.cursor()
-        c.execute("INSERT INTO products(name,type,size,unit,class,color,barcode,min_stock) VALUES (?,?,?,?,?,?,?,?)", data)
-        conn.commit()
+<input type="text" name="product" placeholder="Ürün Adı" required>
 
-        return redirect("/labels?b="+barcode)
+<select name="type">
+<option value="HG">HG</option>
+<option value="MAT">MAT</option>
+</select>
 
-    return style + """
-    <div class=container><div class=card>
-    <h2>Ürün</h2>
-    <form method=post>
-    <input name=name placeholder=Ad>
-    <input name=type placeholder=Cins>
-    <input name=size placeholder=Ebat>
-    <select name=unit><option>HG</option><option>MAT</option></select>
-    <input name=class placeholder=Sınıf>
-    <input name=color placeholder=Renk>
-    <input name=barcode placeholder="Boş bırak otomatik barkod">
-    <input name=min placeholder="Min stok">
-    <button>Kaydet</button>
-    </form></div></div>
-    """
+<select name="depot">
+{% for d in depots %}
+<option value="{{d}}">{{d}}</option>
+{% endfor %}
+</select>
 
-# ================= STOK =================
-@app.route("/stock_in", methods=["GET","POST"])
-def stock_in():
-    if request.method == "POST":
-        b = request.form["barcode"]
-        d = request.form["depo"]
-        q = int(request.form["qty"])
+<input type="number" name="quantity" placeholder="Miktar" required>
 
-        conn = db()
-        c = conn.cursor()
-        c.execute("SELECT id,name FROM products WHERE barcode=?", (b,))
-        p = c.fetchone()
+<input type="text" id="barcode" name="barcode" placeholder="Barkod">
 
-        if not p: return "ÜRÜN YOK"
-        pid,name = p
+<button type="submit">BARKOD OLUŞTUR</button>
 
-        c.execute("SELECT id FROM stock WHERE product_id=? AND depo=?", (pid,d))
-        s = c.fetchone()
+</form>
+</div>
 
-        if s:
-            c.execute("UPDATE stock SET quantity=quantity+? WHERE id=?", (q,s[0]))
-        else:
-            c.execute("INSERT INTO stock(product_id,depo,quantity) VALUES (?,?,?)",(pid,d,q))
+<div class="card">
+<h3>📷 Barkod Oku</h3>
+<div id="reader"></div>
+</div>
 
-        c.execute("INSERT INTO logs(user,action,product,depo,qty,date) VALUES (?,?,?,?,?,?)",
-                  (session["user"],"GİRİŞ",name,d,q,str(datetime.now())))
+<script>
+const html5QrCode = new Html5Qrcode("reader");
 
-        conn.commit()
-        return redirect("/list")
-
-    ops = "".join([f"<option>{x}</option>" for x in depolar])
-
-    return style + f"""
-    <div class=container><div class=card>
-    <h2>Stok Giriş</h2>
-
-    <button onclick="start()">📷 Kamera</button>
-    <div id="reader"></div>
-
-    <form method=post>
-    <input id=barcode name=barcode placeholder=Barkod>
-    <select name=depo>{ops}</select>
-    <input name=qty placeholder=Adet>
-    <button>Kaydet</button>
-    </form>
-
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <script>
-    function start(){
-        const html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start({facingMode:"environment"},{{fps:10}},(txt)=>{
-            document.getElementById("barcode").value=txt;
-        });
+html5QrCode.start(
+    { facingMode: "environment" },
+    { fps: 10 },
+    (decodedText) => {
+        document.getElementById("barcode").value = decodedText;
     }
-    </script>
+);
+</script>
 
-    </div></div>
+</body>
+</html>
+"""
+
+@app.route("/")
+def index():
+    return render_template_string(HTML, depots=depots)
+
+@app.route("/generate", methods=["POST"])
+def generate():
+    product = request.form["product"]
+    type_ = request.form["type"]
+    depot = request.form["depot"]
+    quantity = request.form["quantity"]
+    code = request.form["barcode"]
+
+    if not code:
+        code = product[:3].upper() + type_ + "001"
+
+    filename = "barcode.png"
+
+    CODE128 = barcode.get_barcode_class('code128')
+    my_code = CODE128(code, writer=ImageWriter())
+    my_code.save("static/barcode")
+
+    return f"""
+    <h2>Barkod Oluşturuldu</h2>
+    <p>{product} - {type_}</p>
+    <p>Depo: {depot}</p>
+    <p>Miktar: {quantity}</p>
+    <img src="/static/barcode.png"><br><br>
+
+    <button onclick="window.print()">🖨️ Yazdır</button>
+    <br><br>
+    <a href="/">Geri</a>
     """
 
-# ================= STOK LİSTE =================
-@app.route("/list")
-def list_page():
-    q = request.args.get("q","")
-
-    conn = db()
-    c = conn.cursor()
-    c.execute("""
-    SELECT p.name,p.barcode,s.depo,s.quantity
-    FROM stock s JOIN products p ON p.id=s.product_id
-    WHERE p.name LIKE ? OR p.barcode LIKE ?
-    """,(f"%{q}%",f"%{q}%"))
-
-    data = c.fetchall()
-
-    rows = ""
-    for d in data:
-        rows += f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]}</td><td>{d[3]}</td></tr>"
-
-    return style + f"""
-    <div class=container><div class=card>
-    <h2>Stok</h2>
-    <form><input name=q placeholder=Ara value="{q}"></form>
-    <table>
-    <tr><th>Ürün</th><th>Barkod</th><th>Depo</th><th>Adet</th></tr>
-    {rows}
-    </table>
-    </div></div>
-    """
-
-# ================= ETİKET =================
-@app.route("/labels")
-def labels():
-    b = request.args.get("b")
-
-    conn = db()
-    c = conn.cursor()
-    c.execute("SELECT * FROM products WHERE barcode=?", (b,))
-    p = c.fetchone()
-
-    html = "<script>window.print()</script>"
-
-    html += f"""
-    <div class=label>
-    <b>{p[1]}</b><br>
-    {p[2]} / {p[3]}<br>
-    {p[4]}<br>
-    {p[5]}<br>
-    {p[6]}<br>
-    <img src="https://barcode.tec-it.com/barcode.ashx?data={p[7]}&code=EAN13"><br>
-    {p[7]}
-    </div>
-    """
-
-    return html
-
-# ================= RUN =================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    os.makedirs("static", exist_ok=True)
+    app.run(debug=True)
