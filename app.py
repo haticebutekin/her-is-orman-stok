@@ -1,3 +1,8 @@
+import sqlite3
+import os
+from datetime import datetime
+import barcode
+from barcode.writer import ImageWriter
 from flask import Flask, request, redirect, session, render_template_string
 import sqlite3
 import os
@@ -185,7 +190,19 @@ def panel():
 
         barkod=barkod_uret()
 
+def barkod_resmi(barkod):
 
+    dosya = f"static/{barkod}"
+
+    EAN = barcode.get(
+        "code128",
+        barkod,
+        writer=ImageWriter()
+    )
+
+    yol = EAN.save(dosya)
+
+    return yol
 
         con.execute("""
 
