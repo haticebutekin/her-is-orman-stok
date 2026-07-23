@@ -128,11 +128,22 @@ def barkod_olustur(kod):
 
     yol=os.path.join("static", kod)
 
-    img=barcode.get(
-        "code128",
-        kod,
-        writer=ImageWriter()
-    )
+  from barcode.writer import ImageWriter
+
+yazar = ImageWriter()
+
+yazar.set_options({
+    "module_width": 0.6,
+    "module_height": 40,
+    "font_size": 18,
+    "text_distance": 8
+})
+
+img = barcode.get(
+    "code128",
+    kod,
+    writer=yazar
+)
 
     img.save(yol)
 
