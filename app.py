@@ -33,8 +33,8 @@ DEPOLAR=[
 ]
 
 
-if not os.path.exists("static"):
-    os.mkdir("static")
+if not os.path.isdir("static"):
+    os.makedirs("static", exist_ok=True)
 
 
 
@@ -120,19 +120,15 @@ def yeni_barkod():
 
 def barkod_olustur(kod):
 
-    yol="static/"+kod
+    os.makedirs("static", exist_ok=True)
 
+    yol=os.path.join("static", kod)
 
     img=barcode.get(
-
-    "code128",
-
-    kod,
-
-    writer=ImageWriter()
-
+        "code128",
+        kod,
+        writer=ImageWriter()
     )
-
 
     img.save(yol)
 
