@@ -123,56 +123,26 @@ def barkod_olustur(kod):
 
     os.makedirs("static", exist_ok=True)
 
+    from barcode import Code128
 
-    yazar = ImageWriter()
+    writer = ImageWriter()
 
-    yazar.set_options({
-        "module_width": 0.6,
-        "module_height": 40,
+    options = {
+        "module_width": 0.5,
+        "module_height": 35,
         "font_size": 18,
-        "text_distance": 8
-    })
+        "text_distance": 10,
+        "quiet_zone": 6
+    }
 
-    img = barcode.get(
-        "code128",
-        kod,
-        writer=yazar
-    )
+    barcode_class = Code128(kod, writer=writer)
 
-    yol = "static/" + kod
+    dosya = f"static/{kod}.png"
 
-    img.save(yol)
+    with open(dosya, "wb") as f:
+        barcode_class.write(f, options)
 
-
-yazar = ImageWriter()
-
-yazar.set_options({
-    "module_width": 0.6,
-    "module_height": 40,
-    "font_size": 18,
-    "text_distance": 8
-})
-
-yazar = ImageWriter()
-
-yazar.set_options({
-    "module_width": 0.6,
-    "module_height": 40,
-    "font_size": 18,
-    "text_distance": 8
-})
-
-img = barcode.get(
-    "code128",
-    kod,
-    writer=yazar
-)
-
-yol = "static/" + kod
-
-img.save(yol)
-
-    img.save(yol)
+    return dosya
 
 @app.route("/",methods=["GET","POST"])
 def login():
