@@ -114,7 +114,7 @@ def yeni_barkod():
     con.close()
 
 
-    return "HIS-"+str(sayi+1).zfill(6)
+    return "HER-"+str(sayi+1).zfill(6)
 
 
 
