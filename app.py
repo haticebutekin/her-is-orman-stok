@@ -33,9 +33,11 @@ DEPOLAR=[
 ]
 
 
-if not os.path.isdir("static"):
-    os.makedirs("static", exist_ok=True)
+if os.path.exists("static") and not os.path.isdir("static"):
+    os.remove("static")
 
+if not os.path.exists("static"):
+    os.mkdir("static")
 
 
 def baglan():
