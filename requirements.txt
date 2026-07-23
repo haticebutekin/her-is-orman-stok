@@ -2,3 +2,4 @@ flask
 python-barcode
 reportlab
 gunicorn
+pandas
