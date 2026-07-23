@@ -257,6 +257,35 @@ GİRİŞ
 
 """)
 
+@app.route("/rapor")
+def rapor():
+    toplam = 0
+    veriler = db.execute("SELECT stok FROM urunler").fetchall()
+
+    for v in veriler:
+        toplam += v[0]
+
+    return render_template("rapor.html", toplam=toplam)
+
+<h2>Toplam Stok: {{ toplam }}</h2>
+
+.etiket {
+    border: 1px solid black;
+    width: 200px;
+    padding: 10px;
+    margin: 5px;
+    text-align: center;
+}
+
+.urun-adi {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.stok-kodu {
+    font-size: 12px;
+    margin-bottom: 5px;
+}
 
 @app.route("/toplu_etiket")
 def toplu_etiket():
@@ -279,6 +308,37 @@ def toplu_etiket():
     <html>
     <head>
     <style>
+
+<div class="etiket">
+    <div class="urun-adi">{{ x[1] }}</div>  <!-- ürün adı -->
+    <div class="stok-kodu">{{ x[9] }}</div> <!-- kod -->
+    <svg id="barcode{{loop.index}}"></svg>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode"></script>
+
+<script>
+    JsBarcode("#barcode{{loop.index}}", "{{ x[9] }}", {
+        format: "CODE128",
+        width: 2,
+        height: 40,
+        displayValue: true
+    });
+</script>
+
+<input type="number" name="adet" value="1" min="1">
+
+adet = int(request.form.get("adet", 1))
+
+etiket_listesi = []
+
+for urun in urunler:
+    for i in range(adet):
+        etiket_listesi.append(urun)
+
+        {% for x in etiket_listesi %}
+    <!-- etiket -->
+{% endfor %}
 
     body{
         font-family:Arial;
