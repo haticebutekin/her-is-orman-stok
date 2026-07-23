@@ -1171,14 +1171,6 @@ liste=liste)
 
 
 @app.route("/cikis")
-def cikis():
-
-    session.clear()
-
-    return redirect("/")
-
-
-
 
 
 @app.route("/")
