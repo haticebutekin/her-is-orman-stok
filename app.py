@@ -6,7 +6,8 @@ import datetime
 import os
 
 app = Flask(__name__)
-app.secret_key = "secret123"
+app.secret_key = "heris_stok_guvenli_key"
+
 
 # PERSONELLER
 USERS = {
@@ -15,161 +16,401 @@ USERS = {
     "orhan": "123"
 }
 
+
 # DEPOLAR
 DEPOS = [
     "MDF SATIŞ DEPOSU",
     "LAMİNANT DEPOSU",
     "KAPI DEPOSU",
-    "HGLOSS DEPOSU (MORAY YANI)",
+    "HGLOSS DEPOSU",
     "SÜTÇÜ YANI",
     "HELVACI YANI",
     "RÖTBALANSÇI YANI",
     "KESİMHANE"
 ]
 
+
 DATA = []
+
 
 # LOGIN
 @app.route("/", methods=["GET", "POST"])
 def login():
+
     if request.method == "POST":
-        u = request.form["user"]
-        p = request.form["pass"]
-        if u in USERS and USERS[u] == p:
-            session["user"] = u
+
+        username = request.form.get("user")
+        password = request.form.get("pass")
+
+        if username in USERS and USERS[username] == password:
+            session["user"] = username
             return redirect("/panel")
+
     return render_template_string("""
+    
+    <html>
+    <head>
+    <title>Her İş Stok Pro</title>
+    </head>
+
+    <body>
+
+    <h1>HER İŞ STOK PRO</h1>
+
     <h2>Personel Giriş</h2>
+
     <form method="post">
-        Kullanıcı: <input name="user"><br>
-        Şifre: <input name="pass" type="password"><br>
-        <button>Giriş</button>
+
+    Kullanıcı:
+    <input name="user"><br><br>
+
+    Şifre:
+    <input name="pass" type="password"><br><br>
+
+    <button type="submit">
+    GİRİŞ
+    </button>
+
     </form>
+
+    </body>
+    </html>
+
     """)
 
+
+
 # PANEL
-@app.route("/panel", methods=["GET", "POST"])
+@app.route("/panel", methods=["GET","POST"])
 def panel():
+
     if "user" not in session:
         return redirect("/")
 
+
     if request.method == "POST":
-        barkod = request.form["barkod"]
-        urun = request.form["urun"]
-        cins = request.form["cins"]
-        ebat = request.form["ebat"]
-        yuzey = request.form["yuzey"]
-        renk = request.form["renk"]
-        depo = request.form["depo"]
 
         DATA.append({
-            "tarih": datetime.datetime.now(),
-            "personel": session["user"],
-            "barkod": barkod,
-            "urun": urun,
-            "cins": cins,
-            "ebat": ebat,
-            "yuzey": yuzey,
-            "renk": renk,
-            "depo": depo
+
+            "tarih":
+            datetime.datetime.now().strftime("%d.%m.%Y %H:%M"),
+
+            "personel":
+            session["user"],
+
+            "barkod":
+            request.form.get("barkod"),
+
+            "urun":
+            request.form.get("urun"),
+
+            "cins":
+            request.form.get("cins"),
+
+            "ebat":
+            request.form.get("ebat"),
+
+            "yuzey":
+            request.form.get("yuzey"),
+
+            "renk":
+            request.form.get("renk"),
+
+            "depo":
+            request.form.get("depo")
+
         })
 
+
+
     return render_template_string("""
-    <h2>Hoşgeldin {{user}}</h2>
 
-    <video id="cam" width="300" autoplay></video>
-    <button onclick="startCam()">Kamera Aç</button>
+<html>
 
-    <form method="post">
-        Barkod: <input name="barkod" id="barkod"><br>
-        Ürün Adı: <input name="urun"><br>
-        Mal Cinsi: <input name="cins"><br>
-        Ebat: <input name="ebat"><br>
+<head>
 
-        Yüzey:
-        <select name="yuzey">
-            <option>HG</option>
-            <option>MAT</option>
-        </select><br>
+<title>Her İş Stok Pro</title>
 
-        Renk: <input name="renk"><br>
+<style>
 
-        Depo:
-        <select name="depo">
-            {% for d in depos %}
-            <option>{{d}}</option>
-            {% endfor %}
-        </select><br>
+body{
+font-family:Arial;
+margin:30px;
+}
 
-        <button>Kaydet</button>
-    </form>
+input,select{
+padding:8px;
+margin:5px;
+}
 
-    <br>
-    <a href="/pdf">PDF Yazdır</a> |
-    <a href="/excel">Excel Al</a>
+button{
+padding:10px;
+background:#0066cc;
+color:white;
+border:0;
+}
 
-    <h3>Kayıtlar</h3>
-    <table border=1>
-        <tr>
-            <th>Tarih</th><th>Personel</th><th>Barkod</th>
-            <th>Ürün</th><th>Cins</th><th>Ebat</th>
-            <th>Yüzey</th><th>Renk</th><th>Depo</th>
-        </tr>
-        {% for d in data %}
-        <tr>
-            <td>{{d.tarih}}</td>
-            <td>{{d.personel}}</td>
-            <td>{{d.barkod}}</td>
-            <td>{{d.urun}}</td>
-            <td>{{d.cins}}</td>
-            <td>{{d.ebat}}</td>
-            <td>{{d.yuzey}}</td>
-            <td>{{d.renk}}</td>
-            <td>{{d.depo}}</td>
-        </tr>
-        {% endfor %}
-    </table>
+table{
+border-collapse:collapse;
+width:100%;
+}
 
-    <script>
-    function startCam(){
-        navigator.mediaDevices.getUserMedia({video:true})
-        .then(stream => {
-            document.getElementById('cam').srcObject = stream;
-        });
-    }
-    </script>
-    """, user=session["user"], data=DATA, depos=DEPOS)
+td,th{
+border:1px solid black;
+padding:8px;
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<h1>HER İŞ STOK PRO</h1>
+
+<h3>
+Personel: {{user}}
+</h3>
+
+
+
+<form method="post">
+
+
+Barkod:
+<input name="barkod">
+
+
+Ürün:
+<input name="urun">
+
+
+Mal Cinsi:
+<input name="cins">
+
+
+Ebat:
+<input name="ebat">
+
+
+Yüzey:
+
+<select name="yuzey">
+
+<option>HG</option>
+<option>MAT</option>
+
+</select>
+
+
+Renk:
+
+<input name="renk">
+
+
+Depo:
+
+<select name="depo">
+
+{% for d in depos %}
+
+<option>{{d}}</option>
+
+{% endfor %}
+
+</select>
+
+
+
+<br><br>
+
+<button>
+KAYDET
+</button>
+
+
+</form>
+
+
+<br>
+
+
+<a href="/pdf">
+PDF
+</a>
+
+|
+
+<a href="/excel">
+EXCEL
+</a>
+
+|
+
+<a href="/logout">
+ÇIKIŞ
+</a>
+
+
+
+<h2>Stok Kayıtları</h2>
+
+
+<table>
+
+
+<tr>
+
+<th>Tarih</th>
+<th>Personel</th>
+<th>Barkod</th>
+<th>Ürün</th>
+<th>Cins</th>
+<th>Ebat</th>
+<th>Yüzey</th>
+<th>Renk</th>
+<th>Depo</th>
+
+
+</tr>
+
+
+{% for x in data %}
+
+
+<tr>
+
+<td>{{x.tarih}}</td>
+<td>{{x.personel}}</td>
+<td>{{x.barkod}}</td>
+<td>{{x.urun}}</td>
+<td>{{x.cins}}</td>
+<td>{{x.ebat}}</td>
+<td>{{x.yuzey}}</td>
+<td>{{x.renk}}</td>
+<td>{{x.depo}}</td>
+
+
+</tr>
+
+
+{% endfor %}
+
+
+</table>
+
+
+
+</body>
+
+</html>
+
+
+""",
+user=session["user"],
+data=DATA,
+depos=DEPOS)
+
+
+
 
 # PDF
 @app.route("/pdf")
 def pdf():
+
     buffer = BytesIO()
+
     c = canvas.Canvas(buffer)
 
     y = 800
-    for d in DATA:
-        c.drawString(30, y, f"{d['urun']} - {d['barkod']} - {d['depo']}")
+
+
+    for x in DATA:
+
+        c.drawString(
+            30,
+            y,
+            f"{x['urun']} {x['barkod']} {x['depo']}"
+        )
+
         y -= 20
 
+        if y < 50:
+            c.showPage()
+            y = 800
+
+
     c.save()
+
     buffer.seek(0)
-    return send_file(buffer, as_attachment=True, download_name="etiket.pdf")
+
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name="stok_rapor.pdf"
+    )
+
+
+
 
 # EXCEL
 @app.route("/excel")
 def excel():
-    df = pd.DataFrame(DATA)
-    file = BytesIO()
-    df.to_excel(file, index=False)
+
+    if len(DATA)==0:
+        return "Kayıt yok"
+
+
+    df=pd.DataFrame(DATA)
+
+
+    file=BytesIO()
+
+    df.to_excel(
+        file,
+        index=False,
+        engine="openpyxl"
+    )
+
+
     file.seek(0)
-    return send_file(file, as_attachment=True, download_name="rapor.xlsx")
+
+
+    return send_file(
+        file,
+        as_attachment=True,
+        download_name="stok.xlsx"
+    )
+
+
+
+
 
 # LOGOUT
 @app.route("/logout")
 def logout():
+
     session.clear()
+
     return redirect("/")
 
-# RENDER FIX
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+
+
+
+# RENDER
+if __name__=="__main__":
+
+    port=int(
+        os.environ.get(
+            "PORT",
+            10000
+        )
+    )
+
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
