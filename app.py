@@ -1,9 +1,10 @@
-from flask import Flask, request, render_template_string
+from flask import Flask, request, session, redirect
 import json, os, datetime, uuid
 import qrcode, base64
 from io import BytesIO
 
 app = Flask(__name__)
+app.secret_key = "gizli123"
 
 # ================= DOSYA =================
 def oku(d):
@@ -16,7 +17,13 @@ def yaz(d,v):
     with open(d,"w") as f:
         json.dump(v,f,indent=2)
 
-# ================= SABİT DEPO =================
+# ================= KULLANICI =================
+KULLANICILAR = {
+    "admin": {"sifre": "1234", "rol": "yonetici"},
+    "depocu": {"sifre": "1234", "rol": "depocu"}
+}
+
+# ================= DEPO =================
 DEPOLAR = [
     "MDF SATIŞ DEPOSU","LAMİNANT DEPOSU","KAPI DEPOSU",
     "HGLOSS DEPOSU","MORAY YANI","SÜTÇÜ YANI",
@@ -43,21 +50,59 @@ def log_yaz(kim, islem, urun, adet, depo):
     })
     yaz("hareket.json", log)
 
+# ================= LOGIN =================
+@app.route("/login", methods=["GET","POST"])
+def login():
+    if request.method == "POST":
+        k = request.form["kullanici"]
+        s = request.form["sifre"]
+
+        if k in KULLANICILAR and KULLANICILAR[k]["sifre"] == s:
+            session["user"] = k
+            session["rol"] = KULLANICILAR[k]["rol"]
+            return redirect("/")
+
+        return "❌ Hatalı giriş"
+
+    return """
+    <h2>🔐 Giriş</h2>
+    <form method="post">
+    Kullanıcı: <input name="kullanici"><br>
+    Şifre: <input name="sifre" type="password"><br><br>
+    <button>Giriş</button>
+    </form>
+    """
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
 # ================= ANA =================
 @app.route("/")
 def home():
-    return """
-    <h1>📦 DEPO SİSTEMİ</h1>
-    <a href='/ekle'>➕ Ürün Ekle</a><br><br>
-    <a href='/kamera'>📷 Kamera ile Okut</a><br><br>
-    <a href='/okut'>⌨️ Manuel Okut</a><br><br>
-    <a href='/hareket'>📋 Hareket</a>
-    <a href='/stok'>📊 Stok Listesi</a><br><br>
-    """
+    if "user" not in session:
+        return redirect("/login")
+
+    menu = "<h1>📦 DEPO SİSTEMİ</h1>"
+
+    if session["rol"] == "yonetici":
+        menu += "<a href='/ekle'>➕ Ürün Ekle</a><br><br>"
+        menu += "<a href='/stok'>📊 Stok</a><br><br>"
+
+    menu += "<a href='/kamera'>📷 Kamera (Hızlı)</a><br><br>"
+    menu += "<a href='/okut'>⌨️ Manuel</a><br><br>"
+    menu += "<a href='/hareket'>📋 Hareket</a><br><br>"
+    menu += "<a href='/logout'>🚪 Çıkış</a>"
+
+    return menu
 
 # ================= ÜRÜN EKLE =================
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
+    if session.get("rol") != "yonetici":
+        return "❌ Yetkisiz"
+
     if request.method == "POST":
         f = request.form
         urunler = oku("urunler.json")
@@ -78,29 +123,17 @@ def ekle():
         urunler.append(yeni)
         yaz("urunler.json", urunler)
 
-        log_yaz("Yönetici","ÜRÜN EKLE",yeni["ad"],yeni["adet"],yeni["depo"])
+        log_yaz(session["user"],"ÜRÜN EKLE",yeni["ad"],yeni["adet"],yeni["depo"])
 
         qr = qr_olustur(barkod)
 
         return f"""
         <h2>✅ Ürün Eklendi</h2>
-
         📦 {yeni['ad']}<br>
         Barkod: {barkod}<br><br>
 
         <img src="data:image/png;base64,{qr}"><br><br>
-
-        <button onclick="window.print()">🖨️ Etiket Yazdır</button>
-
-        <hr>
-        <b>ETİKET</b><br>
-        {yeni['ad']}<br>
-        {yeni['cins']}<br>
-        {yeni['ebat']}<br>
-        {yeni['sinif']}<br>
-        {yeni['renk']}<br>
-        {yeni['depo']}<br>
-        Barkod: {barkod}
+        <button onclick="window.print()">🖨️ Yazdır</button>
         """
 
     return f"""
@@ -120,145 +153,122 @@ def ekle():
     </form>
     """
 
-# ================= MANUEL OKUT =================
+# ================= STOK =================
+@app.route("/stok")
+def stok():
+    if session.get("rol") != "yonetici":
+        return "❌ Yetkisiz"
+
+    urunler = oku("urunler.json")
+
+    html = "<h2>📊 STOK</h2><table border=1>"
+    html += "<tr><th>Ad</th><th>Depo</th><th>Adet</th></tr>"
+
+    for u in urunler:
+        renk = "red" if u["adet"] < 5 else "black"
+        html += f"<tr style='color:{renk}'><td>{u['ad']}</td><td>{u['depo']}</td><td>{u['adet']}</td></tr>"
+
+    html += "</table>"
+    return html
+
+# ================= MANUEL =================
 @app.route("/okut", methods=["GET","POST"])
 def okut():
     if request.method == "POST":
         barkod = request.form["barkod"]
         adet = int(request.form["adet"])
-        kim = request.form["kim"]
 
         urunler = oku("urunler.json")
 
         for u in urunler:
             if u["barkod"] == barkod:
-
                 if adet > u["adet"]:
                     return "❌ Yetersiz stok"
 
                 u["adet"] -= adet
                 yaz("urunler.json", urunler)
 
-                log_yaz(kim,"MAL ÇIKIŞ",u["ad"],adet,u["depo"])
+                log_yaz(session["user"],"MAL ÇIKIŞ",u["ad"],adet,u["depo"])
 
-                return f"""
-                <h2>✅ Çıkış</h2>
-                📦 {u['ad']}<br>
-                📏 {u['ebat']}<br>
-                🎨 {u['renk']}<br>
-                🏬 {u['depo']}<br>
-                Kalan: {u['adet']}
-                """
+                return f"✅ {u['ad']} → Kalan: {u['adet']}"
 
         return "❌ Ürün yok"
 
     return """
-    <h2>Manuel Barkod</h2>
+    <h2>Manuel</h2>
     <form method="post">
     Barkod: <input name="barkod"><br>
     Adet: <input name="adet"><br>
-    Kim: <input name="kim"><br>
     <button>Onayla</button>
     </form>
     """
 
-# ================= KAMERA =================
+# ================= HIZLI KAMERA =================
 @app.route("/kamera")
 def kamera():
     return """
-    <h2>📷 Kamera ile Barkod Okut</h2>
-
-    <video id="video" width="300" height="200" autoplay></video>
-    <p id="sonuc"></p>
+    <h2>📷 Hızlı Okutma</h2>
+    <video id="reader" width="300"></video>
+    <p id="durum"></p>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
-
     <script>
-    function start() {
-        const scanner = new Html5Qrcode("video");
+    function baslat() {
+        const html5QrCode = new Html5Qrcode("reader");
 
-        scanner.start(
+        html5QrCode.start(
             { facingMode: "environment" },
             { fps: 10, qrbox: 250 },
-            qrCodeMessage => {
-                document.getElementById("sonuc").innerHTML =
-                "Barkod: " + qrCodeMessage +
-                "<br><a href='/okut?barkod="+qrCodeMessage+"'>ÇIKIŞ YAP</a>";
-                scanner.stop();
+            (qr) => {
+                document.getElementById("durum").innerHTML = "OKUNDU: " + qr;
+
+                fetch("/hizli_cikis", {
+                    method: "POST",
+                    headers: {"Content-Type":"application/json"},
+                    body: JSON.stringify({barkod: qr})
+                })
+                .then(r => r.text())
+                .then(d => document.getElementById("durum").innerHTML = d)
             }
         );
     }
-    start();
+    baslat();
     </script>
     """
 
-@app.route("/stok")
-def stok():
+# ================= HIZLI ÇIKIŞ =================
+@app.route("/hizli_cikis", methods=["POST"])
+def hizli():
+    data = request.get_json()
+    barkod = data["barkod"]
+
     urunler = oku("urunler.json")
 
-    html = """
-    <h2>📦 STOK LİSTESİ</h2>
-
-    <form method="get">
-    Depo filtre:
-    <select name="depo">
-        <option value="">Hepsi</option>
-    """
-
-    for d in DEPOLAR:
-        html += f"<option value='{d}'>{d}</option>"
-
-    html += """
-    </select>
-    <button>Filtrele</button>
-    </form>
-
-    <br><br>
-
-    <table border=1 cellpadding=5>
-    <tr>
-        <th>Ad</th>
-        <th>Cins</th>
-        <th>Ebat</th>
-        <th>Sınıf</th>
-        <th>Renk</th>
-        <th>Depo</th>
-        <th>Adet</th>
-    </tr>
-    """
-
-    secili_depo = request.args.get("depo")
-
     for u in urunler:
-        if secili_depo and u["depo"] != secili_depo:
-            continue
+        if u["barkod"] == barkod:
 
-        renk = "red" if u["adet"] < 5 else "black"
+            if u["adet"] <= 0:
+                return "❌ Stok yok"
 
-        html += f"""
-        <tr style='color:{renk}'>
-            <td>{u['ad']}</td>
-            <td>{u['cins']}</td>
-            <td>{u['ebat']}</td>
-            <td>{u['sinif']}</td>
-            <td>{u['renk']}</td>
-            <td>{u['depo']}</td>
-            <td>{u['adet']}</td>
-        </tr>
-        """
+            u["adet"] -= 1
+            yaz("urunler.json", urunler)
 
-    html += "</table>"
+            log_yaz(session.get("user","depocu"),"HIZLI ÇIKIŞ",u["ad"],1,u["depo"])
 
-    return html
+            return f"✅ {u['ad']} çıktı | Kalan: {u['adet']}"
+
+    return "❌ Ürün bulunamadı"
 
 # ================= HAREKET =================
 @app.route("/hareket")
 def hareket():
     log = oku("hareket.json")
-    h = "<h2>Hareket</h2>"
+    html = "<h2>📋 Hareket</h2>"
+
     for l in log[::-1]:
-        h += f"<hr>{l['kim']} - {l['islem']} - {l['urun']} - {l['adet']} - {l['depo']} - {l['saat']}"
-    return h
+        html += f"<hr>{l['kim']} | {l['islem']} | {l['urun']} | {l['adet']} | {l['depo']} | {l['saat']}"
+
+    return html
 
 # ================= RUN =================
 if __name__ == "__main__":
