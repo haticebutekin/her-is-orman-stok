@@ -1,7 +1,5 @@
 from flask import Flask, render_template_string, request, redirect, session
 import sqlite3
-from pyzbar.pyzbar import decode
-import cv2
 
 app = Flask(__name__)
 app.secret_key = "1234"
@@ -180,15 +178,34 @@ def urunler():
 # ---------------- BARKOD ----------------
 @app.route("/barkod")
 def barkod():
-    return '''
-    <h2>Barkod Okuma</h2>
-    <button onclick="scan()">Kamera Aç</button>
+    return """
+    <h2>Barkod Oku</h2>
+
+    <video id="video" width="300" height="200" autoplay></video>
+    <p id="result"></p>
+
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
     <script>
-    function scan(){
-        fetch('/scan').then(r=>r.text()).then(alert)
+    function onScanSuccess(decodedText) {
+        document.getElementById("result").innerText = "OKUNDU: " + decodedText;
+
+        fetch("/log_barkod?data=" + decodedText)
     }
+
+    let scanner = new Html5QrcodeScanner("video", { fps: 10, qrbox: 250 });
+    scanner.render(onScanSuccess);
     </script>
-    '''
+    """
+
+@app.route("/log_barkod")
+def log_barkod():
+    data = request.args.get("data")
+
+    if "user" in session:
+        log_yaz(session["user"], f"Barkod okudu: {data}")
+
+    return "ok"
 
 @app.route("/scan")
 def scan():
