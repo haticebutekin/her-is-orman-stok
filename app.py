@@ -1,17 +1,12 @@
-from flask import Flask, request, redirect, session
+from flask import Flask, request, redirect, session, send_file
 import sqlite3
 import random
-import json
-import qrcode
-import barcode
-from barcode.writer import ImageWriter
-from reportlab.pdfgen import canvas
-from flask import send_file
-import os
 from datetime import datetime
+import os
+
 
 app = Flask(__name__)
-app.secret_key = "HER_IS_STOK_PRO_2026"
+app.secret_key = "HERIS_STOK_PRO_SECRET"
 
 
 # =====================
@@ -22,20 +17,12 @@ def db():
     return sqlite3.connect("stok.db")
 
 
-def init():
+def init_db():
 
     con = db()
     c = con.cursor()
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS requests(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        product_id INTEGER,
-        quantity INTEGER,
-        status TEXT
-)
-""")
-    
+
     c.execute("""
     CREATE TABLE IF NOT EXISTS users(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,15 +32,7 @@ def init():
     )
     """)
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS requests(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        product_id INTEGER,
-        quantity INTEGER,
-        status TEXT
-    )
-    """)
-    
+
     c.execute("""
     CREATE TABLE IF NOT EXISTS depots(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,9 +50,9 @@ def init():
         class_name TEXT,
         surface TEXT,
         color TEXT,
-        barcode TEXT UNIQUE,
+        barcode TEXT,
         stock INTEGER,
-        depot INTEGER
+        depot TEXT
     )
     """)
 
@@ -81,52 +60,66 @@ def init():
     c.execute("""
     CREATE TABLE IF NOT EXISTS logs(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
+        user TEXT,
         action TEXT,
         date TEXT
     )
     """)
 
 
-    # kullanıcılar
+    # Kullanıcı
 
-    if c.execute("SELECT * FROM users").fetchone() is None:
+    if c.execute(
+        "SELECT * FROM users"
+    ).fetchone() is None:
 
         c.execute("""
-        INSERT INTO users(username,password,role)
-        VALUES('admin','1234','admin')
+        INSERT INTO users
+        (username,password,role)
+        VALUES
+        ('admin','1234','admin')
         """)
 
 
         c.execute("""
-        INSERT INTO users(username,password,role)
-        VALUES('depocu','1234','depo')
+        INSERT INTO users
+        (username,password,role)
+        VALUES
+        ('depocu','1234','depo')
         """)
 
 
 
-    # 8 depo
+    # Depolar
 
     depolar=[
-        "MDF SATIS DEPOSU",
-        "LAMINANT DEPOSU",
-        "KAPI DEPOSU",
-        "HGLOSS DEPOSU",
-        "SUTCUNUN YANI",
-        "HELVACI YANI",
-        "ROTBALANSCI YANI",
-        "KESIMHANE"
+        "DEPO 1",
+        "DEPO 2",
+        "DEPO 3",
+        "DEPO 4",
+        "DEPO 5",
+        "DEPO 6",
+        "DEPO 7",
+        "DEPO 8"
     ]
 
 
-    if c.execute("SELECT * FROM depots").fetchone() is None:
+    for d in depolar:
 
-        for depo in depolar:
+        kontrol=c.execute(
+            "SELECT * FROM depots WHERE name=?",
+            (d,)
+        ).fetchone()
+
+
+        if kontrol is None:
 
             c.execute("""
             INSERT INTO depots(name)
             VALUES(?)
-            """,(depo,))
+            """,
+            (d,))
+
 
 
     con.commit()
@@ -134,7 +127,7 @@ def init():
 
 
 
-init()
+init_db()
 
 
 
@@ -142,8 +135,7 @@ init()
 # YARDIMCI
 # =====================
 
-
-def yeni_barkod():
+def barkod():
 
     return str(
         random.randint(
@@ -154,18 +146,19 @@ def yeni_barkod():
 
 
 
-def logla(islem):
+def log(islem):
 
     con=db()
 
     con.execute("""
-    INSERT INTO logs(username,action,date)
+    INSERT INTO logs
+    (user,action,date)
     VALUES(?,?,?)
     """,
     (
-        session.get("user"),
-        islem,
-        datetime.now()
+    session.get("user"),
+    islem,
+    datetime.now()
     ))
 
     con.commit()
@@ -177,7 +170,6 @@ def logla(islem):
 # LOGIN
 # =====================
 
-
 @app.route("/",methods=["GET","POST"])
 def login():
 
@@ -185,8 +177,8 @@ def login():
     if request.method=="POST":
 
 
-        kullanici=request.form["username"]
-        sifre=request.form["password"]
+        username=request.form["username"]
+        password=request.form["password"]
 
 
         con=db()
@@ -197,13 +189,12 @@ def login():
         WHERE username=? AND password=?
         """,
         (
-        kullanici,
-        sifre
+        username,
+        password
         )).fetchone()
 
 
         con.close()
-
 
 
         if user:
@@ -216,22 +207,31 @@ def login():
 
 
     return """
-    <h1>HER IS STOK PRO</h1>
+
+    <h1>
+    HER İŞ STOK PRO
+    </h1>
+
 
     <form method="post">
 
-    Kullanici:
-    <input name="username"><br><br>
+    Kullanıcı:
+    <input name="username">
 
-    Sifre:
-    <input name="password"
-    type="password"><br><br>
+    <br><br>
+
+    Şifre:
+    <input name="password" type="password">
+
+    <br><br>
 
     <button>
-    GIRIS
+    GİRİŞ
     </button>
 
+
     </form>
+
     """
 
 
@@ -239,7 +239,6 @@ def login():
 # =====================
 # PANEL
 # =====================
-
 
 @app.route("/panel")
 def panel():
@@ -249,36 +248,58 @@ def panel():
 
 
     return """
-    <h1>HER IS STOK PRO</h1>
 
-    <a href="/urun">Yeni Urun</a><br><br>
-
-    <a href="/liste">Urunler</a><br><br>
-    <a href="/etiket/{u[0]}">
-    🏷️ ETİKET BAS
-    </a>
-    <a href="/cikis">Depo Cikis</a><br><br>
-
-    <a href="/log">Kim Ne Yapti</a>
-
-    """
+<h1>
+HER İŞ STOK PRO
+</h1>
 
 
+<a href="/urun">
+Yeni Ürün
+</a>
+
+<br><br>
+
+
+<a href="/liste">
+Ürün Liste
+</a>
+
+
+<br><br>
+
+
+<a href="/cikis">
+Depo Çıkış
+</a>
+
+
+<br><br>
+
+
+<a href="/log">
+Hareketler
+</a>
+
+
+"""
 
 # =====================
-# URUN EKLE
+# ÜRÜN EKLE
 # =====================
 
-
-@app.route("/urun",methods=["GET","POST"])
+@app.route("/urun", methods=["GET","POST"])
 def urun():
+
+    if "user" not in session:
+        return redirect("/")
 
 
     con=db()
 
 
     depolar=con.execute("""
-    SELECT * FROM depots
+    SELECT name FROM depots
     """).fetchall()
 
 
@@ -286,7 +307,7 @@ def urun():
     if request.method=="POST":
 
 
-        barkod=yeni_barkod()
+        yeni=barkod()
 
 
         con.execute("""
@@ -311,23 +332,37 @@ def urun():
         request.form["class_name"],
         request.form["surface"],
         request.form["color"],
-        barkod,
+        yeni,
         request.form["stock"],
         request.form["depot"]
         ))
 
 
         con.commit()
-
         con.close()
 
 
-        logla(
-        "Yeni urun eklendi "+barkod
+        log(
+        "Yeni ürün eklendi barkod: "+yeni
         )
 
 
-        return "Kaydedildi Barkod:"+barkod
+        return f"""
+
+        <h2>
+        Ürün Kaydedildi
+        </h2>
+
+        Barkod:
+        {yeni}
+
+        <br><br>
+
+        <a href="/panel">
+        Panel
+        </a>
+
+        """
 
 
 
@@ -336,10 +371,12 @@ def urun():
 
     for d in depolar:
 
-        secenek+=f"""
-        <option value="{d[0]}">
-        {d[1]}
+        secenek += f"""
+
+        <option>
+        {d[0]}
         </option>
+
         """
 
 
@@ -347,49 +384,69 @@ def urun():
     con.close()
 
 
+
     return f"""
 
-<h2>URUN KARTI</h2>
+<h2>
+YENİ ÜRÜN
+</h2>
 
 
 <form method="post">
 
 
-Mal Adi:
-<input name="name"><br>
+Mal Adı:
+
+<input name="name">
+
+<br><br>
 
 
 Mal Cinsi:
-<input name="type"><br>
+
+<input name="type">
+
+<br><br>
 
 
-Ebat mm:
-<input name="size"><br>
+Ebat (mm):
+
+<input name="size">
+
+<br><br>
 
 
-Sinifi:
-<input name="class_name"><br>
+Sınıf:
+
+<input name="class_name">
+
+<br><br>
 
 
-HG / MAT:
+Yüzey:
 
 <select name="surface">
 
-<option>HG</option>
+<option>
+HG
+</option>
 
-<option>MAT</option>
+<option>
+MAT
+</option>
 
 </select>
 
 
-<br>
+<br><br>
 
 
 Renk:
 
 <input name="color">
 
-<br>
+
+<br><br>
 
 
 Adet:
@@ -397,7 +454,7 @@ Adet:
 <input name="stock">
 
 
-<br>
+<br><br>
 
 
 Depo:
@@ -420,85 +477,119 @@ KAYDET
 </form>
 
 """
+
+
+
+
 # =====================
-# URUN LISTE
+# ÜRÜN LİSTE
 # =====================
 
 @app.route("/liste")
 def liste():
 
+    if "user" not in session:
+        return redirect("/")
+
+
     con=db()
+
 
     urunler=con.execute("""
     SELECT * FROM products
+    ORDER BY id DESC
     """).fetchall()
+
 
     con.close()
 
 
-    sayfa="""
+    html="""
 
-<h2>URUN LISTESI</h2>
+<h2>
+STOK LİSTESİ
+</h2>
 
 """
 
 
     for u in urunler:
 
-        sayfa+=f"""
+
+        html+=f"""
 
 <hr>
 
-<b>Mal:</b> {u[1]}<br>
+
+<b>{u[1]}</b>
+
+<br>
 
 Cins:
-{u[2]}<br>
+{u[2]}
+
+<br>
 
 Ebat:
-{u[3]} mm<br>
+{u[3]} mm
 
-Sinif:
-{u[4]}<br>
+<br>
 
-Yuzey:
-{u[5]}<br>
+Sınıf:
+{u[4]}
+
+<br>
+
+Yüzey:
+{u[5]}
+
+<br>
 
 Renk:
-{u[6]}<br>
+{u[6]}
+
+<br>
 
 Barkod:
-{u[7]}<br>
+{u[7]}
+
+<br>
 
 Stok:
 {u[8]}
 
 <br>
 
-<a href="/etiket/{u[0]}">
-Etiket
-</a>
+Depo:
+{u[9]}
+
 
 """
 
 
-    return sayfa
+
+    return html
+
 
 
 
 
 # =====================
-# DEPO CIKIS
+# DEPO ÇIKIŞ
 # =====================
-
 
 @app.route("/cikis",methods=["GET","POST"])
 def cikis():
 
+
     if request.method=="POST":
 
-        barkod=request.form["barcode"]
-        adet=int(request.form["adet"])
-        talep=int(request.form["talep"])
+
+        bark=request.form["barcode"]
+
+        adet=int(
+            request.form["adet"]
+        )
 
 
         con=db()
@@ -508,15 +599,8 @@ def cikis():
         SELECT * FROM products
         WHERE barcode=?
         """,
-        (barkod,)).fetchone()
-
-
-
-        talep_urun=con.execute("""
-        SELECT * FROM requests
-        WHERE id=?
-        """,
-        (talep,)).fetchone()
+        (bark,)
+        ).fetchone()
 
 
 
@@ -524,31 +608,7 @@ def cikis():
 
             con.close()
 
-            return "❌ Barkod bulunamadı"
-
-
-
-        if talep_urun is None:
-
-            con.close()
-
-            return "❌ Geçersiz çıkış talebi"
-
-
-
-        # YANLIŞ MAL KONTROLÜ
-
-        if urun[0] != talep_urun[1]:
-
-            con.close()
-
-            return """
-            <h2 style='color:red'>
-            ❌ YANLIŞ MALZEME!
-            </h2>
-
-            Çıkış engellendi.
-            """
+            return "Barkod bulunamadı"
 
 
 
@@ -556,7 +616,7 @@ def cikis():
 
             con.close()
 
-            return "❌ Yetersiz stok"
+            return "Yetersiz stok"
 
 
 
@@ -566,6 +626,7 @@ def cikis():
         SET stock=stock-?
 
         WHERE id=?
+
         """,
         (
         adet,
@@ -573,30 +634,27 @@ def cikis():
         ))
 
 
-
-        con.execute("""
-        UPDATE requests
-        SET status='Tamamlandı'
-        WHERE id=?
-        """,
-        (talep,))
-
-
         con.commit()
         con.close()
 
 
 
-        logla(
-        f"{urun[1]} {adet} adet çıkış yaptı"
+        log(
+        f"{urun[1]} {adet} adet çıkış"
         )
 
 
         return """
-        <h2>
-        ✅ Doğru ürün çıktı
-        </h2>
-        """
+
+<h2>
+Çıkış Tamamlandı
+</h2>
+
+<a href="/panel">
+Panel
+</a>
+
+"""
 
 
 
@@ -608,14 +666,6 @@ DEPO ÇIKIŞ
 
 
 <form method="post">
-
-
-Talep No:
-
-<input name="talep">
-
-
-<br><br>
 
 
 Barkod:
@@ -636,185 +686,62 @@ Adet:
 
 
 <button>
-OKUT VE ÇIK
+ÇIKIŞ YAP
 </button>
 
 
 </form>
 
-"""
-
-@app.route("/cikis",methods=["POST"])
-def cikis_yap():
-
-
-    barkod=request.form["barcode"]
-
-    adet=int(
-    request.form["adet"]
-    )
-
-
-    con=db()
-
-
-    urun=con.execute("""
-    SELECT * FROM products
-    WHERE barcode=?
-    """,
-    (barkod,)
-    ).fetchone()
-
-
-
-    if urun is None:
-
-        con.close()
-
-        return "Urun bulunamadi"
-
-
-
-    if urun[8] < adet:
-
-        con.close()
-
-        return "Yetersiz stok"
-
-
-
-    con.execute("""
-    UPDATE products
-
-    SET stock=stock-?
-
-    WHERE id=?
-
-    """,
-    (
-    adet,
-    urun[0]
-    ))
-
-
-
-    con.commit()
-
-    con.close()
-
-
-
-    logla(
-    f"{urun[1]} {adet} adet cikis"
-    )
-
-
-
-    return """
-
-<h2>
-CIKIS TAMAMLANDI
-</h2>
-
-<a href="/kamera">
-📷 Kamera Barkod
-</a>
-    
-<a href="/panel">
-Panel
-</a>
 
 """
-
-
-
+    # =====================
+# HAREKET LOG
 # =====================
-# LOG
-# =====================
-
-@app.route("/talep/<int:id>/<int:adet>")
-def talep(id,adet):
-
-    con=db()
-
-    con.execute("""
-    INSERT INTO requests
-    (product_id,quantity,status)
-
-    VALUES(?,?,?)
-    """,
-    (
-    id,
-    adet,
-    "Bekliyor"
-    ))
-
-    con.commit()
-
-
-    no=con.execute("""
-    SELECT last_insert_rowid()
-    """).fetchone()[0]
-
-
-    con.close()
-
-
-    return f"""
-
-<h2>
-Çıkış Talebi Oluşturuldu
-</h2>
-
-Talep No:
-
-<b>{no}</b>
-
-"""
 
 @app.route("/log")
-def log_ekran():
+def hareketler():
+
+    if "user" not in session:
+        return redirect("/")
+
 
     con=db()
 
-    kayit=con.execute("""
+    kayitlar=con.execute("""
     SELECT * FROM logs
     ORDER BY id DESC
     """).fetchall()
-
 
     con.close()
 
 
     html="""
 
-<h2>KIM NE YAPTI</h2>
+<h2>
+KİM NE YAPTI
+</h2>
 
 """
 
 
-    for k in kayit:
+    for k in kayitlar:
 
         html+=f"""
 
-<p>
+<hr>
 
-Kullanici:
+Kullanıcı:
 {k[1]}
 
 <br>
 
-Islem:
+İşlem:
 {k[2]}
 
 <br>
 
 Tarih:
 {k[3]}
-
-</p>
-
-<hr>
 
 """
 
@@ -825,77 +752,7 @@ Tarih:
 
 
 # =====================
-# ETIKET
-# =====================
-
-
-@app.route("/etiket/<int:id>")
-def etiket(id):
-
-    con=db()
-
-
-    urun=con.execute("""
-    SELECT * FROM products
-    WHERE id=?
-    """,
-    (id,)
-    ).fetchone()
-
-
-    con.close()
-
-
-    if urun is None:
-
-        return "Urun yok"
-
-
-
-    return f"""
-
-<h2>ETIKET BILGISI</h2>
-
-
-Mal:
-{urun[1]}
-
-<br>
-
-Ebat:
-{urun[3]} mm
-
-<br>
-
-HG/MAT:
-{urun[5]}
-
-<br>
-
-Renk:
-{urun[6]}
-
-<br>
-
-BARKOD:
-
-<h3>
-{urun[7]}
-</h3>
-
-
-"""
-
-
-
-
-
-# =====================
-# CALISTIRMA
-# =====================
-
-# =====================
-# KAMERA BARKOD OKUMA
+# KAMERA BARKOD
 # =====================
 
 @app.route("/kamera")
@@ -903,20 +760,11 @@ def kamera():
 
     return """
 
-<!DOCTYPE html>
-<html>
-
-<head>
-
 <script src="https://unpkg.com/html5-qrcode"></script>
 
-</head>
-
-
-<body>
 
 <h2>
-Kamera Barkod Okuma
+KAMERA BARKOD OKUTMA
 </h2>
 
 
@@ -928,17 +776,15 @@ style="width:300px">
 <script>
 
 
-function barkod_okundu(code)
-{
+function okundu(kod){
 
 window.location.href =
-"/barkod_bul/" + code;
+"/barkod/"+kod;
 
 }
 
 
-
-let scanner =
+let scan =
 new Html5QrcodeScanner(
 "reader",
 {
@@ -948,18 +794,10 @@ qrbox:250
 );
 
 
-
-scanner.render(
-barkod_okundu
-);
+scan.render(okundu);
 
 
 </script>
-
-
-</body>
-
-</html>
 
 """
 
@@ -967,7 +805,7 @@ barkod_okundu
 
 
 
-@app.route("/barkod_bul/<kod>")
+@app.route("/barkod/<kod>")
 def barkod_bul(kod):
 
 
@@ -990,31 +828,106 @@ def barkod_bul(kod):
 
         return """
 
-        <h2>
-        URUN BULUNAMADI
-        </h2>
+<h2>
+Ürün bulunamadı
+</h2>
 
-        """
+"""
 
 
 
     return f"""
 
 <h2>
-URUN BULUNDU
+ÜRÜN BULUNDU
 </h2>
+
+
+Mal:
+{urun[1]}
+
+<br>
+
+Cins:
+{urun[2]}
+
+<br>
+
+Ebat:
+{urun[3]} mm
+
+<br>
+
+HG/MAT:
+{urun[5]}
+
+<br>
+
+Renk:
+{urun[6]}
+
+<br>
+
+Depo:
+{urun[9]}
+
+<br>
+
+Stok:
+{urun[8]}
+
+
+"""
+
+
+
+
+
+# =====================
+# ETİKET SAYFASI
+# =====================
+
+@app.route("/etiket/<int:id>")
+def etiket(id):
+
+
+    con=db()
+
+
+    urun=con.execute("""
+    SELECT * FROM products
+    WHERE id=?
+    """,
+    (id,)
+    ).fetchone()
+
+
+    con.close()
+
+
+    if urun is None:
+
+        return "Ürün yok"
+
+
+
+    return f"""
+
+<h2>
+ETİKET
+</h2>
+
+
+HER İŞ STOK PRO
+
+
+<br><br>
 
 
 Mal:
 
 {urun[1]}
 
-<br><br>
-
-
-Cins:
-
-{urun[2]}
 
 <br>
 
@@ -1023,12 +936,14 @@ Ebat:
 
 {urun[3]} mm
 
+
 <br>
 
 
 HG/MAT:
 
 {urun[5]}
+
 
 <br>
 
@@ -1037,169 +952,16 @@ Renk:
 
 {urun[6]}
 
-<br>
-
-
-Depo:
-
-{urun[9]}
 
 <br>
 
 
-Stok:
+BARKOD:
 
-{urun[8]}
+<b>
+{urun[7]}
+</b>
 
-
-<hr>
-
-
-<a href="/cikis">
-
-CIKIS EKRANI
-
-</a>
-
-"""
-
-
-# =====================
-# BARKOD QR ETIKET
-# =====================
-
-@app.route("/etiket/<int:id>")
-def etiket(id):
-
-    con=db()
-
-    urun=con.execute("""
-    SELECT * FROM products
-    WHERE id=?
-    """,(id,)).fetchone()
-
-    con.close()
-
-
-    if urun is None:
-        return "Urun bulunamadi"
-
-
-    barkod=urun[7]
-
-
-    # QR OLUSTUR
-
-    qr=qrcode.make(barkod)
-
-    qr_dosya=f"qr_{barkod}.png"
-
-    qr.save(qr_dosya)
-
-
-
-    # BARKOD OLUSTUR
-
-    barkod_img=barcode.get(
-        "code128",
-        barkod,
-        writer=ImageWriter()
-    )
-
-
-    barkod_dosya=barkod_img.save(
-        f"barcode_{barkod}"
-    )
-
-
-
-    # PDF
-
-    pdf_adi=f"etiket_{barkod}.pdf"
-
-
-    p=canvas.Canvas(pdf_adi)
-
-
-    p.setFont(
-        "Helvetica",
-        12
-    )
-
-
-    p.drawString(
-        40,750,
-        "HER IS STOK PRO"
-    )
-
-
-    p.drawString(
-        40,720,
-        "Mal: "+urun[1]
-    )
-
-
-    p.drawString(
-        40,700,
-        "Cins: "+urun[2]
-    )
-
-
-    p.drawString(
-        40,680,
-        "Ebat: "+urun[3]+" mm"
-    )
-
-
-    p.drawString(
-        40,660,
-        "HG/MAT: "+urun[5]
-    )
-
-
-    p.drawString(
-        40,640,
-        "Renk: "+urun[6]
-    )
-
-
-    p.drawString(
-        40,620,
-        "Barkod: "+barkod
-    )
-
-
-    p.drawImage(
-        qr_dosya,
-        40,
-        450,
-        120,
-        120
-    )
-
-
-    p.drawImage(
-        barkod_dosya+".png",
-        200,
-        480,
-        250,
-        80
-    )
-
-
-    p.save()
-
-
-
-    return f"""
-
-<h2>
-Etiket Hazir
-</h2>
-
-<a href="/indir/{pdf_adi}">
-PDF indir
-</a>
 
 """
 
@@ -1207,15 +969,11 @@ PDF indir
 
 
 
-@app.route("/indir/<dosya>")
-def indir(dosya):
+# =====================
+# ÇALIŞTIR
+# =====================
 
-    return send_file(
-        dosya,
-        as_attachment=True
-    )
-    
-   if __name__ == "__main__":
+if __name__ == "__main__":
 
     app.run(
         host="0.0.0.0",
