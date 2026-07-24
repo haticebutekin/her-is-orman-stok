@@ -1,245 +1,220 @@
-from flask import Flask, render_template_string, request, redirect, session, jsonify
+from flask import Flask, request, redirect, render_template_string, session
 import sqlite3
-import datetime
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
-# ------------------ DATABASE ------------------
+# DB
 def db():
-    return sqlite3.connect("market.db")
+    return sqlite3.connect("system.db")
 
-def init_db():
-    conn = db()
-    c = conn.cursor()
+# TABLOLAR
+def init():
+    con = db()
+    c = con.cursor()
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+    c.execute("""CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY,
         username TEXT,
         password TEXT
-    )
-    """)
+    )""")
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+    c.execute("""CREATE TABLE IF NOT EXISTS depots (
+        id INTEGER PRIMARY KEY,
+        name TEXT
+    )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY,
         name TEXT,
         barcode TEXT,
-        stock INTEGER,
         price REAL,
+        stock INTEGER,
         type TEXT,
         size TEXT,
         class TEXT,
-        color TEXT
-    )
-    """)
+        hg TEXT,
+        surface TEXT,
+        color TEXT,
+        depot_id INTEGER
+    )""")
 
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS sales (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+    c.execute("""CREATE TABLE IF NOT EXISTS sales (
+        id INTEGER PRIMARY KEY,
         total REAL,
+        user TEXT,
         date TEXT
-    )
-    """)
+    )""")
 
-    # default user
+    c.execute("""CREATE TABLE IF NOT EXISTS logs (
+        id INTEGER PRIMARY KEY,
+        user TEXT,
+        action TEXT,
+        date TEXT
+    )""")
+
+    # admin
     c.execute("SELECT * FROM users")
     if not c.fetchone():
-        c.execute("INSERT INTO users (username,password) VALUES ('admin','1234')")
+        c.execute("INSERT INTO users VALUES (NULL,'admin','1234')")
 
-    conn.commit()
-    conn.close()
+    con.commit()
+    con.close()
 
-init_db()
+init()
 
-# ------------------ LOGIN ------------------
+# LOGIN
 @app.route("/", methods=["GET","POST"])
 def login():
     if request.method == "POST":
-        u = request.form["username"]
-        p = request.form["password"]
+        u = request.form["u"]
+        p = request.form["p"]
 
-        conn = db()
-        c = conn.cursor()
+        con = db()
+        c = con.cursor()
         c.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p))
         user = c.fetchone()
-        conn.close()
 
         if user:
             session["user"] = u
             return redirect("/panel")
 
-    return render_template_string("""
-    <h2>Giriş</h2>
-    <form method="post">
-    <input name="username" placeholder="Kullanıcı"><br>
-    <input name="password" type="password" placeholder="Şifre"><br>
+    return """
+    <h2>Login</h2>
+    <form method=post>
+    <input name=u placeholder=Kullanıcı><br>
+    <input name=p type=password placeholder=Şifre><br>
     <button>Giriş</button>
     </form>
-    """)
+    """
 
-# ------------------ PANEL ------------------
+# PANEL
 @app.route("/panel")
 def panel():
     if "user" not in session:
         return redirect("/")
-
-    return render_template_string("""
+    return """
     <h2>Panel</h2>
+    <a href='/add_product'>Ürün Ekle</a><br>
+    <a href='/products'>Ürünler</a><br>
+    <a href='/sale'>Satış</a><br>
+    <a href='/logs'>Loglar</a><br>
+    <a href='/depots'>Depolar</a><br>
+    """
 
-    <a href="/urun">Ürün Ekle</a><br>
-    <a href="/satis">Satış</a><br>
-    <a href="/liste">Ürün Liste</a>
-    """)
+# DEPO
+@app.route("/depots", methods=["GET","POST"])
+def depots():
+    if request.method=="POST":
+        name = request.form["name"]
+        con=db();c=con.cursor()
+        c.execute("INSERT INTO depots VALUES(NULL,?)",(name,))
+        con.commit();con.close()
 
-# ------------------ ÜRÜN EKLE ------------------
-@app.route("/urun", methods=["GET","POST"])
-def urun():
-    if request.method == "POST":
+    con=db();c=con.cursor()
+    data=c.execute("SELECT * FROM depots").fetchall()
+    con.close()
+
+    html="<h2>Depolar</h2><form method=post><input name=name><button>Ekle</button></form>"
+    for d in data:
+        html+=f"<p>{d[1]}</p>"
+    return html
+
+# ÜRÜN EKLE
+@app.route("/add_product", methods=["GET","POST"])
+def add_product():
+    if request.method=="POST":
         data = (
             request.form["name"],
             request.form["barcode"],
-            request.form["stock"],
             request.form["price"],
+            request.form["stock"],
             request.form["type"],
             request.form["size"],
             request.form["class"],
-            request.form["color"]
+            request.form["hg"],
+            request.form["surface"],
+            request.form["color"],
+            request.form["depot"]
         )
 
-        conn = db()
-        c = conn.cursor()
-        c.execute("""
-        INSERT INTO products 
-        (name,barcode,stock,price,type,size,class,color)
-        VALUES (?,?,?,?,?,?,?,?)
-        """, data)
+        con=db();c=con.cursor()
+        c.execute("""INSERT INTO products VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?)""",data)
 
-        conn.commit()
-        conn.close()
+        c.execute("INSERT INTO logs VALUES(NULL,?,?,?)",
+                  (session["user"],"Ürün eklendi",datetime.now()))
+        con.commit();con.close()
 
-    return render_template_string("""
+    con=db();c=con.cursor()
+    depots=c.execute("SELECT * FROM depots").fetchall()
+    con.close()
+
+    options=""
+    for d in depots:
+        options+=f"<option value={d[0]}>{d[1]}</option>"
+
+    return f"""
     <h2>Ürün Ekle</h2>
-
-    <form method="post">
-    İsim <input name="name"><br>
-    Barkod <input name="barcode" id="barcode"><br>
-    Stok <input name="stock"><br>
-    Fiyat <input name="price"><br>
-
-    Cins <input name="type"><br>
-    Ebat <input name="size"><br>
-    Sınıf <input name="class"><br>
-    Renk <input name="color"><br>
-
+    <form method=post>
+    İsim<input name=name><br>
+    Barkod<input name=barcode><br>
+    Fiyat<input name=price><br>
+    Stok<input name=stock><br>
+    Cins<input name=type><br>
+    Ebat<input name=size><br>
+    Sınıf<input name=class><br>
+    HG<select name=hg><option>Evet</option><option>Hayır</option></select><br>
+    Yüzey<select name=surface><option>Mat</option><option>Parlak</option></select><br>
+    Renk<input name=color><br>
+    Depo<select name=depot>{options}</select><br>
     <button>Kaydet</button>
     </form>
+    """
 
-    <br>
-    <button onclick="scan()">📷 Barkod Oku</button>
+# ÜRÜNLER
+@app.route("/products")
+def products():
+    con=db();c=con.cursor()
+    data=c.execute("SELECT * FROM products").fetchall()
+    con.close()
 
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <div id="reader" style="width:300px"></div>
-
-    <script>
-    function scan(){
-        const qr = new Html5Qrcode("reader");
-        qr.start(
-            { facingMode: "environment" },
-            { fps: 10, qrbox: 250 },
-            (code) => {
-                document.getElementById("barcode").value = code;
-                qr.stop();
-            }
-        );
-    }
-    </script>
-    """)
-
-# ------------------ ÜRÜN LİSTE ------------------
-@app.route("/liste")
-def liste():
-    conn = db()
-    c = conn.cursor()
-    c.execute("SELECT * FROM products")
-    data = c.fetchall()
-    conn.close()
-
-    html = "<h2>Ürünler</h2>"
-
-    for d in data:
-        html += f"""
-        <div>
-        {d[1]} | {d[2]} | {d[3]} adet | {d[4]} TL
-        </div>
-        """
-
+    html="<h2>Ürünler</h2>"
+    for p in data:
+        html+=f"<p>{p[1]} | {p[10]} | HG:{p[8]} | Depo:{p[11]}</p>"
     return html
 
-# ------------------ SATIŞ ------------------
-@app.route("/satis")
-def satis():
-    return render_template_string("""
+# SATIŞ
+@app.route("/sale", methods=["GET","POST"])
+def sale():
+    if request.method=="POST":
+        total=request.form["total"]
+        con=db();c=con.cursor()
+        c.execute("INSERT INTO sales VALUES(NULL,?,?,?)",
+                  (total,session["user"],datetime.now()))
+
+        c.execute("INSERT INTO logs VALUES(NULL,?,?,?)",
+                  (session["user"],"Satış yaptı",datetime.now()))
+        con.commit();con.close()
+
+    return """
     <h2>Satış</h2>
+    <form method=post>
+    Toplam<input name=total>
+    <button>Sat</button>
+    </form>
+    """
 
-    Barkod: <input id="b"><button onclick="ekle()">Ekle</button>
+# LOG
+@app.route("/logs")
+def logs():
+    con=db();c=con.cursor()
+    data=c.execute("SELECT * FROM logs").fetchall()
+    con.close()
 
-    <ul id="list"></ul>
-    <h3 id="toplam">0 TL</h3>
+    html="<h2>Loglar</h2>"
+    for l in data:
+        html+=f"<p>{l[1]} - {l[2]} - {l[3]}</p>"
+    return html
 
-    <button onclick="scan()">📷 Oku</button>
-
-    <script src="https://unpkg.com/html5-qrcode"></script>
-
-    <script>
-    let toplam = 0;
-
-    function ekle(){
-        let b = document.getElementById("b").value;
-
-        fetch("/get/"+b)
-        .then(r=>r.json())
-        .then(d=>{
-            let li = document.createElement("li");
-            li.innerText = d.name + " - " + d.price;
-            document.getElementById("list").appendChild(li);
-
-            toplam += d.price;
-            document.getElementById("toplam").innerText = toplam + " TL";
-        });
-    }
-
-    function scan(){
-        const qr = new Html5Qrcode("reader");
-        qr.start(
-            { facingMode: "environment" },
-            { fps: 10, qrbox: 250 },
-            (code) => {
-                document.getElementById("b").value = code;
-                ekle();
-                qr.stop();
-            }
-        );
-    }
-    </script>
-
-    <div id="reader" style="width:300px"></div>
-    """)
-
-# ------------------ API ------------------
-@app.route("/get/<barcode>")
-def get_product(barcode):
-    conn = db()
-    c = conn.cursor()
-    c.execute("SELECT name,price FROM products WHERE barcode=?", (barcode,))
-    p = c.fetchone()
-    conn.close()
-
-    if p:
-        return jsonify({"name":p[0],"price":p[1]})
-    return jsonify({"name":"YOK","price":0})
-
-# ------------------
-if __name__ == "__main__":
-    app.run(debug=True)
+app.run(host="0.0.0.0", port=10000)
