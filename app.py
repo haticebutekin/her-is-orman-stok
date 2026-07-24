@@ -91,15 +91,15 @@ def init_db():
 
 
     # Depolar
-depolar=[
-    "MDF SATIŞ DEPOSU",
-    "LAMİNANT DEPOSU",
-    "KAPI DEPOSU",
-    "HGLOSS DEPOSU (MORAY YANI)",
-    "SÜTÇÜ YANI",
-    "HELVACI YANI",
-    "RÖTBALANSÇI YANI",
-    "KESİMHANE"
+    depolar=[
+        "MDF SATIŞ DEPOSU",
+        "LAMİNANT DEPOSU",
+        "KAPI DEPOSU",
+        "HGLOSS DEPOSU (MORAY YANI)",
+        "SÜTÇÜ YANI",
+        "HELVACI YANI",
+        "RÖTBALANSÇI YANI",
+        "KESİMHANE"
 ]
   
     
