@@ -1,5 +1,7 @@
 from flask import Flask, request, redirect, session, render_template_string
 import sqlite3
+import cv2
+from pyzbar.pyzbar import decode
 
 app = Flask(__name__)
 app.secret_key = "secret123"
@@ -94,6 +96,59 @@ def panel():
     <a href="/logout">Çıkış</a>
     """, user=session["user"], role=session["role"])
 
+@app.route("/barkod")
+def barkod():
+    if "user" not in session:
+        return redirect("/")
+
+    cap = cv2.VideoCapture(0)
+
+    while True:
+        ret, frame = cap.read()
+        for barcode in decode(frame):
+            barkod_data = barcode.data.decode("utf-8")
+
+            cap.release()
+            cv2.destroyAllWindows()
+
+            return f"""
+            <h2>Barkod Okundu!</h2>
+            <p>{barkod_data}</p>
+            <a href='/urun_bul/{barkod_data}'>Ürünü Getir</a>
+            """
+
+        cv2.imshow("Barkod Oku", frame)
+
+        if cv2.waitKey(1) == 27:
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+    return "İptal edildi"
+    @app.route("/urun_bul/<kod>")
+def urun_bul(kod):
+    db = get_db()
+    c = db.cursor()
+
+    c.execute("SELECT * FROM products WHERE name=?", (kod,))
+    urun = c.fetchone()
+
+    if urun:
+        return f"""
+        <h2>Ürün Bulundu</h2>
+        Adı: {urun[1]}<br>
+        Cinsi: {urun[2]}<br>
+        MM: {urun[3]}<br>
+        Sınıf: {urun[4]}<br>
+        Yüzey: {urun[5]}<br>
+        Renk: {urun[6]}<br>
+        Stok: {urun[7]}<br>
+        Depo: {urun[8]}<br>
+        <a href='/panel'>Geri</a>
+        """
+    else:
+        return "Ürün bulunamadı"
+    
 # ---------------- ÜRÜN LİSTE ----------------
 @app.route("/urunler")
 def urunler():
@@ -110,6 +165,8 @@ def urunler():
 
     html += "</table><br><a href='/panel'>Geri</a>"
     return html
+
+<a href="/barkod">📷 Barkod Oku</a><br>
 
 # ---------------- ÜRÜN EKLE ----------------
 @app.route("/ekle", methods=["GET","POST"])
