@@ -2,6 +2,12 @@ from flask import Flask, request, redirect, session
 import sqlite3
 import random
 import json
+import qrcode
+import barcode
+from barcode.writer import ImageWriter
+from reportlab.pdfgen import canvas
+from flask import send_file
+import os
 from datetime import datetime
 
 app = Flask(__name__)
@@ -248,7 +254,9 @@ def panel():
     <a href="/urun">Yeni Urun</a><br><br>
 
     <a href="/liste">Urunler</a><br><br>
-
+    <a href="/etiket/{u[0]}">
+    🏷️ ETİKET BAS
+    </a>
     <a href="/cikis">Depo Cikis</a><br><br>
 
     <a href="/log">Kim Ne Yapti</a>
@@ -1058,6 +1066,156 @@ CIKIS EKRANI
 
 if __name__=="__main__":
 
+# =====================
+# BARKOD QR ETIKET
+# =====================
+
+@app.route("/etiket/<int:id>")
+def etiket(id):
+
+    con=db()
+
+    urun=con.execute("""
+    SELECT * FROM products
+    WHERE id=?
+    """,(id,)).fetchone()
+
+    con.close()
+
+
+    if urun is None:
+        return "Urun bulunamadi"
+
+
+    barkod=urun[7]
+
+
+    # QR OLUSTUR
+
+    qr=qrcode.make(barkod)
+
+    qr_dosya=f"qr_{barkod}.png"
+
+    qr.save(qr_dosya)
+
+
+
+    # BARKOD OLUSTUR
+
+    barkod_img=barcode.get(
+        "code128",
+        barkod,
+        writer=ImageWriter()
+    )
+
+
+    barkod_dosya=barkod_img.save(
+        f"barcode_{barkod}"
+    )
+
+
+
+    # PDF
+
+    pdf_adi=f"etiket_{barkod}.pdf"
+
+
+    p=canvas.Canvas(pdf_adi)
+
+
+    p.setFont(
+        "Helvetica",
+        12
+    )
+
+
+    p.drawString(
+        40,750,
+        "HER IS STOK PRO"
+    )
+
+
+    p.drawString(
+        40,720,
+        "Mal: "+urun[1]
+    )
+
+
+    p.drawString(
+        40,700,
+        "Cins: "+urun[2]
+    )
+
+
+    p.drawString(
+        40,680,
+        "Ebat: "+urun[3]+" mm"
+    )
+
+
+    p.drawString(
+        40,660,
+        "HG/MAT: "+urun[5]
+    )
+
+
+    p.drawString(
+        40,640,
+        "Renk: "+urun[6]
+    )
+
+
+    p.drawString(
+        40,620,
+        "Barkod: "+barkod
+    )
+
+
+    p.drawImage(
+        qr_dosya,
+        40,
+        450,
+        120,
+        120
+    )
+
+
+    p.drawImage(
+        barkod_dosya+".png",
+        200,
+        480,
+        250,
+        80
+    )
+
+
+    p.save()
+
+
+
+    return f"""
+
+<h2>
+Etiket Hazir
+</h2>
+
+<a href="/indir/{pdf_adi}">
+PDF indir
+</a>
+
+"""
+
+
+
+
+
+@app.route("/indir/<dosya>")
+def indir(dosya):
+
+    return send_file(
+        dosya,
+        as_attachment=True
+    )
     app.run(
     host="0.0.0.0",
     port=10000
