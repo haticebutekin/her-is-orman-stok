@@ -52,6 +52,7 @@ def home():
     <a href='/kamera'>📷 Kamera ile Okut</a><br><br>
     <a href='/okut'>⌨️ Manuel Okut</a><br><br>
     <a href='/hareket'>📋 Hareket</a>
+    <a href='/stok'>📊 Stok Listesi</a><br><br>
     """
 
 # ================= ÜRÜN EKLE =================
@@ -190,6 +191,65 @@ def kamera():
     start();
     </script>
     """
+
+@app.route("/stok")
+def stok():
+    urunler = oku("urunler.json")
+
+    html = """
+    <h2>📦 STOK LİSTESİ</h2>
+
+    <form method="get">
+    Depo filtre:
+    <select name="depo">
+        <option value="">Hepsi</option>
+    """
+
+    for d in DEPOLAR:
+        html += f"<option value='{d}'>{d}</option>"
+
+    html += """
+    </select>
+    <button>Filtrele</button>
+    </form>
+
+    <br><br>
+
+    <table border=1 cellpadding=5>
+    <tr>
+        <th>Ad</th>
+        <th>Cins</th>
+        <th>Ebat</th>
+        <th>Sınıf</th>
+        <th>Renk</th>
+        <th>Depo</th>
+        <th>Adet</th>
+    </tr>
+    """
+
+    secili_depo = request.args.get("depo")
+
+    for u in urunler:
+        if secili_depo and u["depo"] != secili_depo:
+            continue
+
+        renk = "red" if u["adet"] < 5 else "black"
+
+        html += f"""
+        <tr style='color:{renk}'>
+            <td>{u['ad']}</td>
+            <td>{u['cins']}</td>
+            <td>{u['ebat']}</td>
+            <td>{u['sinif']}</td>
+            <td>{u['renk']}</td>
+            <td>{u['depo']}</td>
+            <td>{u['adet']}</td>
+        </tr>
+        """
+
+    html += "</table>"
+
+    return html
 
 # ================= HAREKET =================
 @app.route("/hareket")
