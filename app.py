@@ -208,6 +208,9 @@ def panel():
     <a href="/urun">Ürün Ekle</a><br>
     <a href="/liste">Ürünler</a><br>
     <a href="/log">İşlemler</a>
+    <a href="/cikis">
+📷 Depo Çıkış
+</a>
 
     """
 
@@ -425,3 +428,205 @@ if __name__=="__main__":
     host="0.0.0.0",
     port=10000
     )
+
+# =========================
+# DEPO BARKOD ÇIKIŞ
+# =========================
+
+
+@app.route("/cikis")
+def cikis():
+
+    if "user" not in session:
+        return redirect("/")
+
+    return """
+
+    <h2>📦 Depo Çıkış</h2>
+
+    <form method="post" action="/cikis_barkod">
+
+    Barkod okut:
+
+    <input name="barcode"
+    autofocus>
+
+    <button>
+    Bul
+    </button>
+
+    </form>
+
+    """
+
+
+
+@app.route("/cikis_barkod", methods=["POST"])
+def cikis_barkod():
+
+    barcode=request.form["barcode"]
+
+
+    con=db()
+
+    urun=con.execute("""
+    SELECT * FROM products
+    WHERE barcode=?
+    """,
+    (barcode,)).fetchone()
+
+
+    con.close()
+
+
+    if not urun:
+
+        return """
+        <h2>
+        ❌ Ürün bulunamadı
+        </h2>
+        <a href="/cikis">
+        Tekrar
+        </a>
+        """
+
+
+
+    return f"""
+
+<h2>Ürün Bulundu</h2>
+
+
+Ürün:
+{urun[1]}
+
+<br>
+
+Cins:
+{urun[2]}
+
+<br>
+
+Ebat:
+{urun[3]} mm
+
+<br>
+
+Sınıf:
+{urun[4]}
+
+<br>
+
+Tip:
+{urun[5]}
+
+<br>
+
+Renk:
+{urun[6]}
+
+<br>
+
+Mevcut Stok:
+{urun[8]}
+
+
+<hr>
+
+
+<form method="post"
+action="/stok_dus">
+
+
+<input type="hidden"
+name="id"
+value="{urun[0]}">
+
+
+Kaç adet?
+
+<input name="adet">
+
+
+<button>
+Çıkış Yap
+</button>
+
+
+</form>
+
+
+"""
+
+
+
+
+
+@app.route("/stok_dus", methods=["POST"])
+def stok_dus():
+
+
+    id=request.form["id"]
+    adet=int(request.form["adet"])
+
+
+
+    con=db()
+
+
+    urun=con.execute("""
+    SELECT * FROM products
+    WHERE id=?
+    """,
+    (id,)).fetchone()
+
+
+
+    if urun[8] < adet:
+
+        con.close()
+
+        return """
+
+        ❌ Yetersiz stok
+
+        """
+
+
+
+    con.execute("""
+    UPDATE products
+
+    SET stock=stock-?
+
+    WHERE id=?
+
+    """,
+    (adet,id))
+
+
+
+    con.commit()
+    con.close()
+
+
+
+    log(
+    f"{urun[1]} ürününden {adet} adet çıkış yaptı"
+    )
+
+
+
+    return """
+
+<h2>
+✅ Çıkış tamamlandı
+</h2>
+
+
+<a href="/cikis">
+Yeni işlem
+
+</a>
+
+"""
