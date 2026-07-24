@@ -99,6 +99,59 @@ def depots():
         html+=f"<p>{d[1]}</p>"
     return html
 
+@app.route("/scan")
+def scan():
+    return """
+    <html>
+    <head>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    </head>
+
+    <body style="background:black;color:white;text-align:center">
+    <h2>Barkod Okut</h2>
+
+    <div id="reader" style="width:300px;margin:auto"></div>
+
+    <form id="form" method="POST" action="/find_product">
+        <input type="hidden" name="barcode" id="barcode">
+    </form>
+
+    <script>
+    function onScanSuccess(decodedText) {
+        document.getElementById("barcode").value = decodedText;
+        document.getElementById("form").submit();
+    }
+
+    let scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+    scanner.render(onScanSuccess);
+    </script>
+    </body>
+    </html>
+    """
+
+@app.route("/find_product", methods=["POST"])
+def find_product():
+    barcode = request.form["barcode"]
+
+    con=db();c=con.cursor()
+    c.execute("SELECT * FROM products WHERE barcode=?", (barcode,))
+    p = c.fetchone()
+    con.close()
+
+    if p:
+        return f"""
+        <h2>Ürün Bulundu</h2>
+        <b>{p[1]}</b><br>
+        Fiyat: {p[3]}<br>
+        Stok: {p[4]}<br>
+        HG: {p[8]}<br>
+        Yüzey: {p[9]}<br>
+        <br>
+        <a href="/scan">Yeni Tara</a>
+        """
+    else:
+        return "<h2>Ürün bulunamadı</h2><a href='/scan'>Tekrar dene</a>"
+
 # ÜRÜN EKLE
 @app.route("/add_product", methods=["GET","POST"])
 def add_product():
@@ -173,6 +226,7 @@ def products():
     for p in data:
         html+=f"""
         <div style='background:#1e1e1e;padding:10px;margin:10px;border-radius:10px'>
+        <div class=card><a href='/scan'>📷 Barkod Okut</a></div>
         <b>{p[1]}</b><br>
         HG: {p[8]} | Yüzey: {p[9]}<br>
         Depo: {p[11]} | Stok: {p[4]}
