@@ -91,17 +91,18 @@ def init_db():
 
 
     # Depolar
-
-    depolar=[
-        "DEPO 1",
-        "DEPO 2",
-        "DEPO 3",
-        "DEPO 4",
-        "DEPO 5",
-        "DEPO 6",
-        "DEPO 7",
-        "DEPO 8"
-    ]
+depolar=[
+    "MDF SATIŞ DEPOSU",
+    "LAMİNANT DEPOSU",
+    "KAPI DEPOSU",
+    "HGLOSS DEPOSU (MORAY YANI)",
+    "SÜTÇÜ YANI",
+    "HELVACI YANI",
+    "RÖTBALANSÇI YANI",
+    "KESİMHANE"
+]
+  
+    
 
 
     for d in depolar:
