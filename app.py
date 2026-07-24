@@ -1,63 +1,29 @@
-from flask import Flask, request, redirect, render_template_string, session
+from flask import Flask, request, redirect, session, render_template_string
 import sqlite3
 from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
-# DB
 def db():
     return sqlite3.connect("system.db")
 
-# TABLOLAR
 def init():
     con = db()
     c = con.cursor()
 
-    c.execute("""CREATE TABLE IF NOT EXISTS users (
+    c.execute("CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, username TEXT, password TEXT, role TEXT)")
+    c.execute("CREATE TABLE IF NOT EXISTS depots(id INTEGER PRIMARY KEY, name TEXT)")
+    c.execute("""CREATE TABLE IF NOT EXISTS products(
         id INTEGER PRIMARY KEY,
-        username TEXT,
-        password TEXT
-    )""")
+        name TEXT, barcode TEXT, price REAL, stock INTEGER,
+        type TEXT, size TEXT, class TEXT,
+        hg TEXT, surface TEXT, color TEXT,
+        depot_id INTEGER)""")
+    c.execute("CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY, user TEXT, action TEXT, date TEXT)")
 
-    c.execute("""CREATE TABLE IF NOT EXISTS depots (
-        id INTEGER PRIMARY KEY,
-        name TEXT
-    )""")
-
-    c.execute("""CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY,
-        name TEXT,
-        barcode TEXT,
-        price REAL,
-        stock INTEGER,
-        type TEXT,
-        size TEXT,
-        class TEXT,
-        hg TEXT,
-        surface TEXT,
-        color TEXT,
-        depot_id INTEGER
-    )""")
-
-    c.execute("""CREATE TABLE IF NOT EXISTS sales (
-        id INTEGER PRIMARY KEY,
-        total REAL,
-        user TEXT,
-        date TEXT
-    )""")
-
-    c.execute("""CREATE TABLE IF NOT EXISTS logs (
-        id INTEGER PRIMARY KEY,
-        user TEXT,
-        action TEXT,
-        date TEXT
-    )""")
-
-    # admin
-    c.execute("SELECT * FROM users")
-    if not c.fetchone():
-        c.execute("INSERT INTO users VALUES (NULL,'admin','1234')")
+    if not c.execute("SELECT * FROM users").fetchone():
+        c.execute("INSERT INTO users VALUES(NULL,'admin','1234','admin')")
 
     con.commit()
     con.close()
@@ -71,17 +37,22 @@ def login():
         u = request.form["u"]
         p = request.form["p"]
 
-        con = db()
-        c = con.cursor()
+        con=db();c=con.cursor()
         c.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p))
-        user = c.fetchone()
+        user=c.fetchone()
 
         if user:
-            session["user"] = u
+            session["user"]=u
+            session["role"]=user[3]
             return redirect("/panel")
 
     return """
-    <h2>Login</h2>
+    <style>
+    body{background:#111;color:white;font-family:Arial;text-align:center}
+    input,button{padding:10px;margin:5px;border-radius:8px;border:none}
+    button{background:#00c853;color:white}
+    </style>
+    <h1>GİRİŞ</h1>
     <form method=post>
     <input name=u placeholder=Kullanıcı><br>
     <input name=p type=password placeholder=Şifre><br>
@@ -94,20 +65,27 @@ def login():
 def panel():
     if "user" not in session:
         return redirect("/")
-    return """
-    <h2>Panel</h2>
-    <a href='/add_product'>Ürün Ekle</a><br>
-    <a href='/products'>Ürünler</a><br>
-    <a href='/sale'>Satış</a><br>
-    <a href='/logs'>Loglar</a><br>
-    <a href='/depots'>Depolar</a><br>
+
+    return f"""
+    <style>
+    body{{background:#0d0d0d;color:white;font-family:Arial}}
+    .card{{background:#1e1e1e;padding:20px;margin:10px;border-radius:12px;display:inline-block}}
+    a{{color:white;text-decoration:none}}
+    </style>
+
+    <h2>Hoşgeldin {session['user']}</h2>
+
+    <div class=card><a href='/products'>📦 Ürünler</a></div>
+    <div class=card><a href='/add_product'>➕ Ürün Ekle</a></div>
+    <div class=card><a href='/depots'>🏬 Depolar</a></div>
+    <div class=card><a href='/logs'>📊 Loglar</a></div>
     """
 
-# DEPO
+# DEPOLAR
 @app.route("/depots", methods=["GET","POST"])
 def depots():
     if request.method=="POST":
-        name = request.form["name"]
+        name=request.form["name"]
         con=db();c=con.cursor()
         c.execute("INSERT INTO depots VALUES(NULL,?)",(name,))
         con.commit();con.close()
@@ -125,36 +103,37 @@ def depots():
 @app.route("/add_product", methods=["GET","POST"])
 def add_product():
     if request.method=="POST":
-        data = (
-            request.form["name"],
-            request.form["barcode"],
-            request.form["price"],
-            request.form["stock"],
-            request.form["type"],
-            request.form["size"],
-            request.form["class"],
-            request.form["hg"],
-            request.form["surface"],
-            request.form["color"],
+        data=(
+            request.form["name"], request.form["barcode"],
+            request.form["price"], request.form["stock"],
+            request.form["type"], request.form["size"],
+            request.form["class"], request.form["hg"],
+            request.form["surface"], request.form["color"],
             request.form["depot"]
         )
 
         con=db();c=con.cursor()
-        c.execute("""INSERT INTO products VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?)""",data)
+        c.execute("INSERT INTO products VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?)",data)
 
         c.execute("INSERT INTO logs VALUES(NULL,?,?,?)",
-                  (session["user"],"Ürün eklendi",datetime.now()))
+                  (session["user"],"Ürün ekledi",datetime.now()))
         con.commit();con.close()
 
     con=db();c=con.cursor()
     depots=c.execute("SELECT * FROM depots").fetchall()
     con.close()
 
-    options=""
+    opt=""
     for d in depots:
-        options+=f"<option value={d[0]}>{d[1]}</option>"
+        opt+=f"<option value={d[0]}>{d[1]}</option>"
 
     return f"""
+    <style>
+    body{{background:#121212;color:white;font-family:Arial}}
+    input,select{{margin:5px;padding:8px;border-radius:8px}}
+    button{{background:#00c853;color:white;padding:10px;border:none}}
+    </style>
+
     <h2>Ürün Ekle</h2>
     <form method=post>
     İsim<input name=name><br>
@@ -162,12 +141,23 @@ def add_product():
     Fiyat<input name=price><br>
     Stok<input name=stock><br>
     Cins<input name=type><br>
-    Ebat<input name=size><br>
+    Ebat(mm)<input name=size><br>
     Sınıf<input name=class><br>
-    HG<select name=hg><option>Evet</option><option>Hayır</option></select><br>
-    Yüzey<select name=surface><option>Mat</option><option>Parlak</option></select><br>
+
+    HG<select name=hg>
+        <option>Evet</option>
+        <option>Hayır</option>
+    </select><br>
+
+    Yüzey<select name=surface>
+        <option>Mat</option>
+        <option>Parlak</option>
+    </select><br>
+
     Renk<input name=color><br>
-    Depo<select name=depot>{options}</select><br>
+
+    Depo<select name=depot>{opt}</select><br>
+
     <button>Kaydet</button>
     </form>
     """
@@ -181,29 +171,14 @@ def products():
 
     html="<h2>Ürünler</h2>"
     for p in data:
-        html+=f"<p>{p[1]} | {p[10]} | HG:{p[8]} | Depo:{p[11]}</p>"
+        html+=f"""
+        <div style='background:#1e1e1e;padding:10px;margin:10px;border-radius:10px'>
+        <b>{p[1]}</b><br>
+        HG: {p[8]} | Yüzey: {p[9]}<br>
+        Depo: {p[11]} | Stok: {p[4]}
+        </div>
+        """
     return html
-
-# SATIŞ
-@app.route("/sale", methods=["GET","POST"])
-def sale():
-    if request.method=="POST":
-        total=request.form["total"]
-        con=db();c=con.cursor()
-        c.execute("INSERT INTO sales VALUES(NULL,?,?,?)",
-                  (total,session["user"],datetime.now()))
-
-        c.execute("INSERT INTO logs VALUES(NULL,?,?,?)",
-                  (session["user"],"Satış yaptı",datetime.now()))
-        con.commit();con.close()
-
-    return """
-    <h2>Satış</h2>
-    <form method=post>
-    Toplam<input name=total>
-    <button>Sat</button>
-    </form>
-    """
 
 # LOG
 @app.route("/logs")
