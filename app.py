@@ -1,5 +1,7 @@
-from flask import Flask, request, redirect, session
-import sqlite3
+from flask import Flask, request, redirect, session, send_file
+import sqlite3, io, base64, random, string
+import barcode
+from barcode.writer import ImageWriter
 
 app = Flask(__name__)
 app.secret_key = "secret123"
@@ -12,23 +14,15 @@ def init_db():
     db = get_db()
     c = db.cursor()
 
-    # ürün tablosu
     c.execute("""
     CREATE TABLE IF NOT EXISTS products(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         barcode TEXT,
         name TEXT,
-        type TEXT,
-        size TEXT,
-        quality TEXT,
-        surface TEXT,
-        color TEXT,
-        stock INTEGER,
-        depot TEXT
+        stock INTEGER
     )
     """)
 
-    # kullanıcı
     c.execute("""
     CREATE TABLE IF NOT EXISTS users(
         username TEXT,
@@ -37,7 +31,6 @@ def init_db():
     )
     """)
 
-    # log
     c.execute("""
     CREATE TABLE IF NOT EXISTS logs(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,7 +40,6 @@ def init_db():
     )
     """)
 
-    # default kullanıcı
     c.execute("SELECT * FROM users")
     if not c.fetchall():
         c.execute("INSERT INTO users VALUES ('admin','1234','admin')")
@@ -64,13 +56,23 @@ def log_yaz(user, action):
     c.execute("INSERT INTO logs (user, action) VALUES (?,?)", (user, action))
     db.commit()
 
+# ---------------- BARKOD ÜRET ----------------
+def generate_barcode():
+    return ''.join(random.choices(string.digits, k=12))
+
+def barcode_image(code):
+    EAN = barcode.get_barcode_class('code128')
+    rv = io.BytesIO()
+    EAN(code, writer=ImageWriter()).write(rv)
+    rv.seek(0)
+    return rv
+
 # ---------------- LOGIN ----------------
 @app.route("/", methods=["GET","POST"])
 def login():
     if request.method == "POST":
         db = get_db()
         c = db.cursor()
-
         c.execute("SELECT * FROM users WHERE username=? AND password=?",
                   (request.form["username"], request.form["password"]))
         user = c.fetchone()
@@ -78,16 +80,18 @@ def login():
         if user:
             session["user"] = user[0]
             session["role"] = user[2]
-
             log_yaz(user[0], "Giriş yaptı")
-
             return redirect("/panel")
 
     return '''
+    <style>
+    body{font-family:sans-serif; text-align:center; margin-top:50px}
+    input,button{padding:10px; margin:5px}
+    </style>
     <h2>Giriş</h2>
     <form method="post">
-        Kullanıcı: <input name="username"><br>
-        Şifre: <input name="password" type="password"><br>
+        <input name="username" placeholder="Kullanıcı"><br>
+        <input name="password" type="password" placeholder="Şifre"><br>
         <button>Giriş</button>
     </form>
     '''
@@ -98,17 +102,16 @@ def panel():
     if "user" not in session:
         return redirect("/")
 
-    html = f"<h2>Hoşgeldin {session['user']}</h2>"
-    html += "<a href='/urunler'>Ürünler</a><br>"
-    html += "<a href='/barkod'>📷 Barkod Oku</a><br>"
+    html = f"<h2>👋 {session['user']}</h2>"
+    html += "<a href='/barkod'>📷 Okut & Satış</a><br>"
 
     if session["role"] == "admin":
-        html += "<a href='/ekle'>Ürün Ekle</a><br>"
-        html += "<a href='/kullanicilar'>Kullanıcılar</a><br>"
+        html += "<a href='/ekle'>➕ Ürün Ekle</a><br>"
+        html += "<a href='/urunler'>📦 Ürünler</a><br>"
+        html += "<a href='/kullanicilar'>👥 Kullanıcı</a><br>"
         html += "<a href='/loglar'>📊 Loglar</a><br>"
 
     html += "<a href='/logout'>Çıkış</a>"
-
     return html
 
 # ---------------- ÜRÜN EKLE ----------------
@@ -118,117 +121,108 @@ def ekle():
         return "Yetkin yok!"
 
     if request.method == "POST":
+        code = generate_barcode()
+
         db = get_db()
         c = db.cursor()
-
-        c.execute("INSERT INTO products VALUES (NULL,?,?,?,?,?,?,?,?,?)", (
-            request.form["barcode"],
+        c.execute("INSERT INTO products VALUES (NULL,?,?,?)", (
+            code,
             request.form["name"],
-            request.form["type"],
-            request.form["size"],
-            request.form["quality"],
-            request.form["surface"],
-            request.form["color"],
-            request.form["stock"],
-            request.form["depot"]
+            request.form["stock"]
         ))
-
         db.commit()
 
-        log_yaz(session["user"], f"Ürün ekledi: {request.form['name']}")
+        log_yaz(session["user"], f"Ürün eklendi: {request.form['name']}")
 
-        return redirect("/urunler")
+        return f"""
+        <h3>Ürün eklendi</h3>
+        Barkod: {code}<br><br>
+        <img src="/barcode/{code}"><br><br>
+        <button onclick="window.print()">🖨 Yazdır</button><br>
+        <a href='/panel'>Geri</a>
+        """
 
     return '''
     <h2>Ürün Ekle</h2>
     <form method="post">
-        Barkod: <input name="barcode"><br>
         Ad: <input name="name"><br>
-        Tip: <input name="type"><br>
-        Ebat: <input name="size"><br>
-        Kalite: <input name="quality"><br>
-        Yüzey: <input name="surface"><br>
-        Renk: <input name="color"><br>
         Stok: <input name="stock"><br>
-        Depo: <input name="depot"><br>
         <button>Kaydet</button>
     </form>
     '''
 
+# ---------------- BARKOD GÖRSEL ----------------
+@app.route("/barcode/<code>")
+def barcode_view(code):
+    return send_file(barcode_image(code), mimetype="image/png")
+
 # ---------------- ÜRÜNLER ----------------
 @app.route("/urunler")
 def urunler():
-    if "user" not in session:
-        return redirect("/")
+    if session.get("role") != "admin":
+        return "Yetkin yok!"
 
     db = get_db()
     c = db.cursor()
     c.execute("SELECT * FROM products")
     data = c.fetchall()
 
-    log_yaz(session["user"], "Ürünleri görüntüledi")
-
     html = "<h2>Ürünler</h2>"
-
     for i in data:
-        html += f"{i[2]} | Barkod: {i[1]} | Stok: {i[8]}<br>"
+        html += f"""
+        {i[2]} | Stok: {i[3]} 
+        <a href='/barcode/{i[1]}' target='_blank'>🧾 Etiket</a><br>
+        """
 
-    html += "<br><a href='/panel'>Geri</a>"
     return html
 
-# ---------------- BARKOD ----------------
+# ---------------- BARKOD OKUMA ----------------
 @app.route("/barkod")
 def barkod():
     return """
-    <h2>Barkod Oku</h2>
-
+    <h2>📷 Okut</h2>
     <div id="reader" style="width:300px;"></div>
-    <p id="result"></p>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
-
     <script>
-    function onScanSuccess(decodedText) {
-        document.getElementById("result").innerText = "OKUNDU: " + decodedText;
-
-        fetch("/log_barkod?data=" + decodedText)
+    function onScanSuccess(code) {
+        fetch("/sat?code=" + code)
         .then(r=>r.text())
-        .then(t=>alert(t));
+        .then(alert);
     }
 
-    let scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-    scanner.render(onScanSuccess);
+    new Html5QrcodeScanner("reader",{fps:10,qrbox:250})
+    .render(onScanSuccess);
     </script>
     """
 
-# ---------------- BARKOD → SATIŞ ----------------
-@app.route("/log_barkod")
-def log_barkod():
-    data = request.args.get("data")
+# ---------------- SATIŞ / DÜŞÜM ----------------
+@app.route("/sat")
+def sat():
+    if "user" not in session:
+        return "Giriş yok"
+
+    code = request.args.get("code")
 
     db = get_db()
     c = db.cursor()
 
-    c.execute("SELECT * FROM products WHERE barcode=?", (data,))
-    product = c.fetchone()
+    c.execute("SELECT * FROM products WHERE barcode=?", (code,))
+    p = c.fetchone()
 
-    if not product:
-        log_yaz(session["user"], f"Ürün yok: {data}")
-        return "ÜRÜN BULUNAMADI ❌"
+    if not p:
+        return "Ürün yok"
 
-    stock = product[8]
+    if p[3] <= 0:
+        return "Stok yok"
 
-    if stock <= 0:
-        log_yaz(session["user"], f"Stok yok: {product[2]}")
-        return f"STOK YOK ❌ ({product[2]})"
-
-    new_stock = stock - 1
-    c.execute("UPDATE products SET stock=? WHERE id=?", (new_stock, product[0]))
+    new_stock = p[3] - 1
+    c.execute("UPDATE products SET stock=? WHERE id=?", (new_stock, p[0]))
     db.commit()
 
-    log_yaz(session["user"], f"SATIŞ: {product[2]} | Kalan: {new_stock}")
+    log_yaz(session["user"], f"Düşüm: {p[2]} | Kalan:{new_stock}")
 
-    return f"SATILDI ✅ {product[2]} | Kalan stok: {new_stock}"
+    return f"{p[2]} satıldı. Kalan: {new_stock}"
 
 # ---------------- KULLANICI ----------------
 @app.route("/kullanicilar", methods=["GET","POST"])
@@ -247,22 +241,17 @@ def kullanicilar():
         ))
         db.commit()
 
-        log_yaz(session["user"], f"Kullanıcı ekledi: {request.form['username']}")
-
     c.execute("SELECT * FROM users")
     users = c.fetchall()
 
     html = "<h2>Kullanıcılar</h2>"
-
     for u in users:
         html += f"{u[0]} ({u[2]})<br>"
 
     html += '''
-    <h3>Ekle</h3>
     <form method="post">
-        Kullanıcı: <input name="username"><br>
-        Şifre: <input name="password"><br>
-        Rol:
+        <input name="username" placeholder="kullanıcı"><br>
+        <input name="password" placeholder="şifre"><br>
         <select name="role">
             <option>admin</option>
             <option>personel</option>
@@ -270,10 +259,9 @@ def kullanicilar():
         <button>Ekle</button>
     </form>
     '''
-
     return html
 
-# ---------------- LOGLAR ----------------
+# ---------------- LOG ----------------
 @app.route("/loglar")
 def loglar():
     if session.get("role") != "admin":
@@ -285,11 +273,9 @@ def loglar():
     logs = c.fetchall()
 
     html = "<h2>Loglar</h2>"
-
     for l in logs:
         html += f"{l[3]} | {l[1]} → {l[2]}<br>"
 
-    html += "<br><a href='/panel'>Geri</a>"
     return html
 
 # ---------------- LOGOUT ----------------
@@ -298,6 +284,5 @@ def logout():
     session.clear()
     return redirect("/")
 
-# ---------------- RUN ----------------
 if __name__ == "__main__":
     app.run()
