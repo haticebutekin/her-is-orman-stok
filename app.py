@@ -1,117 +1,239 @@
-from flask import Flask, render_template_string, request, send_file
-import io
-from reportlab.pdfgen import canvas
+from flask import Flask, request, redirect, render_template_string, send_file, session
+import sqlite3, uuid, io, datetime
 import barcode
 from barcode.writer import ImageWriter
+import qrcode
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet
 
 app = Flask(__name__)
+app.secret_key = "secret123"
 
-HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>MDF Kesim + Barkod</title>
-</head>
-<body style="font-family: Arial; padding:20px;">
+# ---------------- DATABASE ----------------
+def db():
+    return sqlite3.connect("db.sqlite3")
 
-<h2>MDF Kesim Sistemi</h2>
+def init_db():
+    con = db()
+    cur = con.cursor()
 
-<form method="POST">
-    <label>Ürün Adı:</label><br>
-    <input type="text" name="urun" required><br><br>
+    cur.execute("""CREATE TABLE IF NOT EXISTS urunler(
+        id INTEGER PRIMARY KEY,
+        ad TEXT,
+        cins TEXT,
+        ebat TEXT,
+        sinif TEXT,
+        renk TEXT,
+        adet INTEGER,
+        depo TEXT,
+        barkod TEXT
+    )""")
 
-    <label>En (mm):</label><br>
-    <input type="number" name="en" required><br><br>
+    cur.execute("""CREATE TABLE IF NOT EXISTS log(
+        id INTEGER PRIMARY KEY,
+        user TEXT,
+        islem TEXT,
+        urun TEXT,
+        depo TEXT,
+        adet INTEGER,
+        tarih TEXT
+    )""")
 
-    <label>Boy (mm):</label><br>
-    <input type="number" name="boy" required><br><br>
+    con.commit()
+    con.close()
 
-    <label>Adet:</label><br>
-    <input type="number" name="adet" required><br><br>
+init_db()
 
-    <label>MDF Kalınlık (mm):</label><br>
-    <input type="number" name="kalinlik" required><br><br>
+# ---------------- SABİT DEPOLAR ----------------
+DEPOLAR = [
+    "MDF SATIŞ",
+    "LAMİNANT",
+    "KAPI",
+    "HGLOSS (MORAY)",
+    "SÜTÇÜ",
+    "HELVACI",
+    "RÖTBALANSÇI",
+    "KESİMHANE"
+]
 
-    <button type="submit">Oluştur</button>
-</form>
+# ---------------- LOGIN ----------------
+@app.route("/login", methods=["GET","POST"])
+def login():
+    if request.method == "POST":
+        user = request.form["user"]
+        if user == "admin":
+            session["role"] = "admin"
+        else:
+            session["role"] = "depocu"
+        session["user"] = user
+        return redirect("/")
+    return """
+    <h2>Giriş</h2>
+    <form method="POST">
+    Kullanıcı: <input name="user">
+    <button>Giriş</button>
+    </form>
+    """
 
-{% if barkod %}
-    <h3>Sonuç:</h3>
-    <p><b>Ürün:</b> {{urun}}</p>
-    <p><b>Ölçü:</b> {{en}} x {{boy}} mm</p>
-    <p><b>Adet:</b> {{adet}}</p>
-    <p><b>Kalınlık:</b> {{kalinlik}} mm</p>
-
-    <img src="/barkod" alt="barkod"><br><br>
-
-    <a href="/pdf">PDF İndir</a>
-{% endif %}
-
-</body>
-</html>
-"""
-
-data_store = {}
-
-@app.route("/", methods=["GET", "POST"])
+# ---------------- ANA SAYFA ----------------
+@app.route("/", methods=["GET","POST"])
 def index():
-    global data_store
+    if "role" not in session:
+        return redirect("/login")
+
+    con = db()
+    cur = con.cursor()
+
+    if request.method == "POST" and session["role"]=="admin":
+        barkod_no = str(uuid.uuid4())[:8]
+
+        cur.execute("INSERT INTO urunler(ad,cins,ebat,sinif,renk,adet,depo,barkod) VALUES(?,?,?,?,?,?,?,?)",
+        (
+            request.form["ad"],
+            request.form["cins"],
+            request.form["ebat"],
+            request.form["sinif"],
+            request.form["renk"],
+            request.form["adet"],
+            request.form["depo"],
+            barkod_no
+        ))
+
+        con.commit()
+
+    urunler = cur.execute("SELECT * FROM urunler").fetchall()
+
+    html = """
+    <h2>DEPO SİSTEMİ</h2>
+
+    <p>Giriş: {{user}} ({{role}})</p>
+
+    {% if role=='admin' %}
+    <h3>Ürün Ekle</h3>
+    <form method="POST">
+    Ad: <input name="ad"><br>
+    Cins: <input name="cins"><br>
+    Ebat: <input name="ebat"><br>
+    HG/MAT: <input name="sinif"><br>
+    Renk: <input name="renk"><br>
+    Adet: <input name="adet"><br>
+
+    Depo:
+    <select name="depo">
+    {% for d in depolar %}
+    <option>{{d}}</option>
+    {% endfor %}
+    </select><br><br>
+
+    <button>Ekle</button>
+    </form>
+    {% endif %}
+
+    <h3>Ürünler</h3>
+    {% for u in urunler %}
+    <p>{{u[1]}} | {{u[2]}} | {{u[3]}} | {{u[4]}} | {{u[5]}} | {{u[6]}} adet | {{u[7]}} | Barkod: {{u[8]}}</p>
+    {% endfor %}
+
+    <br>
+    <a href="/cikis">Barkod ile Çıkış</a> |
+    <a href="/log">Hareketler</a>
+    """
+
+    return render_template_string(html, urunler=urunler, depolar=DEPOLAR, user=session["user"], role=session["role"])
+
+# ---------------- BARKOD ÇIKIŞ ----------------
+@app.route("/cikis", methods=["GET","POST"])
+def cikis():
+    if "role" not in session:
+        return redirect("/login")
+
+    con = db()
+    cur = con.cursor()
 
     if request.method == "POST":
-        urun = request.form["urun"]
-        en = request.form["en"]
-        boy = request.form["boy"]
-        adet = request.form["adet"]
-        kalinlik = request.form["kalinlik"]
+        barkod = request.form["barkod"]
+        adet = int(request.form["adet"])
 
-        barkod_data = f"{urun}-{en}x{boy}-{kalinlik}mm"
+        urun = cur.execute("SELECT * FROM urunler WHERE barkod=?", (barkod,)).fetchone()
 
-        data_store = {
-            "urun": urun,
-            "en": en,
-            "boy": boy,
-            "adet": adet,
-            "kalinlik": kalinlik,
-            "barkod": barkod_data
-        }
+        if not urun:
+            return "HATALI BARKOD"
 
-        return render_template_string(HTML, barkod=True, **data_store)
+        if urun[6] < adet:
+            return "YETERSİZ STOK"
 
-    return render_template_string(HTML, barkod=False)
+        yeni = urun[6] - adet
 
+        cur.execute("UPDATE urunler SET adet=? WHERE id=?", (yeni, urun[0]))
 
-@app.route("/barkod")
-def barkod():
-    global data_store
+        cur.execute("INSERT INTO log(user,islem,urun,depo,adet,tarih) VALUES(?,?,?,?,?,?)",
+        (
+            session["user"],
+            "ÇIKIŞ",
+            urun[1],
+            urun[7],
+            adet,
+            str(datetime.datetime.now())
+        ))
 
-    CODE128 = barcode.get_barcode_class('code128')
-    rv = io.BytesIO()
-    code = CODE128(data_store["barkod"], writer=ImageWriter())
-    code.write(rv)
-    rv.seek(0)
+        con.commit()
 
-    return send_file(rv, mimetype='image/png')
+    return """
+    <h2>Barkod ile Çıkış</h2>
+    <form method="POST">
+    Barkod: <input name="barkod"><br>
+    Adet: <input name="adet"><br>
+    <button>Çıkış Yap</button>
+    </form>
+    """
 
+# ---------------- LOG ----------------
+@app.route("/log")
+def log():
+    con = db()
+    cur = con.cursor()
+    logs = cur.execute("SELECT * FROM log").fetchall()
 
-@app.route("/pdf")
-def pdf():
-    global data_store
+    html = "<h2>Hareket Geçmişi</h2>"
+    for l in logs:
+        html += f"<p>{l[1]} | {l[2]} | {l[3]} | {l[4]} | {l[5]} | {l[6]}</p>"
 
+    return html
+
+# ---------------- BARKOD + QR PDF ----------------
+@app.route("/etiket/<barkod_no>")
+def etiket(barkod_no):
     buffer = io.BytesIO()
-    p = canvas.Canvas(buffer)
+    doc = SimpleDocTemplate(buffer)
+    styles = getSampleStyleSheet()
+    elements = []
 
-    p.drawString(100, 800, f"Ürün: {data_store['urun']}")
-    p.drawString(100, 780, f"Ölçü: {data_store['en']} x {data_store['boy']} mm")
-    p.drawString(100, 760, f"Adet: {data_store['adet']}")
-    p.drawString(100, 740, f"Kalınlık: {data_store['kalinlik']} mm")
+    elements.append(Paragraph(f"Barkod: {barkod_no}", styles["Normal"]))
 
-    p.drawString(100, 700, f"Barkod: {data_store['barkod']}")
+    # BARCODE
+    CODE128 = barcode.get_barcode_class('code128')
+    b = CODE128(barkod_no, writer=ImageWriter())
+    bio = io.BytesIO()
+    b.write(bio)
+    bio.seek(0)
 
-    p.save()
+    elements.append(Image(bio, width=200, height=50))
+
+    # QR
+    qr = qrcode.make(barkod_no)
+    qrbio = io.BytesIO()
+    qr.save(qrbio)
+    qrbio.seek(0)
+
+    elements.append(Image(qrbio, width=100, height=100))
+
+    elements.append(Spacer(1,20))
+
+    doc.build(elements)
 
     buffer.seek(0)
-    return send_file(buffer, as_attachment=True, download_name="kesim.pdf", mimetype='application/pdf')
+    return send_file(buffer, as_attachment=True, download_name="etiket.pdf")
 
-
+# ---------------- RUN ----------------
 if __name__ == "__main__":
     app.run(debug=True)
