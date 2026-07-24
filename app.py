@@ -685,14 +685,14 @@ def cikis():
 
 
        stok_log(
-       urun[0],
-       urun[1],
-       urun[9],
-       adet,
-       "DEPO ÇIKIŞ"
+           urun[0],
+           urun[1],
+           urun[9],
+           adet,
+           "DEPO ÇIKIŞ"
        )
 
-        return """
+    return """
 
 <h2>
 Çıkış Tamamlandı
@@ -702,7 +702,7 @@ def cikis():
 Panel
 </a>
 
-"""
+    """
 
 
 
