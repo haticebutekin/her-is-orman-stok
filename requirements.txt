@@ -1,5 +1,2 @@
-Flask
-python-barcode
-Pillow
+flask
 gunicorn
-openpyxl
