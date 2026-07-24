@@ -200,7 +200,7 @@ def dus(id):
 @app.route("/barkod_oku")
 @login_required
 def barkod_oku():
-    return "Sunucuda kamera çalışmaz (telefon versiyonunu
+    return "Sunucuda kamera çalışmaz (telefon versiyonunu)"
     while True:
         _, frame = cap.read()
         for b in decode(frame):
