@@ -21,6 +21,14 @@ def init():
     con = db()
     c = con.cursor()
 
+c.execute("""
+CREATE TABLE IF NOT EXISTS requests(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER,
+    quantity INTEGER,
+    status TEXT
+)
+""")
     c.execute("""
     CREATE TABLE IF NOT EXISTS users(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -466,16 +474,131 @@ Etiket
 # =====================
 
 
-@app.route("/cikis")
+@app.route("/cikis",methods=["GET","POST"])
 def cikis():
+
+    if request.method=="POST":
+
+        barkod=request.form["barcode"]
+        adet=int(request.form["adet"])
+        talep=int(request.form["talep"])
+
+
+        con=db()
+
+
+        urun=con.execute("""
+        SELECT * FROM products
+        WHERE barcode=?
+        """,
+        (barkod,)).fetchone()
+
+
+
+        talep_urun=con.execute("""
+        SELECT * FROM requests
+        WHERE id=?
+        """,
+        (talep,)).fetchone()
+
+
+
+        if urun is None:
+
+            con.close()
+
+            return "❌ Barkod bulunamadı"
+
+
+
+        if talep_urun is None:
+
+            con.close()
+
+            return "❌ Geçersiz çıkış talebi"
+
+
+
+        # YANLIŞ MAL KONTROLÜ
+
+        if urun[0] != talep_urun[1]:
+
+            con.close()
+
+            return """
+            <h2 style='color:red'>
+            ❌ YANLIŞ MALZEME!
+            </h2>
+
+            Çıkış engellendi.
+            """
+
+
+
+        if urun[8] < adet:
+
+            con.close()
+
+            return "❌ Yetersiz stok"
+
+
+
+        con.execute("""
+        UPDATE products
+
+        SET stock=stock-?
+
+        WHERE id=?
+        """,
+        (
+        adet,
+        urun[0]
+        ))
+
+
+
+        con.execute("""
+        UPDATE requests
+        SET status='Tamamlandı'
+        WHERE id=?
+        """,
+        (talep,))
+
+
+        con.commit()
+        con.close()
+
+
+
+        logla(
+        f"{urun[1]} {adet} adet çıkış yaptı"
+        )
+
+
+        return """
+        <h2>
+        ✅ Doğru ürün çıktı
+        </h2>
+        """
+
+
 
     return """
 
-<h2>DEPO CIKIS</h2>
+<h2>
+DEPO ÇIKIŞ
+</h2>
 
 
-<form method="post"
-action="/cikis">
+<form method="post">
+
+
+Talep No:
+
+<input name="talep">
+
+
+<br><br>
 
 
 Barkod:
@@ -486,6 +609,7 @@ autofocus>
 
 <br><br>
 
+
 Adet:
 
 <input name="adet">
@@ -495,15 +619,13 @@ Adet:
 
 
 <button>
-CIKIS YAP
+OKUT VE ÇIK
 </button>
 
 
 </form>
 
 """
-
-
 
 @app.route("/cikis",methods=["POST"])
 def cikis_yap():
@@ -593,6 +715,45 @@ Panel
 # LOG
 # =====================
 
+@app.route("/talep/<int:id>/<int:adet>")
+def talep(id,adet):
+
+    con=db()
+
+    con.execute("""
+    INSERT INTO requests
+    (product_id,quantity,status)
+
+    VALUES(?,?,?)
+    """,
+    (
+    id,
+    adet,
+    "Bekliyor"
+    ))
+
+    con.commit()
+
+
+    no=con.execute("""
+    SELECT last_insert_rowid()
+    """).fetchone()[0]
+
+
+    con.close()
+
+
+    return f"""
+
+<h2>
+Çıkış Talebi Oluşturuldu
+</h2>
+
+Talep No:
+
+<b>{no}</b>
+
+"""
 
 @app.route("/log")
 def log_ekran():
