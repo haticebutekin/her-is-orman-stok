@@ -647,7 +647,7 @@ def etiket(id):
     urun=con.execute("""
     SELECT * FROM products
     WHERE id=?
-    """,
+    """)
     (id,)).fetchone()
 
     con.close()
