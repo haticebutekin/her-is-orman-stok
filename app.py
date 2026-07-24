@@ -1,36 +1,26 @@
-from flask import Flask, request, redirect, session, render_template_string
+from flask import Flask, render_template_string, request, redirect, session
 import sqlite3
-import cv2
 from pyzbar.pyzbar import decode
+import cv2
 
 app = Flask(__name__)
-app.secret_key = "secret123"
+app.secret_key = "1234"
 
-# ---------------- DATABASE ----------------
+# ---------------- DB ----------------
 def get_db():
-    return sqlite3.connect("market.db")
+    return sqlite3.connect("database.db")
 
 def init_db():
     db = get_db()
     c = db.cursor()
 
-    # USERS (ROL SİSTEMİ)
+    # ürün
     c.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        role TEXT
-    )
-    """)
-
-    # PRODUCTS (FULL DETAY)
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS products (
+    CREATE TABLE IF NOT EXISTS products(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         type TEXT,
-        size INTEGER,
+        size TEXT,
         quality TEXT,
         surface TEXT,
         color TEXT,
@@ -39,42 +29,69 @@ def init_db():
     )
     """)
 
-    # DEFAULT USERS
+    # kullanıcı
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS users(
+        username TEXT,
+        password TEXT,
+        role TEXT
+    )
+    """)
+
+    # log
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS logs(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user TEXT,
+        action TEXT,
+        time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    # default kullanıcılar
     c.execute("SELECT * FROM users")
     if not c.fetchall():
-        c.execute("INSERT INTO users VALUES (NULL,'admin','1234','admin')")
-        c.execute("INSERT INTO users VALUES (NULL,'personel','1234','staff')")
+        c.execute("INSERT INTO users VALUES ('admin','1234','admin')")
+        c.execute("INSERT INTO users VALUES ('personel','1234','personel')")
 
     db.commit()
-    db.close()
 
 init_db()
+
+# ---------------- LOG ----------------
+def log_yaz(user, action):
+    db = get_db()
+    c = db.cursor()
+    c.execute("INSERT INTO logs (user, action) VALUES (?,?)", (user, action))
+    db.commit()
 
 # ---------------- LOGIN ----------------
 @app.route("/", methods=["GET","POST"])
 def login():
     if request.method == "POST":
-        u = request.form["username"]
-        p = request.form["password"]
-
         db = get_db()
         c = db.cursor()
-        c.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p))
+
+        c.execute("SELECT * FROM users WHERE username=? AND password=?",
+                  (request.form["username"], request.form["password"]))
         user = c.fetchone()
 
         if user:
-            session["user"] = user[1]
-            session["role"] = user[3]
+            session["user"] = user[0]
+            session["role"] = user[2]
+
+            log_yaz(user[0], "Giriş yaptı")
+
             return redirect("/panel")
 
-    return render_template_string("""
+    return '''
     <h2>Giriş</h2>
     <form method="post">
         Kullanıcı: <input name="username"><br>
-        Şifre: <input name="password"><br>
+        Şifre: <input name="password" type="password"><br>
         <button>Giriş</button>
     </form>
-    """)
+    '''
 
 # ---------------- PANEL ----------------
 @app.route("/panel")
@@ -82,183 +99,177 @@ def panel():
     if "user" not in session:
         return redirect("/")
 
-    return render_template_string("""
-    <h1>Hoşgeldin {{user}}</h1>
-    <p>Rol: {{role}}</p>
+    html = f"<h2>Hoşgeldin {session['user']}</h2>"
 
-    <a href="/urunler">Ürünler</a><br>
-    <a href="/ekle">Ürün Ekle</a><br>
+    html += "<a href='/urunler'>Ürünler</a><br>"
+    html += "<a href='/barkod'>📷 Barkod Oku</a><br>"
 
-    {% if role == "admin" %}
-        <a href="/kullanicilar">Kullanıcı Yönetimi</a><br>
-    {% endif %}
+    if session["role"] == "admin":
+        html += "<a href='/ekle'>Ürün Ekle</a><br>"
+        html += "<a href='/kullanicilar'>Kullanıcılar</a><br>"
+        html += "<a href='/loglar'>📊 Loglar</a><br>"
 
-    <a href="/logout">Çıkış</a>
-    """, user=session["user"], role=session["role"])
+    html += "<a href='/logout'>Çıkış</a>"
 
-@app.route("/barkod")
-def barkod():
+    return html
+
+# ---------------- ÜRÜN EKLE ----------------
+@app.route("/ekle", methods=["GET","POST"])
+def ekle():
+    if session.get("role") != "admin":
+        return "Yetkin yok!"
+
+    if request.method == "POST":
+        db = get_db()
+        c = db.cursor()
+
+        c.execute("INSERT INTO products VALUES (NULL,?,?,?,?,?,?,?,?)", (
+            request.form["name"],
+            request.form["type"],
+            request.form["size"],
+            request.form["quality"],
+            request.form["surface"],
+            request.form["color"],
+            request.form["stock"],
+            request.form["depot"]
+        ))
+
+        db.commit()
+
+        log_yaz(session["user"], f"Ürün ekledi: {request.form['name']}")
+
+        return redirect("/urunler")
+
+    return '''
+    <h2>Ürün Ekle</h2>
+    <form method="post">
+        Ad: <input name="name"><br>
+        Tip: <input name="type"><br>
+        Ebat: <input name="size"><br>
+        Kalite: <input name="quality"><br>
+        Yüzey: <input name="surface"><br>
+        Renk: <input name="color"><br>
+        Stok: <input name="stock"><br>
+        Depo: <input name="depot"><br>
+        <button>Kaydet</button>
+    </form>
+    '''
+
+# ---------------- ÜRÜNLER ----------------
+@app.route("/urunler")
+def urunler():
     if "user" not in session:
         return redirect("/")
 
-    cap = cv2.VideoCapture(0)
-
-    while True:
-        ret, frame = cap.read()
-        for barcode in decode(frame):
-            barkod_data = barcode.data.decode("utf-8")
-
-            cap.release()
-            cv2.destroyAllWindows()
-
-            return f"""
-            <h2>Barkod Okundu!</h2>
-            <p>{barkod_data}</p>
-            <a href='/urun_bul/{barkod_data}'>Ürünü Getir</a>
-            """
-
-        cv2.imshow("Barkod Oku", frame)
-
-        if cv2.waitKey(1) == 27:
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-    return "İptal edildi"
-    @app.route("/urun_bul/<kod>")
-def urun_bul(kod):
-    db = get_db()
-    c = db.cursor()
-
-    c.execute("SELECT * FROM products WHERE name=?", (kod,))
-    urun = c.fetchone()
-
-    if urun:
-        return f"""
-        <h2>Ürün Bulundu</h2>
-        Adı: {urun[1]}<br>
-        Cinsi: {urun[2]}<br>
-        MM: {urun[3]}<br>
-        Sınıf: {urun[4]}<br>
-        Yüzey: {urun[5]}<br>
-        Renk: {urun[6]}<br>
-        Stok: {urun[7]}<br>
-        Depo: {urun[8]}<br>
-        <a href='/panel'>Geri</a>
-        """
-    else:
-        return "Ürün bulunamadı"
-    
-# ---------------- ÜRÜN LİSTE ----------------
-@app.route("/urunler")
-def urunler():
     db = get_db()
     c = db.cursor()
     c.execute("SELECT * FROM products")
     data = c.fetchall()
 
+    log_yaz(session["user"], "Ürünleri görüntüledi")
+
     html = "<h2>Ürünler</h2>"
-    html += "<table border=1><tr><th>Adı</th><th>Cinsi</th><th>MM</th><th>Sınıf</th><th>Yüzey</th><th>Renk</th><th>Stok</th><th>Depo</th></tr>"
 
-    for d in data:
-        html += f"<tr><td>{d[1]}</td><td>{d[2]}</td><td>{d[3]}</td><td>{d[4]}</td><td>{d[5]}</td><td>{d[6]}</td><td>{d[7]}</td><td>{d[8]}</td></tr>"
+    for i in data:
+        html += f"{i[1]} | {i[7]} adet<br>"
 
-    html += "</table><br><a href='/panel'>Geri</a>"
+    html += "<br><a href='/panel'>Geri</a>"
+
     return html
 
-<a href="/barkod">📷 Barkod Oku</a><br>
+# ---------------- BARKOD ----------------
+@app.route("/barkod")
+def barkod():
+    return '''
+    <h2>Barkod Okuma</h2>
+    <button onclick="scan()">Kamera Aç</button>
+    <script>
+    function scan(){
+        fetch('/scan').then(r=>r.text()).then(alert)
+    }
+    </script>
+    '''
 
-# ---------------- ÜRÜN EKLE ----------------
-@app.route("/ekle", methods=["GET","POST"])
-def ekle():
-    if "user" not in session:
-        return redirect("/")
+@app.route("/scan")
+def scan():
+    cam = cv2.VideoCapture(0)
 
-    if request.method == "POST":
-        name = request.form["name"]
-        type_ = request.form["type"]
-        size = request.form["size"]
-        quality = request.form["quality"]
-        surface = request.form["surface"]
-        color = request.form["color"]
-        stock = request.form["stock"]
-        depot = request.form["depot"]
+    while True:
+        _, frame = cam.read()
+        codes = decode(frame)
 
-        db = get_db()
-        c = db.cursor()
-        c.execute("INSERT INTO products VALUES (NULL,?,?,?,?,?,?,?,?)",
-                  (name,type_,size,quality,surface,color,stock,depot))
-        db.commit()
+        for code in codes:
+            data = code.data.decode("utf-8")
+            cam.release()
 
-    return render_template_string("""
-    <h2>Ürün Ekle</h2>
-    <form method="post">
-        Adı: <input name="name"><br>
-        Cinsi: <input name="type"><br>
-        Kaç MM: <input name="size"><br>
-        Sınıf: <input name="quality"><br>
-        HGLOSS / MAT: <input name="surface"><br>
-        Renk: <input name="color"><br>
-        Stok: <input name="stock"><br>
+            log_yaz(session["user"], f"Barkod okudu: {data}")
 
-        Depo:
-        <select name="depot">
-            <option>MDF SATIŞ DEPOSU</option>
-            <option>LAMİNANT DEPOSU</option>
-            <option>KAPI DEPOSU</option>
-            <option>HGLOSS DEPOSU</option>
-            <option>SÜTÇÜ YANI</option>
-            <option>HELVACI YANI</option>
-            <option>RÖTBALANSÇI YANI</option>
-            <option>KESİMHANE</option>
-        </select><br>
+            return f"OKUNDU: {data}"
 
-        <button>Kaydet</button>
-    </form>
-    <a href="/panel">Geri</a>
-    """)
-
-# ---------------- KULLANICI YÖNETİMİ ----------------
+# ---------------- KULLANICI ----------------
 @app.route("/kullanicilar", methods=["GET","POST"])
 def kullanicilar():
     if session.get("role") != "admin":
-        return "Yetkisiz!"
+        return "Yetkin yok!"
 
     db = get_db()
     c = db.cursor()
 
     if request.method == "POST":
-        u = request.form["username"]
-        p = request.form["password"]
-        r = request.form["role"]
-        c.execute("INSERT INTO users VALUES (NULL,?,?,?)", (u,p,r))
+        c.execute("INSERT INTO users VALUES (?,?,?)", (
+            request.form["username"],
+            request.form["password"],
+            request.form["role"]
+        ))
         db.commit()
+
+        log_yaz(session["user"], f"Kullanıcı ekledi: {request.form['username']}")
 
     c.execute("SELECT * FROM users")
     users = c.fetchall()
 
     html = "<h2>Kullanıcılar</h2>"
-    for u in users:
-        html += f"{u[1]} - {u[3]}<br>"
 
-    html += """
-    <h3>Yeni Kullanıcı</h3>
+    for u in users:
+        html += f"{u[0]} ({u[2]})<br>"
+
+    html += '''
+    <h3>Ekle</h3>
     <form method="post">
         Kullanıcı: <input name="username"><br>
         Şifre: <input name="password"><br>
         Rol:
         <select name="role">
             <option>admin</option>
-            <option>staff</option>
+            <option>personel</option>
         </select><br>
         <button>Ekle</button>
     </form>
-    <a href='/panel'>Geri</a>
-    """
+    '''
 
     return html
 
-# ---------------- LOGOUT ----------------
+# ---------------- LOGLAR ----------------
+@app.route("/loglar")
+def loglar():
+    if session.get("role") != "admin":
+        return "Yetkin yok!"
+
+    db = get_db()
+    c = db.cursor()
+    c.execute("SELECT * FROM logs ORDER BY id DESC")
+    logs = c.fetchall()
+
+    html = "<h2>Loglar</h2>"
+
+    for l in logs:
+        html += f"{l[3]} | {l[1]} → {l[2]}<br>"
+
+    html += "<br><a href='/panel'>Geri</a>"
+
+    return html
+
+# ---------------- ÇIKIŞ ----------------
 @app.route("/logout")
 def logout():
     session.clear()
