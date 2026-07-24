@@ -766,15 +766,21 @@ def etiket(id):
 
 
 
-    return f"""
+ return f"""
+
+<html>
+<body>
 
 <h2>
-✅ Etiket Hazır
+Etiket Hazir
 </h2>
 
 <a href="/indir/{dosya}">
-PDF Aç
+PDF Ac
 </a>
+
+</body>
+</html>
 
 """
 
