@@ -3,84 +3,67 @@ import sqlite3
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = "super_secret"
+app.secret_key = "secret"
 
-# ---------------- DB ----------------
 def db():
     return sqlite3.connect("pro.db")
 
+# ---------------- SETUP ----------------
 def setup():
     conn = db()
     c = conn.cursor()
 
-    # ürünler
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS products(
+    c.execute("""CREATE TABLE IF NOT EXISTS products(
         id INTEGER PRIMARY KEY,
         name TEXT,
         barcode TEXT,
         stock INTEGER,
         min_stock INTEGER,
         depo INTEGER
-    )
-    """)
+    )""")
 
-    # kullanıcılar
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS users(
+    c.execute("""CREATE TABLE IF NOT EXISTS users(
         id INTEGER PRIMARY KEY,
         username TEXT UNIQUE,
         password TEXT,
         role TEXT
-    )
-    """)
+    )""")
 
-    # loglar
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS logs(
+    c.execute("""CREATE TABLE IF NOT EXISTS depots(
+        id INTEGER PRIMARY KEY,
+        name TEXT
+    )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS logs(
         id INTEGER PRIMARY KEY,
         user TEXT,
         action TEXT,
         detail TEXT,
         date TEXT
-    )
-    """)
+    )""")
 
-    # satış
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS sales(
-        id INTEGER PRIMARY KEY,
-        user TEXT,
-        total INTEGER,
-        date TEXT
-    )
-    """)
+    # 🔥 SENİN DEPOLARIN
+    depots = [
+        (1, "MDF SATIŞ DEPOSU"),
+        (2, "LAMİNANT DEPOSU"),
+        (3, "KAPI DEPOSU"),
+        (4, "HGLOSS DEPOSU (MORAY YANI)"),
+        (5, "SÜTÇÜ YANI"),
+        (6, "HELVACI YANI"),
+        (7, "RÖTBALANSÇI YANI"),
+        (8, "KESİMHANE")
+    ]
 
-    # depolar
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS depots(
-        id INTEGER PRIMARY KEY,
-        name TEXT
-    )
-    """)
+    for d in depots:
+        c.execute("INSERT OR IGNORE INTO depots(id,name) VALUES (?,?)", d)
 
-    # 8 depo
-    for i in range(1,9):
-        c.execute("INSERT OR IGNORE INTO depots(id,name) VALUES (?,?)",(i,f"Depo {i}"))
-
-    # kullanıcılar
     users = [
-        ("ramazan","1234","depo"),
-        ("orhan","1234","depo"),
-        ("behic","1234","depo"),
-        ("hatice","1234","admin"),
-        ("ahmet","1234","admin"),
-        ("berke","1234","muhasebe"),
-        ("irem","1234","muhasebe"),
+        ("admin","1234","admin"),
+        ("depo","1234","depo")
     ]
 
     for u in users:
-        c.execute("INSERT OR IGNORE INTO users(username,password,role) VALUES (?,?,?)",u)
+        c.execute("INSERT OR IGNORE INTO users(username,password,role) VALUES (?,?,?)", u)
 
     conn.commit()
     conn.close()
@@ -104,14 +87,14 @@ def login():
             session["role"]=user[3]
             return redirect("/panel")
 
-    return render_template_string("""
-    <h2>HER İŞ ORMAN STOK PRO</h2>
+    return """
+    <h2>STOK SİSTEMİ</h2>
     <form method=post>
     <input name=u placeholder="Kullanıcı"><br>
     <input name=p type=password placeholder="Şifre"><br>
     <button>Giriş</button>
     </form>
-    """)
+    """
 
 # ---------------- PANEL ----------------
 @app.route("/panel")
@@ -122,20 +105,25 @@ def panel():
     conn = db()
     c = conn.cursor()
 
-    products = c.execute("SELECT * FROM products").fetchall()
+    products = c.execute("""
+    SELECT p.id, p.name, p.barcode, p.stock, p.min_stock, d.name
+    FROM products p
+    JOIN depots d ON p.depo = d.id
+    """).fetchall()
+
+    depots = c.execute("SELECT * FROM depots").fetchall()
 
     return render_template_string("""
     <h2>{{user}} ({{role}})</h2>
 
-    <a href="/transfer">📦 Transfer</a>
-    <a href="/report">📊 Rapor</a>
-    <a href="/logs">📜 Log</a>
+    <a href="/transfer">Transfer</a>
+    <a href="/logs">Log</a>
 
     <hr>
 
     {% for p in products %}
     <div>
-    {{p[1]}} | Depo {{p[5]}} | Stok: {{p[3]}}
+    {{p[1]}} | {{p[5]}} | Stok: {{p[3]}}
     {% if p[3] <= p[4] %}
         🔴 KRİTİK
     {% elif p[3] <= p[4]+5 %}
@@ -149,7 +137,13 @@ def panel():
     <h3>Barkod düş</h3>
     <form action="/scan" method=post>
     <input name=barcode placeholder="Barkod">
-    <input name=depo placeholder="Depo No">
+
+    <select name=depo>
+    {% for d in depots %}
+    <option value="{{d[0]}}">{{d[1]}}</option>
+    {% endfor %}
+    </select>
+
     <button>Düş</button>
     </form>
 
@@ -161,11 +155,17 @@ def panel():
     Barkod <input name=barcode>
     Stok <input name=stock>
     Min <input name=min>
-    Depo <input name=depo>
+
+    <select name=depo>
+    {% for d in depots %}
+    <option value="{{d[0]}}">{{d[1]}}</option>
+    {% endfor %}
+    </select>
+
     <button>Ekle</button>
     </form>
     {% endif %}
-    """, products=products, user=session["user"], role=session["role"])
+    """, products=products, depots=depots, user=session["user"], role=session["role"])
 
 # ---------------- ÜRÜN EKLE ----------------
 @app.route("/add", methods=["POST"])
@@ -199,7 +199,7 @@ def scan():
     p = c.execute("SELECT * FROM products WHERE barcode=? AND depo=?",
                   (barcode,depo)).fetchone()
 
-    if p:
+    if p and p[3] > 0:
         c.execute("UPDATE products SET stock=stock-1 WHERE id=?", (p[0],))
 
         c.execute("INSERT INTO logs(user,action,detail,date) VALUES (?,?,?,?)",
@@ -215,10 +215,11 @@ def transfer():
     if session.get("role") != "admin":
         return "Yetki yok"
 
-    if request.method=="POST":
-        conn = db()
-        c = conn.cursor()
+    conn = db()
+    c = conn.cursor()
+    depots = c.execute("SELECT * FROM depots").fetchall()
 
+    if request.method=="POST":
         barkod = request.form["barcode"]
         miktar = int(request.form["miktar"])
         f = request.form["from"]
@@ -244,41 +245,29 @@ def transfer():
             conn.close()
             return redirect("/panel")
 
-    return """
+    return render_template_string("""
     <h2>Transfer</h2>
     <form method=post>
     Barkod <input name=barcode><br>
     Miktar <input name=miktar><br>
-    Nereden <input name=from><br>
-    Nereye <input name=to><br>
+
+    Nereden
+    <select name=from>
+    {% for d in depots %}
+    <option value="{{d[0]}}">{{d[1]}}</option>
+    {% endfor %}
+    </select>
+
+    Nereye
+    <select name=to>
+    {% for d in depots %}
+    <option value="{{d[0]}}">{{d[1]}}</option>
+    {% endfor %}
+    </select>
+
     <button>Yap</button>
     </form>
-    """
-
-# ---------------- RAPOR ----------------
-@app.route("/report")
-def report():
-    conn = db()
-    c = conn.cursor()
-
-    gunluk = c.execute("SELECT date(date), COUNT(*) FROM logs GROUP BY date(date)").fetchall()
-    kullanici = c.execute("SELECT user, COUNT(*) FROM logs GROUP BY user").fetchall()
-
-    return render_template_string("""
-    <h2>Rapor</h2>
-
-    <h3>Günlük</h3>
-    {% for g in gunluk %}
-    <div>{{g[0]}} : {{g[1]}}</div>
-    {% endfor %}
-
-    <h3>Kullanıcı</h3>
-    {% for k in kullanici %}
-    <div>{{k[0]}} : {{k[1]}}</div>
-    {% endfor %}
-
-    <a href="/panel">Geri</a>
-    """, gunluk=gunluk, kullanici=kullanici)
+    """, depots=depots)
 
 # ---------------- LOG ----------------
 @app.route("/logs")
