@@ -1,6 +1,89 @@
 from flask import Flask, request, redirect, session, render_template_string
 import sqlite3
 from datetime import datetime
+from flask import session
+
+cart = []
+
+@app.route("/kasa")
+def kasa():
+    if "user" not in session:
+        return redirect("/")
+
+    return render_template_string("""
+    <h1>🛒 KASA EKRANI</h1>
+
+    <form method="post" action="/kasa_ekle">
+        Barkod: <input name="barcode" autofocus>
+        <button>EKLE</button>
+    </form>
+
+    <h2>Sepet</h2>
+    <table border=1>
+    <tr>
+        <th>Ad</th><th>Cins</th><th>Ebat</th><th>Sınıf</th>
+        <th>HG/Mat</th><th>Renk</th><th>Fiyat</th>
+    </tr>
+
+    {% for item in cart %}
+    <tr>
+        <td>{{item[1]}}</td>
+        <td>{{item[2]}}</td>
+        <td>{{item[3]}}</td>
+        <td>{{item[4]}}</td>
+        <td>{{item[5]}}</td>
+        <td>{{item[6]}}</td>
+        <td>{{item[7]}}</td>
+    </tr>
+    {% endfor %}
+    </table>
+
+    <h2>Toplam: {{total}} TL</h2>
+
+    <form method="post" action="/satis_tamamla">
+        <button style="font-size:20px;">SATIŞ TAMAMLA</button>
+    </form>
+
+    <a href="/panel">Panele dön</a>
+    """, cart=cart, total=sum([x[7] for x in cart]))
+
+@app.route("/kasa_ekle", methods=["POST"])
+def kasa_ekle():
+    barcode = request.form["barcode"]
+
+    conn = sqlite3.connect("market.db")
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM products WHERE barcode=?", (barcode,))
+    urun = c.fetchone()
+
+    if urun:
+        cart.append(urun)
+
+        # stok düş
+        c.execute("UPDATE products SET stock = stock - 1 WHERE id=?", (urun[0],))
+        conn.commit()
+
+    conn.close()
+    return redirect("/kasa")
+
+@app.route("/satis_tamamla", methods=["POST"])
+def satis_tamamla():
+    global cart
+
+    toplam = sum([x[7] for x in cart])
+
+    conn = sqlite3.connect("market.db")
+    c = conn.cursor()
+
+    c.execute("INSERT INTO sales (total, date) VALUES (?, ?)",
+              (toplam, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+
+    conn.commit()
+    conn.close()
+
+    cart = []
+    return redirect("/kasa")
 
 app = Flask(__name__)
 app.secret_key = "secret"
