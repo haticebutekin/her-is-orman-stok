@@ -1,251 +1,245 @@
-from flask import Flask, render_template_string, request, redirect, url_for, send_file
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from datetime import datetime
-import uuid, os
-
-# Barkod + Kamera
-import cv2
-from pyzbar.pyzbar import decode
-
-# Barkod üretme
-import barcode
-from barcode.writer import ImageWriter
-
-# PDF
-from reportlab.pdfgen import canvas
+from flask import Flask, render_template_string, request, redirect, session, jsonify
+import sqlite3
+import datetime
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
-db = SQLAlchemy(app)
+app.secret_key = "secret123"
 
-login_manager = LoginManager(app)
-login_manager.login_view = "login"
+# ------------------ DATABASE ------------------
+def db():
+    return sqlite3.connect("market.db")
 
-# 🔐 KULLANICILAR
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True)
-    role = db.Column(db.String(20))
+def init_db():
+    conn = db()
+    c = conn.cursor()
 
-# 📦 ÜRÜN
-class Product(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100))
-    cins = db.Column(db.String(50))
-    ebat = db.Column(db.String(50))
-    mm = db.Column(db.String(10))
-    sinif = db.Column(db.String(20))
-    yuzey = db.Column(db.String(20))
-    renk = db.Column(db.String(50))
-    barcode = db.Column(db.String(100), unique=True)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        password TEXT
+    )
+    """)
 
-# 📊 STOK
-class Stock(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    product_id = db.Column(db.Integer)
-    depo = db.Column(db.String(100))
-    miktar = db.Column(db.Integer)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        barcode TEXT,
+        stock INTEGER,
+        price REAL,
+        type TEXT,
+        size TEXT,
+        class TEXT,
+        color TEXT
+    )
+    """)
 
-# 🧾 LOG
-class Log(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user = db.Column(db.String(50))
-    action = db.Column(db.String(200))
-    date = db.Column(db.DateTime, default=datetime.utcnow)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS sales (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        total REAL,
+        date TEXT
+    )
+    """)
 
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
+    # default user
+    c.execute("SELECT * FROM users")
+    if not c.fetchone():
+        c.execute("INSERT INTO users (username,password) VALUES ('admin','1234')")
 
-# 📍 DEPOLAR
-DEPOLAR = [
-"MDF SATIŞ DEPOSU",
-"LAMİNANT DEPOSU",
-"KAPI DEPOSU",
-"HGLOSS DEPOSU (MORAY YANI)",
-"SÜTÇÜ YANI",
-"HELVACI YANI",
-"RÖTBALANSÇI YANI",
-"KESİMHANE"
-]
+    conn.commit()
+    conn.close()
 
-# 👤 İLK KULLANICILAR
-@app.before_request
-def create_users():
-    if not User.query.first():
-        users = [
-            ("ramazan","depo"),
-            ("orhan","depo"),
-            ("behiç","depo"),
-            ("hatice","yonetici"),
-            ("ahmet","yonetici"),
-            ("berke","muhasebe"),
-            ("irem","muhasebe")
-        ]
-        for u,r in users:
-            db.session.add(User(username=u, role=r))
-        db.session.commit()
+init_db()
 
-# 🔐 LOGIN
+# ------------------ LOGIN ------------------
 @app.route("/", methods=["GET","POST"])
 def login():
-    if request.method=="POST":
-        u = User.query.filter_by(username=request.form["username"]).first()
-        if u:
-            login_user(u)
+    if request.method == "POST":
+        u = request.form["username"]
+        p = request.form["password"]
+
+        conn = db()
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p))
+        user = c.fetchone()
+        conn.close()
+
+        if user:
+            session["user"] = u
             return redirect("/panel")
+
     return render_template_string("""
     <h2>Giriş</h2>
     <form method="post">
-    Kullanıcı: <input name="username">
+    <input name="username" placeholder="Kullanıcı"><br>
+    <input name="password" type="password" placeholder="Şifre"><br>
     <button>Giriş</button>
     </form>
     """)
 
-# 🏠 PANEL
+# ------------------ PANEL ------------------
 @app.route("/panel")
-@login_required
 def panel():
-    products = Product.query.all()
-    stocks = Stock.query.all()
-    logs = Log.query.order_by(Log.date.desc()).limit(10)
+    if "user" not in session:
+        return redirect("/")
 
     return render_template_string("""
-    <h2>Hoşgeldin {{user.username}} ({{user.role}})</h2>
+    <h2>Panel</h2>
 
-    <a href="/urun">Ürün Ekle</a> |
-    <a href="/barkod_oku">Barkod Oku</a> |
-    <a href="/logout">Çıkış</a>
+    <a href="/urun">Ürün Ekle</a><br>
+    <a href="/satis">Satış</a><br>
+    <a href="/liste">Ürün Liste</a>
+    """)
 
-    <h3>Ürünler</h3>
-    {% for p in products %}
-        {{p.name}} - {{p.barcode}} 
-        <a href="/etiket/{{p.id}}">Etiket</a><br>
-    {% endfor %}
-
-    <h3>Stok</h3>
-    {% for s in stocks %}
-        Ürün {{s.product_id}} | {{s.depo}} | {{s.miktar}}
-        <a href="/dus/{{s.id}}">Düş</a><br>
-    {% endfor %}
-
-    <h3>Log</h3>
-    {% for l in logs %}
-        {{l.user}} - {{l.action}}<br>
-    {% endfor %}
-    """, user=current_user, products=products, stocks=stocks, logs=logs)
-
-# 📦 ÜRÜN EKLE
+# ------------------ ÜRÜN EKLE ------------------
 @app.route("/urun", methods=["GET","POST"])
-@login_required
 def urun():
-    if current_user.role=="depo":
-        return "Yetki yok"
-
-    if request.method=="POST":
-        code = str(uuid.uuid4())[:12]
-
-        p = Product(
-            name=request.form["name"],
-            cins=request.form["cins"],
-            ebat=request.form["ebat"],
-            mm=request.form["mm"],
-            sinif=request.form["sinif"],
-            yuzey=request.form["yuzey"],
-            renk=request.form["renk"],
-            barcode=code
+    if request.method == "POST":
+        data = (
+            request.form["name"],
+            request.form["barcode"],
+            request.form["stock"],
+            request.form["price"],
+            request.form["type"],
+            request.form["size"],
+            request.form["class"],
+            request.form["color"]
         )
-        db.session.add(p)
-        db.session.commit()
 
-        # barkod resmi
-        EAN = barcode.get_barcode_class('code128')
-        ean = EAN(code, writer=ImageWriter())
-        ean.save(f"static/{code}")
+        conn = db()
+        c = conn.cursor()
+        c.execute("""
+        INSERT INTO products 
+        (name,barcode,stock,price,type,size,class,color)
+        VALUES (?,?,?,?,?,?,?,?)
+        """, data)
 
-        db.session.add(Log(user=current_user.username, action=f"Ürün eklendi {code}"))
-        db.session.commit()
-
-        return redirect("/panel")
+        conn.commit()
+        conn.close()
 
     return render_template_string("""
     <h2>Ürün Ekle</h2>
+
     <form method="post">
-    Ad: <input name="name"><br>
-    Cins: <input name="cins"><br>
-    Ebat: <input name="ebat"><br>
-    mm: <input name="mm"><br>
-    Sınıf: <input name="sinif"><br>
-    Yüzey: <input name="yuzey"><br>
-    Renk: <input name="renk"><br>
+    İsim <input name="name"><br>
+    Barkod <input name="barcode" id="barcode"><br>
+    Stok <input name="stock"><br>
+    Fiyat <input name="price"><br>
+
+    Cins <input name="type"><br>
+    Ebat <input name="size"><br>
+    Sınıf <input name="class"><br>
+    Renk <input name="color"><br>
+
     <button>Kaydet</button>
     </form>
+
+    <br>
+    <button onclick="scan()">📷 Barkod Oku</button>
+
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <div id="reader" style="width:300px"></div>
+
+    <script>
+    function scan(){
+        const qr = new Html5Qrcode("reader");
+        qr.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: 250 },
+            (code) => {
+                document.getElementById("barcode").value = code;
+                qr.stop();
+            }
+        );
+    }
+    </script>
     """)
 
-# 📉 STOK DÜŞ
-@app.route("/dus/<int:id>")
-@login_required
-def dus(id):
-    s = Stock.query.get(id)
-    if s.miktar>0:
-        s.miktar -=1
+# ------------------ ÜRÜN LİSTE ------------------
+@app.route("/liste")
+def liste():
+    conn = db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM products")
+    data = c.fetchall()
+    conn.close()
 
-    db.session.add(Log(user=current_user.username, action="stok düşüldü"))
-    db.session.commit()
-    return redirect("/panel")
+    html = "<h2>Ürünler</h2>"
 
-# 📷 BARKOD OKUMA
-@app.route("/barkod_oku")
-@login_required
-def barkod_oku():
-    return "Sunucuda kamera çalışmaz (telefon versiyonunu)"
-    while True:
-        _, frame = cap.read()
-        for b in decode(frame):
-            code = b.data.decode("utf-8")
+    for d in data:
+        html += f"""
+        <div>
+        {d[1]} | {d[2]} | {d[3]} adet | {d[4]} TL
+        </div>
+        """
 
-            product = Product.query.filter_by(barcode=code).first()
-            if product:
-                db.session.add(Log(user=current_user.username, action=f"Barkod okutuldu {code}"))
-                db.session.commit()
+    return html
 
-                cap.release()
-                cv2.destroyAllWindows()
-                return f"Bulundu: {product.name}"
+# ------------------ SATIŞ ------------------
+@app.route("/satis")
+def satis():
+    return render_template_string("""
+    <h2>Satış</h2>
 
-        cv2.imshow("OKU", frame)
-        if cv2.waitKey(1)==27:
-            break
+    Barkod: <input id="b"><button onclick="ekle()">Ekle</button>
 
-    cap.release()
-    return "iptal"
+    <ul id="list"></ul>
+    <h3 id="toplam">0 TL</h3>
 
-# 🧾 ETİKET PDF
-@app.route("/etiket/<int:id>")
-@login_required
-def etiket(id):
-    p = Product.query.get(id)
-    file = f"{p.barcode}.pdf"
+    <button onclick="scan()">📷 Oku</button>
 
-    c = canvas.Canvas(file)
-    c.drawString(100,750,p.name)
-    c.drawString(100,730,p.barcode)
-    c.drawImage(f"static/{p.barcode}.png",100,600,200,100)
-    c.save()
+    <script src="https://unpkg.com/html5-qrcode"></script>
 
-    return send_file(file)
+    <script>
+    let toplam = 0;
 
-# 🚪 ÇIKIŞ
-@app.route("/logout")
-def logout():
-    logout_user()
-    return redirect("/")
+    function ekle(){
+        let b = document.getElementById("b").value;
 
-# 🚀 ÇALIŞTIR
+        fetch("/get/"+b)
+        .then(r=>r.json())
+        .then(d=>{
+            let li = document.createElement("li");
+            li.innerText = d.name + " - " + d.price;
+            document.getElementById("list").appendChild(li);
+
+            toplam += d.price;
+            document.getElementById("toplam").innerText = toplam + " TL";
+        });
+    }
+
+    function scan(){
+        const qr = new Html5Qrcode("reader");
+        qr.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: 250 },
+            (code) => {
+                document.getElementById("b").value = code;
+                ekle();
+                qr.stop();
+            }
+        );
+    }
+    </script>
+
+    <div id="reader" style="width:300px"></div>
+    """)
+
+# ------------------ API ------------------
+@app.route("/get/<barcode>")
+def get_product(barcode):
+    conn = db()
+    c = conn.cursor()
+    c.execute("SELECT name,price FROM products WHERE barcode=?", (barcode,))
+    p = c.fetchone()
+    conn.close()
+
+    if p:
+        return jsonify({"name":p[0],"price":p[1]})
+    return jsonify({"name":"YOK","price":0})
+
+# ------------------
 if __name__ == "__main__":
-    if not os.path.exists("static"):
-        os.mkdir("static")
-    db.create_all()
     app.run(debug=True)
