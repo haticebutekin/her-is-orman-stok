@@ -16,8 +16,9 @@ def init_db():
     c.execute("""
     CREATE TABLE IF NOT EXISTS products(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barcode TEXT,
         name TEXT,
-        type TEXT,
+        type of goods TEXT,
         size TEXT,
         quality TEXT,
         surface TEXT,
@@ -122,8 +123,9 @@ def ekle():
         c = db.cursor()
 
         c.execute("INSERT INTO products VALUES (NULL,?,?,?,?,?,?,?,?)", (
+             request.form["barcode"],
             request.form["name"],
-            request.form["type"],
+            request.form["type of goods"],
             request.form["size"],
             request.form["quality"],
             request.form["surface"],
@@ -142,7 +144,7 @@ def ekle():
     <h2>Ürün Ekle</h2>
     <form method="post">
         Ad: <input name="name"><br>
-        Tip: <input name="type"><br>
+        Tip: <input name="type of goods"><br>
         Ebat: <input name="size"><br>
         Kalite: <input name="quality"><br>
         Yüzey: <input name="surface"><br>
@@ -284,7 +286,43 @@ def loglar():
 
     html += "<br><a href='/panel'>Geri</a>"
 
+    Barkod: <input name="barcode"><br>
+
     return html
+
+for i in data:
+    html += f"{i[2]} | Barkod: {i[1]} | Stok: {i[8]}<br>"
+
+@app.route("/log_barkod")
+def log_barkod():
+    data = request.args.get("data")
+
+    db = get_db()
+    c = db.cursor()
+
+    # ürün bul
+    c.execute("SELECT * FROM products WHERE barcode=?", (data,))
+    product = c.fetchone()
+
+    if not product:
+        log_yaz(session["user"], f"Barkod okundu ama ürün yok: {data}")
+        return "ÜRÜN BULUNAMADI ❌"
+
+    # stok kontrol
+    stock = product[8]
+
+    if stock <= 0:
+        log_yaz(session["user"], f"Stok yok: {product[2]}")
+        return f"STOK YOK ❌ ({product[2]})"
+
+    # stok düş
+    new_stock = stock - 1
+    c.execute("UPDATE products SET stock=? WHERE id=?", (new_stock, product[0]))
+    db.commit()
+
+    log_yaz(session["user"], f"SATIŞ: {product[2]} | Kalan: {new_stock}")
+
+    return f"SATILDI ✅ {product[2]} | Kalan stok: {new_stock}"
 
 # ---------------- ÇIKIŞ ----------------
 @app.route("/logout")
