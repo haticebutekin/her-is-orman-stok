@@ -1,9 +1,2 @@
 flask
-flask_sqlalchemy
-flask_login
-pillow
-python-barcode
-reportlab
-opencv-python-headless
-pyzbar
 gunicorn
