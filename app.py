@@ -642,148 +642,26 @@ Yeni işlem
 @app.route("/etiket/<int:id>")
 def etiket(id):
 
-    con=db()
+    con = db()
 
     urun = con.execute("""
     SELECT * FROM products
     WHERE id=?
-    """,
-    (id,)).fetchone()
+    """, (id,)).fetchone()
 
     con.close()
 
-
     if not urun:
+        return "Ürün bulunamadı"
 
-        return "Ürün yok"
-
-
-
-    barkod=urun[7]
-
-
-    # QR
-
-    qr=qrcode.make(barkod)
-
-    qr.save(
-    f"qr_{barkod}.png"
-    )
-
-
-
-    # Barkod
-
-    code=barcode.get(
-        "code128",
-        barkod,
-        writer=ImageWriter()
-    )
-
-
-    barcode_file=code.save(
-    f"barcode_{barkod}"
-    )
-
-
-
-    # PDF
-
-    dosya=f"etiket_{barkod}.pdf"
-
-
-    pdf=canvas.Canvas(dosya)
-
-
-
-    pdf.setFont(
-    "Helvetica",
-    12
-    )
-
-
-    pdf.drawString(
-    50,750,
-    "HER IS STOK PRO"
-    )
-
-
-    pdf.drawString(
-    50,720,
-    "Urun: "+urun[1]
-    )
-
-
-    pdf.drawString(
-    50,700,
-    "Cins: "+urun[2]
-    )
-
-
-    pdf.drawString(
-    50,680,
-    "Ebat: "+urun[3]+" mm"
-    )
-
-
-    pdf.drawString(
-    50,660,
-    "Tip: "+urun[5]
-    )
-
-
-    pdf.drawString(
-    50,640,
-    "Renk: "+urun[6]
-    )
-
-
-    pdf.drawString(
-    50,620,
-    "Barkod: "+barkod
-    )
-
-
-    pdf.drawImage(
-    f"qr_{barkod}.png",
-    50,
-    430,
-    120,
-    120
-    )
-
-
-    pdf.drawImage(
-    barcode_file+".png",
-    200,
-    470,
-    250,
-    80
-    )
-
-
-    pdf.save()
-
-
-
- return f"""
-
-<html>
-<body>
-
-<h2>
-Etiket Hazir
-</h2>
-
-<a href="/indir/{dosya}">
-PDF Ac
-</a>
-
-</body>
-</html>
-
-"""
-
+    return f"""
+    <h2>Etiket</h2>
+    Ürün: {urun[1]}<br>
+    Barkod: {urun[7]}<br>
+    Ebat: {urun[3]} mm<br>
+    Tip: {urun[5]}
+    """
+    
 @app.route("/indir/<dosya>")
 def indir(dosya):
 
