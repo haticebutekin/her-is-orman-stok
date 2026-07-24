@@ -2,83 +2,81 @@ from flask import Flask, request, redirect, session
 import sqlite3
 import random
 from datetime import datetime
-import qrcode
-import barcode
-from barcode.writer import ImageWriter
-from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
-app.secret_key = "HER_IS_STOK_PRO"
+app.secret_key = "HER_IS_STOK_PRO_2026"
 
 
-# --------------------
+# =====================
 # DATABASE
-# --------------------
+# =====================
 
 def db():
     return sqlite3.connect("stok.db")
 
 
-def setup():
+def init():
 
-    con=db()
-    c=con.cursor()
+    con = db()
+    c = con.cursor()
 
     c.execute("""
     CREATE TABLE IF NOT EXISTS users(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT,
-    password TEXT,
-    role TEXT
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        password TEXT,
+        role TEXT
     )
     """)
 
+
     c.execute("""
     CREATE TABLE IF NOT EXISTS depots(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT
     )
     """)
 
 
     c.execute("""
     CREATE TABLE IF NOT EXISTS products(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    type TEXT,
-    size TEXT,
-    class_name TEXT,
-    surface TEXT,
-    color TEXT,
-    barcode TEXT UNIQUE,
-    stock INTEGER,
-    depot INTEGER
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        type TEXT,
+        size TEXT,
+        class_name TEXT,
+        surface TEXT,
+        color TEXT,
+        barcode TEXT UNIQUE,
+        stock INTEGER,
+        depot INTEGER
     )
     """)
 
 
     c.execute("""
     CREATE TABLE IF NOT EXISTS logs(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user TEXT,
-    action TEXT,
-    date TEXT
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        action TEXT,
+        date TEXT
     )
     """)
 
 
-    # kullanıcı
+    # kullanıcılar
 
-    if not c.execute("SELECT * FROM users").fetchone():
+    if c.execute("SELECT * FROM users").fetchone() is None:
 
         c.execute("""
-        INSERT INTO users
-        VALUES(NULL,'admin','1234','admin')
+        INSERT INTO users(username,password,role)
+        VALUES('admin','1234','admin')
         """)
 
+
         c.execute("""
-        INSERT INTO users
-        VALUES(NULL,'depocu','1234','depo')
+        INSERT INTO users(username,password,role)
+        VALUES('depocu','1234','depo')
         """)
 
 
@@ -86,24 +84,25 @@ def setup():
     # 8 depo
 
     depolar=[
-    "MDF SATIŞ DEPOSU",
-    "LAMİNANT DEPOSU",
-    "KAPI DEPOSU",
-    "HGLOSS DEPOSU (MORAY YANI)",
-    "SÜTÇÜ YANI",
-    "HELVACI YANI",
-    "RÖTBALANSÇI YANI",
-    "KESİMHANE"
+        "MDF SATIS DEPOSU",
+        "LAMINANT DEPOSU",
+        "KAPI DEPOSU",
+        "HGLOSS DEPOSU",
+        "SUTCUNUN YANI",
+        "HELVACI YANI",
+        "ROTBALANSCI YANI",
+        "KESIMHANE"
     ]
 
 
-    if not c.execute("SELECT * FROM depots").fetchone():
+    if c.execute("SELECT * FROM depots").fetchone() is None:
 
-        for d in depolar:
-            c.execute(
-            "INSERT INTO depots(name) VALUES(?)",
-            (d,)
-            )
+        for depo in depolar:
+
+            c.execute("""
+            INSERT INTO depots(name)
+            VALUES(?)
+            """,(depo,))
 
 
     con.commit()
@@ -111,32 +110,38 @@ def setup():
 
 
 
-setup()
+init()
 
 
 
-def barkod():
+# =====================
+# YARDIMCI
+# =====================
+
+
+def yeni_barkod():
 
     return str(
         random.randint(
-        100000000000,
-        999999999999)
+            100000000000,
+            999999999999
+        )
     )
 
 
 
-def log(islem):
+def logla(islem):
 
     con=db()
 
     con.execute("""
-    INSERT INTO logs
-    VALUES(NULL,?,?,?)
+    INSERT INTO logs(username,action,date)
+    VALUES(?,?,?)
     """,
     (
-    session.get("user"),
-    islem,
-    datetime.now()
+        session.get("user"),
+        islem,
+        datetime.now()
     ))
 
     con.commit()
@@ -144,140 +149,168 @@ def log(islem):
 
 
 
-# --------------------
+# =====================
 # LOGIN
-# --------------------
+# =====================
+
 
 @app.route("/",methods=["GET","POST"])
 def login():
 
+
     if request.method=="POST":
 
-        u=request.form["user"]
-        p=request.form["pass"]
+
+        kullanici=request.form["username"]
+        sifre=request.form["password"]
 
 
         con=db()
 
-        data=con.execute("""
+
+        user=con.execute("""
         SELECT * FROM users
         WHERE username=? AND password=?
         """,
-        (u,p)).fetchone()
+        (
+        kullanici,
+        sifre
+        )).fetchone()
+
 
         con.close()
 
 
-        if data:
 
-            session["user"]=u
-            session["role"]=data[3]
+        if user:
+
+            session["user"]=user[1]
+            session["role"]=user[3]
 
             return redirect("/panel")
 
 
+
     return """
+    <h1>HER IS STOK PRO</h1>
 
-    <h2>HER İŞ STOK PRO</h2>
+    <form method="post">
 
-    <form method=post>
+    Kullanici:
+    <input name="username"><br><br>
 
-    Kullanıcı:
-    <input name=user><br>
-
-    Şifre:
-    <input name=pass><br>
+    Sifre:
+    <input name="password"
+    type="password"><br><br>
 
     <button>
-    Giriş
+    GIRIS
     </button>
 
     </form>
-
     """
 
 
 
-# --------------------
+# =====================
 # PANEL
-# --------------------
+# =====================
+
 
 @app.route("/panel")
 def panel():
 
+    if "user" not in session:
+        return redirect("/")
+
+
     return """
+    <h1>HER IS STOK PRO</h1>
 
-    <h1>STOK PRO</h1>
+    <a href="/urun">Yeni Urun</a><br><br>
 
-    <a href="/urun">Ürün Ekle</a><br>
-    <a href="/liste">Ürünler</a><br>
-    <a href="/log">İşlemler</a>
-    <a href="/cikis">
-    <a href="/etiket/{p[0]}">
-🏷️ Etiket Bas
-</a>
-📷 Depo Çıkış
-</a>
+    <a href="/liste">Urunler</a><br><br>
+
+    <a href="/cikis">Depo Cikis</a><br><br>
+
+    <a href="/log">Kim Ne Yapti</a>
 
     """
 
 
 
-# --------------------
-# ÜRÜN EKLE
-# --------------------
+# =====================
+# URUN EKLE
+# =====================
+
 
 @app.route("/urun",methods=["GET","POST"])
 def urun():
 
+
     con=db()
 
-    depolar=con.execute(
-    "SELECT * FROM depots"
-    ).fetchall()
+
+    depolar=con.execute("""
+    SELECT * FROM depots
+    """).fetchall()
+
 
 
     if request.method=="POST":
 
 
-        kod=barkod()
+        barkod=yeni_barkod()
 
 
         con.execute("""
         INSERT INTO products
-        VALUES(NULL,?,?,?,?,?,?,?,?,?)
+        (
+        name,
+        type,
+        size,
+        class_name,
+        surface,
+        color,
+        barcode,
+        stock,
+        depot
+        )
+        VALUES(?,?,?,?,?,?,?,?,?)
         """,
         (
-
         request.form["name"],
         request.form["type"],
         request.form["size"],
-        request.form["class"],
+        request.form["class_name"],
         request.form["surface"],
         request.form["color"],
-        kod,
+        barkod,
         request.form["stock"],
         request.form["depot"]
-
         ))
 
 
         con.commit()
 
-        log(
-        "Yeni ürün eklendi Barkod:"+kod
+        con.close()
+
+
+        logla(
+        "Yeni urun eklendi "+barkod
         )
 
 
-        return "Kaydedildi Barkod:"+kod
+        return "Kaydedildi Barkod:"+barkod
 
 
 
-    sec=""
+    secenek=""
+
 
     for d in depolar:
 
-        sec+=f"""
+        secenek+=f"""
         <option value="{d[0]}">
         {d[1]}
         </option>
@@ -285,33 +318,36 @@ def urun():
 
 
 
+    con.close()
+
+
     return f"""
 
-<h2>Ürün Kartı</h2>
+<h2>URUN KARTI</h2>
 
 
-<form method=post>
+<form method="post">
 
 
-Mal adı:
-<input name=name><br>
+Mal Adi:
+<input name="name"><br>
 
 
-Cins:
-<input name=type><br>
+Mal Cinsi:
+<input name="type"><br>
 
 
 Ebat mm:
-<input name=size><br>
+<input name="size"><br>
 
 
-Sınıf:
-<input name=class><br>
+Sinifi:
+<input name="class_name"><br>
 
 
 HG / MAT:
 
-<select name=surface>
+<select name="surface">
 
 <option>HG</option>
 
@@ -319,17 +355,20 @@ HG / MAT:
 
 </select>
 
+
 <br>
 
 
 Renk:
-<input name=color>
+
+<input name="color">
 
 <br>
 
 
 Adet:
-<input name=stock>
+
+<input name="stock">
 
 
 <br>
@@ -337,245 +376,143 @@ Adet:
 
 Depo:
 
-<select name=depot>
+<select name="depot">
 
-{sec}
+{secenek}
 
 </select>
 
 
-<br>
+<br><br>
 
 
 <button>
-Kaydet
+KAYDET
 </button>
 
 
 </form>
 
-
 """
-
-
-
-# --------------------
-# LİSTE
-# --------------------
+# =====================
+# URUN LISTE
+# =====================
 
 @app.route("/liste")
 def liste():
 
     con=db()
 
-    data=con.execute(
-    "SELECT * FROM products"
-    ).fetchall()
+    urunler=con.execute("""
+    SELECT * FROM products
+    """).fetchall()
+
+    con.close()
 
 
-    html="<h2>Ürünler</h2>"
+    sayfa="""
+
+<h2>URUN LISTESI</h2>
+
+"""
 
 
-    for p in data:
+    for u in urunler:
 
-        html+=f"""
+        sayfa+=f"""
 
-        {p[1]}
-        |
-        {p[7]}
-        |
-        {p[5]}
-        |
-        {p[8]}
-        adet
+<hr>
 
-        <hr>
+<b>Mal:</b> {u[1]}<br>
 
-        """
+Cins:
+{u[2]}<br>
 
+Ebat:
+{u[3]} mm<br>
 
-    return html
+Sinif:
+{u[4]}<br>
 
+Yuzey:
+{u[5]}<br>
 
+Renk:
+{u[6]}<br>
 
+Barkod:
+{u[7]}<br>
 
-@app.route("/log")
-def logs():
+Stok:
+{u[8]}
 
-    con=db()
+<br>
 
-    data=con.execute(
-    "SELECT * FROM logs"
-    ).fetchall()
+<a href="/etiket/{u[0]}">
+Etiket
+</a>
 
-
-    html="<h2>Kim Ne Yaptı</h2>"
-
-
-    for x in data:
-
-        html+=f"""
-        {x[1]}
-        -
-        {x[2]}
-        -
-        {x[3]}
-        <br>
-        """
+"""
 
 
-    return html
+    return sayfa
 
 
 
 
-if __name__=="__main__":
-
-    app.run(
-    host="0.0.0.0",
-    port=10000
-    )
-
-# =========================
-# DEPO BARKOD ÇIKIŞ
-# =========================
+# =====================
+# DEPO CIKIS
+# =====================
 
 
 @app.route("/cikis")
 def cikis():
 
-    if "user" not in session:
-        return redirect("/")
-
     return """
 
-    <h2>📦 Depo Çıkış</h2>
-
-    <form method="post" action="/cikis_barkod">
-
-    Barkod okut:
-
-    <input name="barcode"
-    autofocus>
-
-    <button>
-    Bul
-    </button>
-
-    </form>
-
-    """
-
-
-
-@app.route("/cikis_barkod", methods=["POST"])
-def cikis_barkod():
-
-    barcode=request.form["barcode"]
-
-
-    con=db()
-
-    urun=con.execute("""
-    SELECT * FROM products
-    WHERE barcode=?
-    """,
-    (barcode,)).fetchone()
-
-
-    con.close()
-
-
-    if not urun:
-
-        return """
-        <h2>
-        ❌ Ürün bulunamadı
-        </h2>
-        <a href="/cikis">
-        Tekrar
-        </a>
-        """
-
-
-
-    return f"""
-
-<h2>Ürün Bulundu</h2>
-
-
-Ürün:
-{urun[1]}
-
-<br>
-
-Cins:
-{urun[2]}
-
-<br>
-
-Ebat:
-{urun[3]} mm
-
-<br>
-
-Sınıf:
-{urun[4]}
-
-<br>
-
-Tip:
-{urun[5]}
-
-<br>
-
-Renk:
-{urun[6]}
-
-<br>
-
-Mevcut Stok:
-{urun[8]}
-
-
-<hr>
+<h2>DEPO CIKIS</h2>
 
 
 <form method="post"
-action="/stok_dus">
+action="/cikis">
 
 
-<input type="hidden"
-name="id"
-value="{urun[0]}">
+Barkod:
+
+<input name="barcode"
+autofocus>
 
 
-Kaç adet?
+<br><br>
+
+Adet:
 
 <input name="adet">
 
 
+<br><br>
+
+
 <button>
-Çıkış Yap
+CIKIS YAP
 </button>
 
 
 </form>
 
-
 """
 
 
 
+@app.route("/cikis",methods=["POST"])
+def cikis_yap():
 
 
-@app.route("/stok_dus", methods=["POST"])
-def stok_dus():
+    barkod=request.form["barcode"]
 
-
-    id=request.form["id"]
-    adet=int(request.form["adet"])
-
+    adet=int(
+    request.form["adet"]
+    )
 
 
     con=db()
@@ -583,9 +520,18 @@ def stok_dus():
 
     urun=con.execute("""
     SELECT * FROM products
-    WHERE id=?
+    WHERE barcode=?
     """,
-    (id,)).fetchone()
+    (barkod,)
+    ).fetchone()
+
+
+
+    if urun is None:
+
+        con.close()
+
+        return "Urun bulunamadi"
 
 
 
@@ -593,11 +539,7 @@ def stok_dus():
 
         con.close()
 
-        return """
-
-        ❌ Yetersiz stok
-
-        """
+        return "Yetersiz stok"
 
 
 
@@ -609,17 +551,21 @@ def stok_dus():
     WHERE id=?
 
     """,
-    (adet,id))
+    (
+    adet,
+    urun[0]
+    ))
 
 
 
     con.commit()
+
     con.close()
 
 
 
-    log(
-    f"{urun[1]} ürününden {adet} adet çıkış yaptı"
+    logla(
+    f"{urun[1]} {adet} adet cikis"
     )
 
 
@@ -627,54 +573,150 @@ def stok_dus():
     return """
 
 <h2>
-✅ Çıkış tamamlandı
+CIKIS TAMAMLANDI
 </h2>
 
+<a href="/panel">
+Panel
+</a>
 
-<a href="/cikis">
-Yeni işlem
+"""
 
-# =========================
-# ETİKET OLUŞTURMA
-# =========================
+
+
+
+
+# =====================
+# LOG
+# =====================
+
+
+@app.route("/log")
+def log_ekran():
+
+    con=db()
+
+    kayit=con.execute("""
+    SELECT * FROM logs
+    ORDER BY id DESC
+    """).fetchall()
+
+
+    con.close()
+
+
+    html="""
+
+<h2>KIM NE YAPTI</h2>
+
+"""
+
+
+    for k in kayit:
+
+        html+=f"""
+
+<p>
+
+Kullanici:
+{k[1]}
+
+<br>
+
+Islem:
+{k[2]}
+
+<br>
+
+Tarih:
+{k[3]}
+
+</p>
+
+<hr>
+
+"""
+
+
+    return html
+
+
+
+
+# =====================
+# ETIKET
+# =====================
 
 
 @app.route("/etiket/<int:id>")
 def etiket(id):
 
-    con = db()
+    con=db()
 
-    urun = con.execute(
-        """
-        SELECT * FROM products
-        WHERE id=?
-        """,
-        (id,)
+
+    urun=con.execute("""
+    SELECT * FROM products
+    WHERE id=?
+    """,
+    (id,)
     ).fetchone()
+
 
     con.close()
 
+
     if urun is None:
-        return "Ürün bulunamadı"
+
+        return "Urun yok"
+
+
 
     return f"""
-    <h2>Etiket Bilgisi</h2>
-    Ürün: {urun[1]}<br>
-    Barkod: {urun[7]}<br>
-    Ebat: {urun[3]}<br>
-    Tip: {urun[5]}
-    """
-    
-@app.route("/indir/<dosya>")
-def indir(dosya):
 
-    return send_file(
-        dosya,
-        as_attachment=True
-    )
+<h2>ETIKET BILGISI</h2>
 
-    
 
-</a>
+Mal:
+{urun[1]}
+
+<br>
+
+Ebat:
+{urun[3]} mm
+
+<br>
+
+HG/MAT:
+{urun[5]}
+
+<br>
+
+Renk:
+{urun[6]}
+
+<br>
+
+BARKOD:
+
+<h3>
+{urun[7]}
+</h3>
+
 
 """
+
+
+
+
+
+# =====================
+# CALISTIRMA
+# =====================
+
+
+if __name__=="__main__":
+
+    app.run(
+    host="0.0.0.0",
+    port=10000
+    )
