@@ -22,6 +22,7 @@ def init_db():
     con = db()
     c = con.cursor()
 
+    
 
     c.execute("""
     CREATE TABLE IF NOT EXISTS users(
@@ -56,6 +57,18 @@ def init_db():
     )
     """)
 
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS stock_moves(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        action TEXT,
+        product_id INTEGER,
+        product_name TEXT,
+        depot TEXT,
+        quantity INTEGER,
+        date TEXT
+    )
+    """)
 
     c.execute("""
     CREATE TABLE IF NOT EXISTS logs(
@@ -172,6 +185,37 @@ def log(islem):
 # =====================
 
 @app.route("/",methods=["GET","POST"])
+
+def stok_log(product_id, name, depot, adet, action):
+
+    con=db()
+
+    con.execute("""
+    INSERT INTO stock_moves
+    (
+    username,
+    action,
+    product_id,
+    product_name,
+    depot,
+    quantity,
+    date
+    )
+    VALUES(?,?,?,?,?,?,?)
+    """,
+    (
+    session.get("user"),
+    action,
+    product_id,
+    name,
+    depot,
+    adet,
+    datetime.now().strftime("%d.%m.%Y %H:%M")
+    ))
+
+    con.commit()
+    con.close()
+    
 def login():
 
 
@@ -640,10 +684,13 @@ def cikis():
 
 
 
-        log(
-        f"{urun[1]} {adet} adet çıkış"
-        )
-
+       stok_log(
+       urun[0],
+       urun[1],
+       urun[9],
+       adet,
+       "DEPO ÇIKIŞ"
+       )
 
         return """
 
