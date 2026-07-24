@@ -2,6 +2,10 @@ from flask import Flask, request, redirect, session
 import sqlite3
 import random
 from datetime import datetime
+import qrcode
+import barcode
+from barcode.writer import ImageWriter
+from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
 app.secret_key = "HER_IS_STOK_PRO"
@@ -209,6 +213,9 @@ def panel():
     <a href="/liste">Ürünler</a><br>
     <a href="/log">İşlemler</a>
     <a href="/cikis">
+    <a href="/etiket/{p[0]}">
+🏷️ Etiket Bas
+</a>
 📷 Depo Çıkış
 </a>
 
@@ -626,6 +633,160 @@ def stok_dus():
 
 <a href="/cikis">
 Yeni işlem
+
+# =========================
+# ETİKET OLUŞTURMA
+# =========================
+
+
+@app.route("/etiket/<int:id>")
+def etiket(id):
+
+    con=db()
+
+    urun=con.execute("""
+    SELECT * FROM products
+    WHERE id=?
+    """,
+    (id,)).fetchone()
+
+    con.close()
+
+
+    if not urun:
+
+        return "Ürün yok"
+
+
+
+    barkod=urun[7]
+
+
+    # QR
+
+    qr=qrcode.make(barkod)
+
+    qr.save(
+    f"qr_{barkod}.png"
+    )
+
+
+
+    # Barkod
+
+    code=barcode.get(
+        "code128",
+        barkod,
+        writer=ImageWriter()
+    )
+
+
+    barcode_file=code.save(
+    f"barcode_{barkod}"
+    )
+
+
+
+    # PDF
+
+    dosya=f"etiket_{barkod}.pdf"
+
+
+    pdf=canvas.Canvas(dosya)
+
+
+
+    pdf.setFont(
+    "Helvetica",
+    12
+    )
+
+
+    pdf.drawString(
+    50,750,
+    "HER IS STOK PRO"
+    )
+
+
+    pdf.drawString(
+    50,720,
+    "Urun: "+urun[1]
+    )
+
+
+    pdf.drawString(
+    50,700,
+    "Cins: "+urun[2]
+    )
+
+
+    pdf.drawString(
+    50,680,
+    "Ebat: "+urun[3]+" mm"
+    )
+
+
+    pdf.drawString(
+    50,660,
+    "Tip: "+urun[5]
+    )
+
+
+    pdf.drawString(
+    50,640,
+    "Renk: "+urun[6]
+    )
+
+
+    pdf.drawString(
+    50,620,
+    "Barkod: "+barkod
+    )
+
+
+    pdf.drawImage(
+    f"qr_{barkod}.png",
+    50,
+    430,
+    120,
+    120
+    )
+
+
+    pdf.drawImage(
+    barcode_file+".png",
+    200,
+    470,
+    250,
+    80
+    )
+
+
+    pdf.save()
+
+
+
+    return f"""
+
+<h2>
+✅ Etiket Hazır
+</h2>
+
+<a href="/indir/{dosya}">
+PDF Aç
+</a>
+
+"""
+
+@app.route("/indir/<dosya>")
+def indir(dosya):
+
+    return send_file(
+        dosya,
+        as_attachment=True
+    )
+
+    
 
 </a>
 
