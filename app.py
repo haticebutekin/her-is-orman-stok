@@ -1,244 +1,116 @@
-from flask import Flask, request, jsonify, render_template_string
-import time
+from flask import Flask, render_template_string, request, send_file
+import io
+from reportlab.pdfgen import canvas
+import barcode
+from barcode.writer import ImageWriter
 
 app = Flask(__name__)
-
-urunler = []
-hareket = []
 
 HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>DEPO PRO</title>
-
-<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-
-<style>
-body { font-family: Arial; padding:20px; }
-input, select { margin:5px; padding:6px; }
-button { padding:6px 12px; }
-.kart { border:1px solid #ccc; padding:10px; margin-top:10px; }
-</style>
+    <title>MDF Kesim + Barkod</title>
 </head>
+<body style="font-family: Arial; padding:20px;">
 
-<body>
+<h2>MDF Kesim Sistemi</h2>
 
-<h2>🔐 Giriş</h2>
-<select id="rol">
-<option>Yönetici</option>
-<option>Depocu</option>
-</select>
-<input id="kullanici" placeholder="İsim">
-<button onclick="giris()">GİRİŞ</button>
+<form method="POST">
+    <label>Ürün Adı:</label><br>
+    <input type="text" name="urun" required><br><br>
 
-<hr>
+    <label>En (mm):</label><br>
+    <input type="number" name="en" required><br><br>
 
-<div id="panel" style="display:none;">
+    <label>Boy (mm):</label><br>
+    <input type="number" name="boy" required><br><br>
 
-<h2>📦 Ürün Ekle</h2>
+    <label>Adet:</label><br>
+    <input type="number" name="adet" required><br><br>
 
-<input id="ad" placeholder="Mal adı">
-<input id="ebat" placeholder="Ebat mm">
-<input id="adet" type="number" placeholder="Adet">
+    <label>MDF Kalınlık (mm):</label><br>
+    <input type="number" name="kalinlik" required><br><br>
 
-<select id="depo">
-<option>MDF SATIŞ DEPOSU</option>
-<option>LAMİNANT DEPOSU</option>
-<option>KAPI DEPOSU</option>
-<option>HGLOSS DEPOSU</option>
-<option>SÜTÇÜ YANI</option>
-<option>HELVACI YANI</option>
-<option>RÖTBALANSÇI YANI</option>
-<option>KESİMHANE</option>
-</select>
+    <button type="submit">Oluştur</button>
+</form>
 
-<button onclick="urunEkle()">EKLE</button>
+{% if barkod %}
+    <h3>Sonuç:</h3>
+    <p><b>Ürün:</b> {{urun}}</p>
+    <p><b>Ölçü:</b> {{en}} x {{boy}} mm</p>
+    <p><b>Adet:</b> {{adet}}</p>
+    <p><b>Kalınlık:</b> {{kalinlik}} mm</p>
 
-<hr>
+    <img src="/barkod" alt="barkod"><br><br>
 
-<h2>🚚 Çıkış</h2>
-<input id="barkod" placeholder="Barkod">
-<input id="cikisAdet" type="number" placeholder="Adet">
-<button onclick="cikis()">ÇIKIŞ</button>
-
-<hr>
-
-<h2>📋 Ürünler</h2>
-<div id="liste"></div>
-
-<hr>
-
-<h2>📊 Hareket</h2>
-<div id="log"></div>
-
-</div>
-
-<script>
-
-let rol = ""
-let kullanici = ""
-
-function giris(){
-rol = document.getElementById("rol").value
-kullanici = document.getElementById("kullanici").value
-
-if(!kullanici) return alert("isim gir")
-
-document.getElementById("panel").style.display="block"
-listele()
-}
-
-function urunEkle(){
-
-if(rol !== "Yönetici") return alert("yetki yok")
-
-fetch("/ekle", {
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body: JSON.stringify({
-ad: ad.value,
-ebat: ebat.value,
-adet: adet.value,
-depo: depo.value,
-kullanici: kullanici
-})
-}).then(r=>r.json()).then(()=>{
-listele()
-})
-}
-
-function listele(){
-fetch("/urunler")
-.then(r=>r.json())
-.then(data=>{
-let alan = document.getElementById("liste")
-alan.innerHTML=""
-
-data.forEach(u=>{
-let div = document.createElement("div")
-div.className="kart"
-
-div.innerHTML = `
-<b>${u.ad}</b><br>
-Ebat: ${u.ebat} mm<br>
-Adet: ${u.adet}<br>
-Depo: ${u.depo}<br>
-Barkod: ${u.barkod}<br>
-<canvas id="qr-${u.barkod}"></canvas>
-`
-
-alan.appendChild(div)
-
-QRCode.toCanvas(document.getElementById("qr-"+u.barkod), u.barkod)
-
-})
-})
-
-fetch("/hareket")
-.then(r=>r.json())
-.then(data=>{
-let log = document.getElementById("log")
-log.innerHTML=""
-
-data.slice().reverse().forEach(h=>{
-log.innerHTML += `${h.saat} | ${h.kisi} | ${h.islem} | ${h.urun} (${h.adet})<br>`
-})
-})
-}
-
-function cikis(){
-
-if(rol !== "Depocu") return alert("yetki yok")
-
-fetch("/cikis", {
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body: JSON.stringify({
-barkod: barkod.value,
-adet: parseInt(cikisAdet.value),
-kullanici: kullanici
-})
-}).then(r=>r.json()).then(res=>{
-alert(res.mesaj || res.hata)
-listele()
-})
-}
-
-</script>
+    <a href="/pdf">PDF İndir</a>
+{% endif %}
 
 </body>
 </html>
 """
 
+data_store = {}
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    global data_store
+
+    if request.method == "POST":
+        urun = request.form["urun"]
+        en = request.form["en"]
+        boy = request.form["boy"]
+        adet = request.form["adet"]
+        kalinlik = request.form["kalinlik"]
+
+        barkod_data = f"{urun}-{en}x{boy}-{kalinlik}mm"
+
+        data_store = {
+            "urun": urun,
+            "en": en,
+            "boy": boy,
+            "adet": adet,
+            "kalinlik": kalinlik,
+            "barkod": barkod_data
+        }
+
+        return render_template_string(HTML, barkod=True, **data_store)
+
+    return render_template_string(HTML, barkod=False)
+
+
+@app.route("/barkod")
 def barkod():
-    return "B" + str(int(time.time()*1000))
+    global data_store
+
+    CODE128 = barcode.get_barcode_class('code128')
+    rv = io.BytesIO()
+    code = CODE128(data_store["barkod"], writer=ImageWriter())
+    code.write(rv)
+    rv.seek(0)
+
+    return send_file(rv, mimetype='image/png')
 
 
-@app.route("/")
-def home():
-    return render_template_string(HTML)
+@app.route("/pdf")
+def pdf():
+    global data_store
 
+    buffer = io.BytesIO()
+    p = canvas.Canvas(buffer)
 
-@app.route("/ekle", methods=["POST"])
-def ekle():
-    data = request.json
+    p.drawString(100, 800, f"Ürün: {data_store['urun']}")
+    p.drawString(100, 780, f"Ölçü: {data_store['en']} x {data_store['boy']} mm")
+    p.drawString(100, 760, f"Adet: {data_store['adet']}")
+    p.drawString(100, 740, f"Kalınlık: {data_store['kalinlik']} mm")
 
-    u = {
-        "ad": data["ad"],
-        "ebat": data["ebat"],
-        "adet": int(data["adet"]),
-        "depo": data["depo"],
-        "barkod": barkod()
-    }
+    p.drawString(100, 700, f"Barkod: {data_store['barkod']}")
 
-    urunler.append(u)
+    p.save()
 
-    hareket.append({
-        "kisi": data["kullanici"],
-        "islem": "Ürün eklendi",
-        "urun": u["ad"],
-        "adet": u["adet"],
-        "saat": time.strftime("%H:%M:%S")
-    })
-
-    return jsonify({"ok":True})
-
-
-@app.route("/urunler")
-def urunler_get():
-    return jsonify(urunler)
-
-
-@app.route("/cikis", methods=["POST"])
-def cikis():
-    data = request.json
-
-    for u in urunler:
-        if u["barkod"] == data["barkod"]:
-
-            if u["adet"] < data["adet"]:
-                return {"hata":"stok yok"}
-
-            u["adet"] -= data["adet"]
-
-            hareket.append({
-                "kisi": data["kullanici"],
-                "islem": "Çıkış",
-                "urun": u["ad"],
-                "adet": data["adet"],
-                "saat": time.strftime("%H:%M:%S")
-            })
-
-            return {"mesaj":"çıkış yapıldı"}
-
-    return {"hata":"ürün yok"}
-
-
-@app.route("/hareket")
-def hareket_get():
-    return jsonify(hareket)
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, download_name="kesim.pdf", mimetype='application/pdf')
 
 
 if __name__ == "__main__":
