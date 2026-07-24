@@ -1,6 +1,7 @@
 from flask import Flask, request, redirect, session
 import sqlite3
 import random
+import json
 from datetime import datetime
 
 app = Flask(__name__)
@@ -576,13 +577,15 @@ def cikis_yap():
 CIKIS TAMAMLANDI
 </h2>
 
+<a href="/kamera">
+📷 Kamera Barkod
+</a>
+    
 <a href="/panel">
 Panel
 </a>
 
 """
-
-
 
 
 
@@ -712,6 +715,175 @@ BARKOD:
 # =====================
 # CALISTIRMA
 # =====================
+
+# =====================
+# KAMERA BARKOD OKUMA
+# =====================
+
+@app.route("/kamera")
+def kamera():
+
+    return """
+
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+</head>
+
+
+<body>
+
+<h2>
+Kamera Barkod Okuma
+</h2>
+
+
+<div id="reader"
+style="width:300px">
+</div>
+
+
+<script>
+
+
+function barkod_okundu(code)
+{
+
+window.location.href =
+"/barkod_bul/" + code;
+
+}
+
+
+
+let scanner =
+new Html5QrcodeScanner(
+"reader",
+{
+fps:10,
+qrbox:250
+}
+);
+
+
+
+scanner.render(
+barkod_okundu
+);
+
+
+</script>
+
+
+</body>
+
+</html>
+
+"""
+
+
+
+
+
+@app.route("/barkod_bul/<kod>")
+def barkod_bul(kod):
+
+
+    con=db()
+
+
+    urun=con.execute("""
+    SELECT * FROM products
+    WHERE barcode=?
+    """,
+    (kod,)
+    ).fetchone()
+
+
+    con.close()
+
+
+
+    if urun is None:
+
+        return """
+
+        <h2>
+        URUN BULUNAMADI
+        </h2>
+
+        """
+
+
+
+    return f"""
+
+<h2>
+URUN BULUNDU
+</h2>
+
+
+Mal:
+
+{urun[1]}
+
+<br><br>
+
+
+Cins:
+
+{urun[2]}
+
+<br>
+
+
+Ebat:
+
+{urun[3]} mm
+
+<br>
+
+
+HG/MAT:
+
+{urun[5]}
+
+<br>
+
+
+Renk:
+
+{urun[6]}
+
+<br>
+
+
+Depo:
+
+{urun[9]}
+
+<br>
+
+
+Stok:
+
+{urun[8]}
+
+
+<hr>
+
+
+<a href="/cikis">
+
+CIKIS EKRANI
+
+</a>
+
+"""
 
 
 if __name__=="__main__":
