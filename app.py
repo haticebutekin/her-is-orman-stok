@@ -1,226 +1,212 @@
-from flask import Flask, render_template_string, request, redirect, session
-import sqlite3, datetime
+from flask import Flask, request, redirect, session, render_template_string
+import sqlite3
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
-cart = []
+# ---------------- DATABASE ----------------
+def get_db():
+    return sqlite3.connect("market.db")
 
 def init_db():
-    conn = sqlite3.connect("market.db")
-    c = conn.cursor()
+    db = get_db()
+    c = db.cursor()
 
-    c.execute("""CREATE TABLE IF NOT EXISTS products (
+    # USERS (ROL SİSTEMİ)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE,
+        password TEXT,
+        role TEXT
+    )
+    """)
+
+    # PRODUCTS (FULL DETAY)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         type TEXT,
-        size TEXT,
-        class TEXT,
-        hg TEXT,
+        size INTEGER,
+        quality TEXT,
+        surface TEXT,
         color TEXT,
         stock INTEGER,
-        price REAL,
-        barcode TEXT,
-        depo TEXT
-    )""")
+        depot TEXT
+    )
+    """)
 
-    c.execute("""CREATE TABLE IF NOT EXISTS sales (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        total REAL,
-        date TEXT
-    )""")
-
-    c.execute("""CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        password TEXT
-    )""")
-
+    # DEFAULT USERS
     c.execute("SELECT * FROM users")
     if not c.fetchall():
-        c.execute("INSERT INTO users VALUES (NULL,'admin','1234')")
+        c.execute("INSERT INTO users VALUES (NULL,'admin','1234','admin')")
+        c.execute("INSERT INTO users VALUES (NULL,'personel','1234','staff')")
 
-    conn.commit()
-    conn.close()
+    db.commit()
+    db.close()
 
 init_db()
 
-# LOGIN
+# ---------------- LOGIN ----------------
 @app.route("/", methods=["GET","POST"])
 def login():
     if request.method == "POST":
         u = request.form["username"]
         p = request.form["password"]
 
-        conn = sqlite3.connect("market.db")
-        c = conn.cursor()
+        db = get_db()
+        c = db.cursor()
         c.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p))
-        if c.fetchone():
-            session["user"] = u
+        user = c.fetchone()
+
+        if user:
+            session["user"] = user[1]
+            session["role"] = user[3]
             return redirect("/panel")
-        conn.close()
-
-    return """
-    <style>
-    body{background:#0f172a;color:white;text-align:center;font-family:sans-serif}
-    input,button{padding:10px;margin:5px;border-radius:8px;border:none}
-    button{background:#22c55e;color:white}
-    </style>
-    <h1>🔐 GİRİŞ</h1>
-    <form method="post">
-    <input name="username" placeholder="Kullanıcı"><br>
-    <input name="password" placeholder="Şifre"><br>
-    <button>GİRİŞ</button>
-    </form>
-    """
-
-# PANEL
-@app.route("/panel")
-def panel():
-    return """
-    <h1>📊 PANEL</h1>
-    <a href="/urun">Ürün Ekle</a><br>
-    <a href="/liste">Liste</a><br>
-    <a href="/kasa">Kasa</a>
-    """
-
-# ÜRÜN EKLE
-@app.route("/urun", methods=["GET","POST"])
-def urun():
-    if request.method == "POST":
-        data = tuple(request.form.values())
-
-        conn = sqlite3.connect("market.db")
-        c = conn.cursor()
-        c.execute("""INSERT INTO products
-        (name,type,size,class,hg,color,stock,price,barcode,depo)
-        VALUES (?,?,?,?,?,?,?,?,?,?)""", data)
-        conn.commit()
-        conn.close()
-
-    return """
-    <h2>Ürün</h2>
-    <form method="post">
-    Ad<input name="name"><br>
-    Cins<input name="type"><br>
-    Ebat<input name="size"><br>
-    Sınıf<input name="class"><br>
-    HG/Mat<input name="hg"><br>
-    Renk<input name="color"><br>
-    Stok<input name="stock"><br>
-    Fiyat<input name="price"><br>
-    Barkod<input name="barcode"><br>
-    <select name="depo">
-    <option>MDF SATIŞ DEPOSU</option>
-    <option>LAMİNANT DEPOSU</option>
-    <option>KAPI DEPOSU</option>
-    <option>HGLOSS DEPOSU (MORAY YANI)</option>
-    <option>SÜTÇÜ YANI</option>
-    <option>HELVACI YANI</option>
-    <option>RÖTBALANSÇI YANI</option>
-    <option>KESİMHANE</option>
-    </select><br>
-    <button>KAYDET</button>
-    </form>
-    """
-
-# LİSTE
-@app.route("/liste")
-def liste():
-    conn = sqlite3.connect("market.db")
-    c = conn.cursor()
-    c.execute("SELECT * FROM products")
-    data = c.fetchall()
-    conn.close()
-
-    html = "<h2>Ürünler</h2><table border=1>"
-    for x in data:
-        html += f"<tr><td>{x}</td></tr>"
-    html += "</table>"
-    return html
-
-# 🛒 PRO KASA
-@app.route("/kasa")
-def kasa():
-    total = sum([x[8] for x in cart]) if cart else 0
 
     return render_template_string("""
-    <style>
-    body{margin:0;font-family:sans-serif;background:#111;color:white}
-    .container{display:flex}
-    .left{width:70%;padding:20px}
-    .right{width:30%;background:#1f2937;padding:20px}
-    input{width:100%;padding:15px;font-size:20px;border-radius:10px;border:none}
-    table{width:100%;margin-top:10px}
-    td{padding:10px;border-bottom:1px solid gray}
-    .total{font-size:30px;color:#22c55e}
-    button{width:100%;padding:15px;margin-top:10px;border:none;border-radius:10px;background:#22c55e;color:white;font-size:20px}
-    </style>
+    <h2>Giriş</h2>
+    <form method="post">
+        Kullanıcı: <input name="username"><br>
+        Şifre: <input name="password"><br>
+        <button>Giriş</button>
+    </form>
+    """)
 
-    <div class="container">
-        <div class="left">
-            <h1>🛒 KASA</h1>
-            <form method="post" action="/kasa_ekle">
-                <input name="barcode" placeholder="Barkod okut..." autofocus>
-            </form>
+# ---------------- PANEL ----------------
+@app.route("/panel")
+def panel():
+    if "user" not in session:
+        return redirect("/")
 
-            <table>
-            {% for x in cart %}
-                <tr>
-                    <td>{{x[1]}}</td>
-                    <td>{{x[2]}}</td>
-                    <td>{{x[3]}}</td>
-                    <td>{{x[6]}}</td>
-                    <td>{{x[8]}} TL</td>
-                </tr>
-            {% endfor %}
-            </table>
-        </div>
+    return render_template_string("""
+    <h1>Hoşgeldin {{user}}</h1>
+    <p>Rol: {{role}}</p>
 
-        <div class="right">
-            <h2>Toplam</h2>
-            <div class="total">{{total}} TL</div>
+    <a href="/urunler">Ürünler</a><br>
+    <a href="/ekle">Ürün Ekle</a><br>
 
-            <form method="post" action="/satis">
-                <button>✔ SATIŞ TAMAMLA</button>
-            </form>
-        </div>
-    </div>
-    """, cart=cart, total=total)
+    {% if role == "admin" %}
+        <a href="/kullanicilar">Kullanıcı Yönetimi</a><br>
+    {% endif %}
 
-# EKLE
-@app.route("/kasa_ekle", methods=["POST"])
-def kasa_ekle():
-    barcode = request.form["barcode"]
+    <a href="/logout">Çıkış</a>
+    """, user=session["user"], role=session["role"])
 
-    conn = sqlite3.connect("market.db")
-    c = conn.cursor()
-    c.execute("SELECT * FROM products WHERE barcode=?", (barcode,))
-    urun = c.fetchone()
+# ---------------- ÜRÜN LİSTE ----------------
+@app.route("/urunler")
+def urunler():
+    db = get_db()
+    c = db.cursor()
+    c.execute("SELECT * FROM products")
+    data = c.fetchall()
 
-    if urun:
-        cart.append(urun)
-        c.execute("UPDATE products SET stock=stock-1 WHERE id=?", (urun[0],))
-        conn.commit()
+    html = "<h2>Ürünler</h2>"
+    html += "<table border=1><tr><th>Adı</th><th>Cinsi</th><th>MM</th><th>Sınıf</th><th>Yüzey</th><th>Renk</th><th>Stok</th><th>Depo</th></tr>"
 
-    conn.close()
-    return redirect("/kasa")
+    for d in data:
+        html += f"<tr><td>{d[1]}</td><td>{d[2]}</td><td>{d[3]}</td><td>{d[4]}</td><td>{d[5]}</td><td>{d[6]}</td><td>{d[7]}</td><td>{d[8]}</td></tr>"
 
-# SATIŞ
-@app.route("/satis", methods=["POST"])
-def satis():
-    global cart
-    total = sum([x[8] for x in cart])
+    html += "</table><br><a href='/panel'>Geri</a>"
+    return html
 
-    conn = sqlite3.connect("market.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO sales (total,date) VALUES (?,?)",
-              (total, datetime.datetime.now().strftime("%Y-%m-%d %H:%M")))
-    conn.commit()
-    conn.close()
+# ---------------- ÜRÜN EKLE ----------------
+@app.route("/ekle", methods=["GET","POST"])
+def ekle():
+    if "user" not in session:
+        return redirect("/")
 
-    cart = []
-    return redirect("/kasa")
+    if request.method == "POST":
+        name = request.form["name"]
+        type_ = request.form["type"]
+        size = request.form["size"]
+        quality = request.form["quality"]
+        surface = request.form["surface"]
+        color = request.form["color"]
+        stock = request.form["stock"]
+        depot = request.form["depot"]
 
+        db = get_db()
+        c = db.cursor()
+        c.execute("INSERT INTO products VALUES (NULL,?,?,?,?,?,?,?,?)",
+                  (name,type_,size,quality,surface,color,stock,depot))
+        db.commit()
+
+    return render_template_string("""
+    <h2>Ürün Ekle</h2>
+    <form method="post">
+        Adı: <input name="name"><br>
+        Cinsi: <input name="type"><br>
+        Kaç MM: <input name="size"><br>
+        Sınıf: <input name="quality"><br>
+        HGLOSS / MAT: <input name="surface"><br>
+        Renk: <input name="color"><br>
+        Stok: <input name="stock"><br>
+
+        Depo:
+        <select name="depot">
+            <option>MDF SATIŞ DEPOSU</option>
+            <option>LAMİNANT DEPOSU</option>
+            <option>KAPI DEPOSU</option>
+            <option>HGLOSS DEPOSU</option>
+            <option>SÜTÇÜ YANI</option>
+            <option>HELVACI YANI</option>
+            <option>RÖTBALANSÇI YANI</option>
+            <option>KESİMHANE</option>
+        </select><br>
+
+        <button>Kaydet</button>
+    </form>
+    <a href="/panel">Geri</a>
+    """)
+
+# ---------------- KULLANICI YÖNETİMİ ----------------
+@app.route("/kullanicilar", methods=["GET","POST"])
+def kullanicilar():
+    if session.get("role") != "admin":
+        return "Yetkisiz!"
+
+    db = get_db()
+    c = db.cursor()
+
+    if request.method == "POST":
+        u = request.form["username"]
+        p = request.form["password"]
+        r = request.form["role"]
+        c.execute("INSERT INTO users VALUES (NULL,?,?,?)", (u,p,r))
+        db.commit()
+
+    c.execute("SELECT * FROM users")
+    users = c.fetchall()
+
+    html = "<h2>Kullanıcılar</h2>"
+    for u in users:
+        html += f"{u[1]} - {u[3]}<br>"
+
+    html += """
+    <h3>Yeni Kullanıcı</h3>
+    <form method="post">
+        Kullanıcı: <input name="username"><br>
+        Şifre: <input name="password"><br>
+        Rol:
+        <select name="role">
+            <option>admin</option>
+            <option>staff</option>
+        </select><br>
+        <button>Ekle</button>
+    </form>
+    <a href='/panel'>Geri</a>
+    """
+
+    return html
+
+# ---------------- LOGOUT ----------------
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
+
+# ---------------- RUN ----------------
 if __name__ == "__main__":
     app.run(debug=True)
