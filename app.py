@@ -86,6 +86,7 @@ def login():
     return '''
     <h2>Giriş</h2>
     <form method="post">
+        Barkod: <input name="barcode"><br>
         Kullanıcı: <input name="username"><br>
         Şifre: <input name="password" type="password"><br>
         <button>Giriş</button>
@@ -285,8 +286,6 @@ def loglar():
         html += f"{l[3]} | {l[1]} → {l[2]}<br>"
 
     html += "<br><a href='/panel'>Geri</a>"
-
-    Barkod: <input name="barcode"><br>
 
     return html
 
