@@ -1,2 +1,6 @@
 flask
 gunicorn
+qrcode
+python-barcode
+pillow
+reportlab
