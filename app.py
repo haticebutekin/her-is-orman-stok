@@ -21,14 +21,15 @@ def init():
     con = db()
     c = con.cursor()
 
-c.execute("""
-CREATE TABLE IF NOT EXISTS requests(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    product_id INTEGER,
-    quantity INTEGER,
-    status TEXT
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS requests(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER,
+        quantity INTEGER,
+        status TEXT
 )
 """)
+    
     c.execute("""
     CREATE TABLE IF NOT EXISTS users(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +39,15 @@ CREATE TABLE IF NOT EXISTS requests(
     )
     """)
 
-
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS requests(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER,
+        quantity INTEGER,
+        status TEXT
+    )
+    """)
+    
     c.execute("""
     CREATE TABLE IF NOT EXISTS depots(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
