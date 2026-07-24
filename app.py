@@ -644,21 +644,24 @@ def etiket(id):
 
     con = db()
 
-    urun = con.execute("""
-    SELECT * FROM products
-    WHERE id=?
-    """, (id,)).fetchone()
+    urun = con.execute(
+        """
+        SELECT * FROM products
+        WHERE id=?
+        """,
+        (id,)
+    ).fetchone()
 
     con.close()
 
-    if not urun:
+    if urun is None:
         return "Ürün bulunamadı"
 
     return f"""
-    <h2>Etiket</h2>
+    <h2>Etiket Bilgisi</h2>
     Ürün: {urun[1]}<br>
     Barkod: {urun[7]}<br>
-    Ebat: {urun[3]} mm<br>
+    Ebat: {urun[3]}<br>
     Tip: {urun[5]}
     """
     
