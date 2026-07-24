@@ -1,8 +1,8 @@
-from flask import Flask, render_template_string, request, redirect, session
+from flask import Flask, request, redirect, session
 import sqlite3
 
 app = Flask(__name__)
-app.secret_key = "1234"
+app.secret_key = "secret123"
 
 # ---------------- DB ----------------
 def get_db():
@@ -12,13 +12,13 @@ def init_db():
     db = get_db()
     c = db.cursor()
 
-    # ürün
+    # ürün tablosu
     c.execute("""
     CREATE TABLE IF NOT EXISTS products(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         barcode TEXT,
         name TEXT,
-        type of goods TEXT,
+        type TEXT,
         size TEXT,
         quality TEXT,
         surface TEXT,
@@ -47,7 +47,7 @@ def init_db():
     )
     """)
 
-    # default kullanıcılar
+    # default kullanıcı
     c.execute("SELECT * FROM users")
     if not c.fetchall():
         c.execute("INSERT INTO users VALUES ('admin','1234','admin')")
@@ -86,7 +86,6 @@ def login():
     return '''
     <h2>Giriş</h2>
     <form method="post">
-        Barkod: <input name="barcode"><br>
         Kullanıcı: <input name="username"><br>
         Şifre: <input name="password" type="password"><br>
         <button>Giriş</button>
@@ -100,7 +99,6 @@ def panel():
         return redirect("/")
 
     html = f"<h2>Hoşgeldin {session['user']}</h2>"
-
     html += "<a href='/urunler'>Ürünler</a><br>"
     html += "<a href='/barkod'>📷 Barkod Oku</a><br>"
 
@@ -123,10 +121,10 @@ def ekle():
         db = get_db()
         c = db.cursor()
 
-        c.execute("INSERT INTO products VALUES (NULL,?,?,?,?,?,?,?,?)", (
-             request.form["barcode"],
+        c.execute("INSERT INTO products VALUES (NULL,?,?,?,?,?,?,?,?,?)", (
+            request.form["barcode"],
             request.form["name"],
-            request.form["type of goods"],
+            request.form["type"],
             request.form["size"],
             request.form["quality"],
             request.form["surface"],
@@ -144,8 +142,9 @@ def ekle():
     return '''
     <h2>Ürün Ekle</h2>
     <form method="post">
+        Barkod: <input name="barcode"><br>
         Ad: <input name="name"><br>
-        Tip: <input name="type of goods"><br>
+        Tip: <input name="type"><br>
         Ebat: <input name="size"><br>
         Kalite: <input name="quality"><br>
         Yüzey: <input name="surface"><br>
@@ -172,10 +171,9 @@ def urunler():
     html = "<h2>Ürünler</h2>"
 
     for i in data:
-        html += f"{i[1]} | {i[7]} adet<br>"
+        html += f"{i[2]} | Barkod: {i[1]} | Stok: {i[8]}<br>"
 
     html += "<br><a href='/panel'>Geri</a>"
-
     return html
 
 # ---------------- BARKOD ----------------
@@ -184,7 +182,7 @@ def barkod():
     return """
     <h2>Barkod Oku</h2>
 
-    <video id="video" width="300" height="200" autoplay></video>
+    <div id="reader" style="width:300px;"></div>
     <p id="result"></p>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -194,37 +192,43 @@ def barkod():
         document.getElementById("result").innerText = "OKUNDU: " + decodedText;
 
         fetch("/log_barkod?data=" + decodedText)
+        .then(r=>r.text())
+        .then(t=>alert(t));
     }
 
-    let scanner = new Html5QrcodeScanner("video", { fps: 10, qrbox: 250 });
+    let scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
     scanner.render(onScanSuccess);
     </script>
     """
 
+# ---------------- BARKOD → SATIŞ ----------------
 @app.route("/log_barkod")
 def log_barkod():
     data = request.args.get("data")
 
-    if "user" in session:
-        log_yaz(session["user"], f"Barkod okudu: {data}")
+    db = get_db()
+    c = db.cursor()
 
-    return "ok"
+    c.execute("SELECT * FROM products WHERE barcode=?", (data,))
+    product = c.fetchone()
 
-@app.route("/scan")
-def scan():
-    cam = cv2.VideoCapture(0)
+    if not product:
+        log_yaz(session["user"], f"Ürün yok: {data}")
+        return "ÜRÜN BULUNAMADI ❌"
 
-    while True:
-        _, frame = cam.read()
-        codes = decode(frame)
+    stock = product[8]
 
-        for code in codes:
-            data = code.data.decode("utf-8")
-            cam.release()
+    if stock <= 0:
+        log_yaz(session["user"], f"Stok yok: {product[2]}")
+        return f"STOK YOK ❌ ({product[2]})"
 
-            log_yaz(session["user"], f"Barkod okudu: {data}")
+    new_stock = stock - 1
+    c.execute("UPDATE products SET stock=? WHERE id=?", (new_stock, product[0]))
+    db.commit()
 
-            return f"OKUNDU: {data}"
+    log_yaz(session["user"], f"SATIŞ: {product[2]} | Kalan: {new_stock}")
+
+    return f"SATILDI ✅ {product[2]} | Kalan stok: {new_stock}"
 
 # ---------------- KULLANICI ----------------
 @app.route("/kullanicilar", methods=["GET","POST"])
@@ -286,44 +290,9 @@ def loglar():
         html += f"{l[3]} | {l[1]} → {l[2]}<br>"
 
     html += "<br><a href='/panel'>Geri</a>"
-
     return html
 
-for i in data:
-    html += f"{i[2]} | Barkod: {i[1]} | Stok: {i[8]}<br>"
-
-@app.route("/log_barkod")
-def log_barkod():
-    data = request.args.get("data")
-
-    db = get_db()
-    c = db.cursor()
-
-    # ürün bul
-    c.execute("SELECT * FROM products WHERE barcode=?", (data,))
-    product = c.fetchone()
-
-    if not product:
-        log_yaz(session["user"], f"Barkod okundu ama ürün yok: {data}")
-        return "ÜRÜN BULUNAMADI ❌"
-
-    # stok kontrol
-    stock = product[8]
-
-    if stock <= 0:
-        log_yaz(session["user"], f"Stok yok: {product[2]}")
-        return f"STOK YOK ❌ ({product[2]})"
-
-    # stok düş
-    new_stock = stock - 1
-    c.execute("UPDATE products SET stock=? WHERE id=?", (new_stock, product[0]))
-    db.commit()
-
-    log_yaz(session["user"], f"SATIŞ: {product[2]} | Kalan: {new_stock}")
-
-    return f"SATILDI ✅ {product[2]} | Kalan stok: {new_stock}"
-
-# ---------------- ÇIKIŞ ----------------
+# ---------------- LOGOUT ----------------
 @app.route("/logout")
 def logout():
     session.clear()
@@ -331,4 +300,4 @@ def logout():
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
