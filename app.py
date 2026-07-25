@@ -1,5 +1,23 @@
 import os
 from flask import Flask, request, jsonify
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+BARCODE_DIR = os.path.join(STATIC_DIR, "barcodes")
+QR_DIR = os.path.join(STATIC_DIR, "qrcodes")
+
+# 🔥 KRİTİK FIX
+# Eğer yanlışlıkla dosya varsa sil
+if os.path.exists(BARCODE_DIR) and not os.path.isdir(BARCODE_DIR):
+    os.remove(BARCODE_DIR)
+
+if os.path.exists(QR_DIR) and not os.path.isdir(QR_DIR):
+    os.remove(QR_DIR)
+
+# klasörleri oluştur
+os.makedirs(BARCODE_DIR, exist_ok=True)
+os.makedirs(QR_DIR, exist_ok=True)
 
 app = Flask(__name__)
 
