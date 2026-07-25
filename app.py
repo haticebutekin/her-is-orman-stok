@@ -224,3 +224,83 @@ def log():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+@app.route("/depocu", methods=["GET","POST"])
+def depocu():
+    con = db()
+    cur = con.cursor()
+
+    urun = None
+    mesaj = ""
+
+    if request.method == "POST":
+        barkod = request.form.get("barkod")
+        adet = request.form.get("adet")
+
+        if barkod and not adet:
+            # SADECE BARKOD → ÜRÜN BUL
+            urun = cur.execute("SELECT * FROM urun WHERE barkod=?", (barkod,)).fetchone()
+            if not urun:
+                mesaj = "❌ Barkod bulunamadı"
+
+        elif barkod and adet:
+            # ÇIKIŞ YAP
+            adet = int(adet)
+            urun = cur.execute("SELECT * FROM urun WHERE barkod=?", (barkod,)).fetchone()
+
+            if not urun:
+                mesaj = "❌ Hatalı barkod"
+
+            elif urun[7] < adet:
+                mesaj = "❌ Yetersiz stok"
+
+            else:
+                yeni = urun[7] - adet
+
+                cur.execute("UPDATE urun SET adet=? WHERE id=?", (yeni, urun[0]))
+
+                cur.execute("""INSERT INTO log(user,islem,urun,adet,tarih)
+                VALUES(?,?,?,?,?)""",
+                ("depocu","ÇIKIŞ",urun[1],adet,str(datetime.datetime.now())))
+
+                con.commit()
+                mesaj = "✅ Çıkış yapıldı"
+                urun = None
+
+    html = """
+    <h2>📦 DEPOCU EKRANI</h2>
+
+    <form method="POST">
+        <input name="barkod" placeholder="Barkod okut / yaz" style="width:100%; height:40px;"><br><br>
+        <button style="width:100%; height:40px;">Ürünü Bul</button>
+    </form>
+
+    <br>
+    <p style="color:red;">{{mesaj}}</p>
+
+    {% if urun %}
+    <hr>
+    <h3>Ürün Bilgisi</h3>
+
+    <p><b>Ad:</b> {{urun[1]}}</p>
+    <p><b>Cins:</b> {{urun[2]}}</p>
+    <p><b>Ebat:</b> {{urun[3]}}</p>
+    <p><b>HG/MAT:</b> {{urun[4]}}</p>
+    <p><b>Renk:</b> {{urun[5]}}</p>
+    <p><b>Kalınlık:</b> {{urun[6]}} mm</p>
+    <p><b>Stok:</b> {{urun[7]}}</p>
+    <p><b>Depo:</b> {{urun[8]}}</p>
+
+    <hr>
+
+    <form method="POST">
+        <input type="hidden" name="barkod" value="{{urun[9]}}">
+        <input name="adet" placeholder="Çıkacak adet" style="width:100%; height:40px;"><br><br>
+        <button style="width:100%; height:50px; background:green; color:white;">
+        🚚 ÇIKIŞ YAP
+        </button>
+    </form>
+    {% endif %}
+    """
+
+    return render_template_string(html, urun=urun, mesaj=mesaj)
