@@ -1,5 +1,10 @@
-from flask import Flask, request, redirect, render_template_string
-import sqlite3, uuid, datetime
+from flask import Flask, request, redirect, render_template_string, send_file
+import sqlite3, uuid, datetime, io
+import barcode
+from barcode.writer import ImageWriter
+import qrcode
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet
 
 app = Flask(__name__)
 
@@ -14,6 +19,10 @@ def kur():
     cur.execute("""CREATE TABLE IF NOT EXISTS urun(
     id INTEGER PRIMARY KEY,
     ad TEXT,
+    cins TEXT,
+    ebat TEXT,
+    sinif TEXT,
+    renk TEXT,
     adet INTEGER,
     depo TEXT,
     barkod TEXT
@@ -39,6 +48,23 @@ DEPOLAR = [
 "RÖTBALANSÇI","KESİMHANE"
 ]
 
+# ---------------- BARKOD ----------------
+def barkod_uret(text):
+    CODE128 = barcode.get_barcode_class('code128')
+    buffer = io.BytesIO()
+    code = CODE128(text, writer=ImageWriter())
+    code.write(buffer)
+    buffer.seek(0)
+    return buffer
+
+# ---------------- QR ----------------
+def qr_uret(text):
+    qr = qrcode.make(text)
+    buffer = io.BytesIO()
+    qr.save(buffer)
+    buffer.seek(0)
+    return buffer
+
 # ---------------- ANA ----------------
 @app.route("/", methods=["GET","POST"])
 def index():
@@ -48,19 +74,34 @@ def index():
     if request.method == "POST":
         barkod = str(uuid.uuid4())[:8]
 
-        cur.execute("INSERT INTO urun(ad,adet,depo,barkod) VALUES(?,?,?,?)",
-        (request.form["ad"], request.form["adet"], request.form["depo"], barkod))
+        cur.execute("""INSERT INTO urun
+        (ad,cins,ebat,sinif,renk,adet,depo,barkod)
+        VALUES(?,?,?,?,?,?,?,?)""",
+        (
+            request.form["ad"],
+            request.form["cins"],
+            request.form["ebat"],
+            request.form["sinif"],
+            request.form["renk"],
+            request.form["adet"],
+            request.form["depo"],
+            barkod
+        ))
 
         con.commit()
 
     urunler = cur.execute("SELECT * FROM urun").fetchall()
 
     html = """
-    <h2>DEPO</h2>
+    <h2>DEPO SİSTEMİ</h2>
 
     <h3>Ürün Ekle</h3>
     <form method="POST">
     Ad: <input name="ad"><br>
+    Cins: <input name="cins"><br>
+    Ebat: <input name="ebat"><br>
+    HG/MAT: <input name="sinif"><br>
+    Renk: <input name="renk"><br>
     Adet: <input name="adet"><br>
 
     Depo:
@@ -75,7 +116,14 @@ def index():
 
     <h3>Ürünler</h3>
     {% for u in urunler %}
-    <p>{{u[1]}} | {{u[2]}} adet | {{u[3]}} | Barkod: {{u[4]}}</p>
+    <p>
+    {{u[1]}} | {{u[2]}} | {{u[3]}} | {{u[4]}} | {{u[5]}} |
+    {{u[6]}} adet | {{u[7]}}
+
+    | Barkod: {{u[8]}}
+
+    | <a href="/etiket/{{u[8]}}">ETİKET</a>
+    </p>
     {% endfor %}
 
     <a href="/cikis">Barkod ile Çıkış</a><br>
@@ -83,6 +131,38 @@ def index():
     """
 
     return render_template_string(html, urunler=urunler, depolar=DEPOLAR)
+
+# ---------------- ETİKET PDF ----------------
+@app.route("/etiket/<barkod>")
+def etiket(barkod):
+    con = db()
+    cur = con.cursor()
+
+    u = cur.execute("SELECT * FROM urun WHERE barkod=?", (barkod,)).fetchone()
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer)
+    styles = getSampleStyleSheet()
+
+    elements = []
+
+    elements.append(Paragraph(f"{u[1]}", styles["Normal"]))
+    elements.append(Paragraph(f"{u[2]} - {u[3]}", styles["Normal"]))
+    elements.append(Paragraph(f"{u[4]} - {u[5]}", styles["Normal"]))
+    elements.append(Paragraph(f"Depo: {u[7]}", styles["Normal"]))
+
+    # barcode
+    b = barkod_uret(barkod)
+    elements.append(Image(b, width=200, height=50))
+
+    # qr
+    q = qr_uret(barkod)
+    elements.append(Image(q, width=100, height=100))
+
+    doc.build(elements)
+
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, download_name="etiket.pdf")
 
 # ---------------- ÇIKIŞ ----------------
 @app.route("/cikis", methods=["GET","POST"])
@@ -99,10 +179,10 @@ def cikis():
         if not urun:
             return "❌ Barkod bulunamadı"
 
-        if urun[2] < adet:
+        if urun[6] < adet:
             return "❌ Yetersiz stok"
 
-        yeni = urun[2] - adet
+        yeni = urun[6] - adet
 
         cur.execute("UPDATE urun SET adet=? WHERE id=?", (yeni, urun[0]))
 
