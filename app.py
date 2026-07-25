@@ -222,8 +222,6 @@ def log():
 
     return html
 
-if __name__ == "__main__":
-    app.run(debug=True)
 
 @app.route("/depocu", methods=["GET","POST"])
 def depocu():
@@ -300,6 +298,9 @@ def depocu():
         🚚 ÇIKIŞ YAP
         </button>
     </form>
+
+    if __name__ == "__main__":
+    app.run(debug=True)
     {% endif %}
     """
 
