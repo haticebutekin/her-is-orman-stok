@@ -1,0 +1,25 @@
+<h2>ÜRÜN EKLE</h2>
+<form method="post" action="/add">
+<input name="name" placeholder="Mal adı">
+<input name="type" placeholder="Cins">
+<input name="size" placeholder="Ebat mm">
+<input name="quality" placeholder="HG/MAT">
+<input name="color" placeholder="Renk">
+<input name="qty" placeholder="Adet">
+<select name="depo">
+{% for d in depolar %}
+<option>{{d}}</option>
+{% endfor %}
+</select>
+<button>Ekle</button>
+</form>
+
+<hr>
+
+<h2>ÜRÜNLER</h2>
+{% for i in data %}
+<p>{{i}}</p>
+<img src="/static/barcodes/{{i[8]}}.png" width="200">
+<img src="/static/qrcodes/{{i[8]}}.png" width="100">
+<hr>
+{% endfor %}
