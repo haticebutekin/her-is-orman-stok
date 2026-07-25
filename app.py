@@ -1,181 +1,64 @@
-from flask import Flask, render_template, request, redirect, url_for, session
-import sqlite3, os, datetime
+from flask import Flask, request, redirect, url_for, session, render_template_string, send_file
 import barcode
 from barcode.writer import ImageWriter
-import qrcode
+import os
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
-# 📁 klasörler
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-BARCODE_DIR = os.path.join(STATIC_DIR, "barcodes")
-QR_DIR = os.path.join(STATIC_DIR, "qrcodes")
+USERNAME = "admin"
+PASSWORD = "1234"
 
-os.makedirs(BARCODE_DIR, exist_ok=True)
-os.makedirs(QR_DIR, exist_ok=True)
+HTML_LOGIN = """
+<h2>Giriş Yap</h2>
+<form method="post">
+  Kullanıcı: <input name="username"><br>
+  Şifre: <input name="password" type="password"><br>
+  <button type="submit">Giriş</button>
+</form>
+"""
 
-# 🏬 DEPOLAR
-DEPOLAR = [
-    "MDF SATIŞ DEPOSU",
-    "LAMİNANT DEPOSU",
-    "KAPI DEPOSU",
-    "HGLOSS DEPOSU (MORAY YANI)",
-    "SÜTÇÜ YANI",
-    "HELVACI YANI",
-    "RÖTBALANSÇI YANI",
-    "KESİMHANE"
-]
+HTML_PANEL = """
+<h2>Barkod Oluştur</h2>
+<form method="post" action="/generate">
+  Barkod: <input name="code"><br>
+  <button type="submit">Oluştur</button>
+</form>
+<a href="/logout">Çıkış</a>
+"""
 
-# 🧠 DB
-def db():
-    return sqlite3.connect("db.sqlite3")
-
-def init_db():
-    con = db()
-    c = con.cursor()
-
-    c.execute("""CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY,
-        name TEXT,
-        type TEXT,
-        size TEXT,
-        quality TEXT,
-        color TEXT,
-        qty INTEGER,
-        depo TEXT,
-        barcode TEXT
-    )""")
-
-    c.execute("""CREATE TABLE IF NOT EXISTS logs (
-        id INTEGER PRIMARY KEY,
-        user TEXT,
-        action TEXT,
-        product TEXT,
-        qty INTEGER,
-        depo TEXT,
-        time TEXT
-    )""")
-
-    con.commit()
-    con.close()
-
-init_db()
-
-# 🔐 LOGIN
-@app.route("/", methods=["GET","POST"])
+@app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        u = request.form["user"]
-        p = request.form["pass"]
+        if request.form["username"] == USERNAME and request.form["password"] == PASSWORD:
+            session["user"] = True
+            return redirect("/panel")
+    return render_template_string(HTML_LOGIN)
 
-        if u=="admin" and p=="123":
-            session["user"]="admin"
-            return redirect("/admin")
-        elif u=="depocu" and p=="123":
-            session["user"]="depocu"
-            return redirect("/scan")
-    return render_template("login.html")
-
-# 👑 ADMIN PANEL
-@app.route("/admin")
-def admin():
-    if session.get("user")!="admin":
+@app.route("/panel")
+def panel():
+    if not session.get("user"):
         return redirect("/")
-    con=db(); c=con.cursor()
-    c.execute("SELECT * FROM products")
-    data=c.fetchall()
-    con.close()
-    return render_template("admin.html", data=data, depolar=DEPOLAR)
+    return render_template_string(HTML_PANEL)
 
-# ➕ ÜRÜN EKLE
-@app.route("/add", methods=["POST"])
-def add():
-    con=db(); c=con.cursor()
-
-    name=request.form["name"]
-    type_=request.form["type"]
-    size=request.form["size"]
-    quality=request.form["quality"]
-    color=request.form["color"]
-    qty=int(request.form["qty"])
-    depo=request.form["depo"]
-
-    code=str(int(datetime.datetime.now().timestamp()))
-
-    # 📦 barkod
-    b=barcode.get("code128", code, writer=ImageWriter())
-    b.save(f"{BARCODE_DIR}/{code}")
-
-    # 📱 qr
-    img=qrcode.make(code)
-    img.save(f"{QR_DIR}/{code}.png")
-
-    c.execute("INSERT INTO products VALUES (NULL,?,?,?,?,?,?,?,?)",
-              (name,type_,size,quality,color,qty,depo,code))
-
-    con.commit(); con.close()
-    return redirect("/admin")
-
-# 📷 BARKOD OKUT
-@app.route("/scan", methods=["GET","POST"])
-def scan():
-    if session.get("user")!="depocu":
+@app.route("/generate", methods=["POST"])
+def generate():
+    if not session.get("user"):
         return redirect("/")
+    
+    code = request.form["code"]
+    filename = f"{code}.png"
+    
+    ean = barcode.get('code128', code, writer=ImageWriter())
+    ean.save(code)
 
-    if request.method=="POST":
-        code=request.form["barcode"]
+    return send_file(filename, as_attachment=True)
 
-        con=db(); c=con.cursor()
-        c.execute("SELECT * FROM products WHERE barcode=?",(code,))
-        p=c.fetchone()
-        con.close()
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
 
-        if not p:
-            return "❌ Ürün bulunamadı"
-
-        return render_template("cikis.html", p=p)
-
-    return render_template("scan.html")
-
-# 🚚 ÇIKIŞ
-@app.route("/cikis", methods=["POST"])
-def cikis():
-    if session.get("user")!="depocu":
-        return redirect("/")
-
-    code=request.form["barcode"]
-    adet=int(request.form["adet"])
-
-    con=db(); c=con.cursor()
-    c.execute("SELECT qty,name,depo FROM products WHERE barcode=?",(code,))
-    p=c.fetchone()
-
-    if not p:
-        return "Hata"
-
-    yeni=p[0]-adet
-    if yeni<0:
-        return "❌ Stok yetersiz"
-
-    c.execute("UPDATE products SET qty=? WHERE barcode=?",(yeni,code))
-
-    # LOG
-    c.execute("INSERT INTO logs VALUES(NULL,?,?,?,?,?,?)",
-              ("depocu","ÇIKIŞ",p[1],adet,p[2],str(datetime.datetime.now())))
-
-    con.commit(); con.close()
-
-    return redirect("/scan")
-
-# 📋 LOG
-@app.route("/logs")
-def logs():
-    con=db(); c=con.cursor()
-    c.execute("SELECT * FROM logs ORDER BY id DESC")
-    data=c.fetchall()
-    con.close()
-    return render_template("logs.html", data=data)
-
-app.run(debug=True)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
