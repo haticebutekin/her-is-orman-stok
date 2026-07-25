@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, jsonify
+from flask import Flask, request, redirect, session
 import sqlite3
 import uuid
 import os
@@ -7,90 +7,136 @@ from barcode.writer import ImageWriter
 import qrcode
 
 app = Flask(__name__)
+app.secret_key = "1234"
 
-# klasörler
 os.makedirs("static/barcodes", exist_ok=True)
 os.makedirs("static/qrcodes", exist_ok=True)
 
-# DB
-def get_db():
-    return sqlite3.connect("database.db")
+# ---------------- DB ----------------
+def db():
+    return sqlite3.connect("db.db")
 
-def init_db():
-    db = get_db()
-    db.execute('''CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY,
-        barkod TEXT,
-        mal_adi TEXT,
-        adet INTEGER,
-        depo TEXT
-    )''')
+def init():
+    con = db()
 
-    db.execute('''CREATE TABLE IF NOT EXISTS movements (
-        id INTEGER PRIMARY KEY,
-        barkod TEXT,
-        islem TEXT,
-        adet INTEGER,
-        tarih DATETIME DEFAULT CURRENT_TIMESTAMP
-    )''')
-    db.commit()
+    con.execute('''CREATE TABLE IF NOT EXISTS users(
+    id INTEGER PRIMARY KEY,
+    username TEXT,
+    password TEXT,
+    role TEXT)''')
 
-init_db()
+    con.execute('''CREATE TABLE IF NOT EXISTS products(
+    id INTEGER PRIMARY KEY,
+    barkod TEXT,
+    ad TEXT,
+    cins TEXT,
+    ebat TEXT,
+    sinif TEXT,
+    renk TEXT,
+    adet INTEGER,
+    depo TEXT)''')
 
-# Barkod üret
-def barkod_uret():
-    return str(uuid.uuid4())[:10]
+    con.execute('''CREATE TABLE IF NOT EXISTS hareket(
+    id INTEGER PRIMARY KEY,
+    barkod TEXT,
+    islem TEXT,
+    adet INTEGER,
+    user TEXT,
+    tarih DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-# ANA SAYFA
-@app.route('/')
-def index():
-    db = get_db()
-    urunler = db.execute("SELECT * FROM products").fetchall()
+    # default kullanıcılar
+    con.execute("INSERT OR IGNORE INTO users VALUES (1,'admin','123','admin')")
+    con.execute("INSERT OR IGNORE INTO users VALUES (2,'depocu','123','depocu')")
 
-    html = "<h1>📦 Ürünler</h1>"
-    html += '<a href="/ekle">Ürün Ekle</a> | <a href="/okut">Barkod Oku</a><hr>'
+    con.commit()
+
+init()
+
+# ---------------- LOGIN ----------------
+@app.route('/', methods=['GET','POST'])
+def login():
+    if request.method == 'POST':
+        u = request.form['u']
+        p = request.form['p']
+
+        con = db()
+        user = con.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p)).fetchone()
+
+        if user:
+            session['user'] = user[1]
+            session['role'] = user[3]
+            return redirect('/panel')
+
+    return '''
+    <h2>Giriş</h2>
+    <form method="POST">
+    Kullanıcı: <input name="u"><br>
+    Şifre: <input name="p"><br>
+    <button>Giriş</button>
+    </form>
+    '''
+
+# ---------------- PANEL ----------------
+@app.route('/panel')
+def panel():
+    if 'user' not in session:
+        return redirect('/')
+
+    con = db()
+    urunler = con.execute("SELECT * FROM products").fetchall()
+
+    html = f"<h2>Hoşgeldin {session['user']} ({session['role']})</h2>"
+    html += '<a href="/ekle">Ürün Ekle</a> | <a href="/okut">Barkod Okut</a> | <a href="/hareket">Hareket</a><hr>'
 
     for u in urunler:
         html += f"""
-        <p>
-        <b>{u[2]}</b><br>
-        Adet: {u[3]}<br>
-        Depo: {u[4]}<br>
+        <b>{u[2]}</b> | {u[7]} adet | {u[8]}<br>
         Barkod: {u[1]}<br>
-        <img src="/static/barcodes/{u[1]}.png" width="200"><br>
-        </p><hr>
+        <img src="/static/barcodes/{u[1]}.png" width="150"><hr>
         """
+
     return html
 
-# ÜRÜN EKLE
+# ---------------- BARKOD ----------------
+def barkod():
+    return str(uuid.uuid4())[:10]
+
+# ---------------- ÜRÜN EKLE ----------------
 @app.route('/ekle', methods=['GET','POST'])
 def ekle():
+    if session.get('role') != 'admin':
+        return "Yetki yok!"
+
     if request.method == 'POST':
-        mal_adi = request.form['mal_adi']
-        adet = int(request.form['adet'])
-        depo = request.form['depo']
+        data = request.form
+        kod = barkod()
 
-        barkod = barkod_uret()
+        # barcode
+        code = barcode.get('code128', kod, writer=ImageWriter())
+        code.save(f"static/barcodes/{kod}")
 
-        # barkod oluştur
-        code = barcode.get('code128', barkod, writer=ImageWriter())
-        code.save(f'static/barcodes/{barkod}')
+        # qr
+        img = qrcode.make(kod)
+        img.save(f"static/qrcodes/{kod}.png")
 
-        # qr oluştur
-        img = qrcode.make(barkod)
-        img.save(f"static/qrcodes/{barkod}.png")
+        con = db()
+        con.execute('''INSERT INTO products
+        (barkod, ad, cins, ebat, sinif, renk, adet, depo)
+        VALUES (?,?,?,?,?,?,?,?)''',
+        (kod, data['ad'], data['cins'], data['ebat'],
+         data['sinif'], data['renk'], data['adet'], data['depo']))
 
-        db = get_db()
-        db.execute("INSERT INTO products (barkod, mal_adi, adet, depo) VALUES (?,?,?,?)",
-                   (barkod, mal_adi, adet, depo))
-        db.commit()
-
-        return redirect('/')
+        con.commit()
+        return redirect('/panel')
 
     return '''
-    <h1>Ürün Ekle</h1>
+    <h2>Ürün Ekle</h2>
     <form method="POST">
-    Mal Adı: <input name="mal_adi"><br>
+    Ad: <input name="ad"><br>
+    Cins: <input name="cins"><br>
+    Ebat: <input name="ebat"><br>
+    Sınıf: <input name="sinif"><br>
+    Renk: <input name="renk"><br>
     Adet: <input name="adet"><br>
 
     Depo:
@@ -99,59 +145,73 @@ def ekle():
     <option>LAMİNANT DEPOSU</option>
     <option>KAPI DEPOSU</option>
     <option>HGLOSS DEPOSU</option>
-    </select>
+    <option>SÜTÇÜ YANI</option>
+    <option>HELVACI YANI</option>
+    <option>RÖTBALANSÇI YANI</option>
+    <option>KESİMHANE</option>
+    </select><br><br>
 
-    <br><br>
     <button>Kaydet</button>
     </form>
     '''
 
-# BARKOD OKUT
+# ---------------- OKUT ----------------
 @app.route('/okut')
 def okut():
     return '''
-    <h1>Barkod Oku</h1>
+    <h2>Barkod Okut</h2>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
-
     <div id="reader"></div>
 
-    <form method="POST" action="/stok-dus">
+    <form method="POST" action="/cikis">
     Barkod: <input id="barkod" name="barkod"><br>
     Adet: <input name="adet"><br>
     <button>Çıkış Yap</button>
     </form>
 
     <script>
-    function onScanSuccess(decodedText) {
-        document.getElementById("barkod").value = decodedText;
+    function onScanSuccess(text){
+        document.getElementById("barkod").value = text;
     }
-
     new Html5QrcodeScanner("reader").render(onScanSuccess);
     </script>
     '''
 
-# STOK DÜŞ
-@app.route('/stok-dus', methods=['POST'])
-def stok_dus():
-    barkod = request.form['barkod']
+# ---------------- ÇIKIŞ ----------------
+@app.route('/cikis', methods=['POST'])
+def cikis():
+    kod = request.form['barkod']
     adet = int(request.form['adet'])
 
-    db = get_db()
-    urun = db.execute("SELECT adet FROM products WHERE barkod=?", (barkod,)).fetchone()
+    con = db()
+    urun = con.execute("SELECT adet FROM products WHERE barkod=?", (kod,)).fetchone()
 
     if not urun:
         return "Ürün yok!"
 
     if urun[0] < adet:
-        return "Yetersiz stok!"
+        return "Stok yetersiz!"
 
-    db.execute("UPDATE products SET adet = adet - ? WHERE barkod=?", (adet, barkod))
-    db.execute("INSERT INTO movements (barkod, islem, adet) VALUES (?, 'CIKIS', ?)",
-               (barkod, adet))
-    db.commit()
+    con.execute("UPDATE products SET adet=adet-? WHERE barkod=?", (adet, kod))
+    con.execute("INSERT INTO hareket (barkod,islem,adet,user) VALUES (?,?,?,?)",
+                (kod,'CIKIS',adet,session['user']))
 
-    return redirect('/')
+    con.commit()
+    return redirect('/panel')
 
+# ---------------- HAREKET ----------------
+@app.route('/hareket')
+def hareket():
+    con = db()
+    h = con.execute("SELECT * FROM hareket ORDER BY id DESC").fetchall()
+
+    html = "<h2>Hareketler</h2><hr>"
+    for i in h:
+        html += f"{i[1]} | {i[2]} | {i[3]} adet | {i[4]} | {i[5]}<br>"
+
+    return html
+
+# ---------------- RUN ----------------
 if __name__ == "__main__":
     app.run(debug=True)
