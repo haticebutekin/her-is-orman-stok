@@ -23,6 +23,7 @@ def kur():
     ebat TEXT,
     sinif TEXT,
     renk TEXT,
+    kalinlik TEXT,
     adet INTEGER,
     depo TEXT,
     barkod TEXT
@@ -75,7 +76,7 @@ def index():
         barkod = str(uuid.uuid4())[:8]
 
         cur.execute("""INSERT INTO urun
-        (ad,cins,ebat,sinif,renk,adet,depo,barkod)
+        (ad,cins,ebat,sinif,renk,kalinlik,adet,depo,barkod)
         VALUES(?,?,?,?,?,?,?,?)""",
         (
             request.form["ad"],
@@ -83,6 +84,7 @@ def index():
             request.form["ebat"],
             request.form["sinif"],
             request.form["renk"],
+            request.form["kalinlik"],
             request.form["adet"],
             request.form["depo"],
             barkod
@@ -100,7 +102,12 @@ def index():
     Ad: <input name="ad"><br>
     Cins: <input name="cins"><br>
     Ebat: <input name="ebat"><br>
-    HG/MAT: <input name="sinif"><br>
+    Kalınlık (mm): <input name="kalinlik"><br>
+    HG/MAT:
+ <select name="sinif">
+ <option>HG</option>
+ <option>MAT</option>
+ </select><br>
     Renk: <input name="renk"><br>
     Adet: <input name="adet"><br>
 
@@ -118,7 +125,7 @@ def index():
     {% for u in urunler %}
     <p>
     {{u[1]}} | {{u[2]}} | {{u[3]}} | {{u[4]}} | {{u[5]}} |
-    {{u[6]}} adet | {{u[7]}}
+    {{u[6]}}mm | {{u[7]}}adet
 
     | Barkod: {{u[8]}}
 
@@ -148,7 +155,7 @@ def etiket(barkod):
 
     elements.append(Paragraph(f"{u[1]}", styles["Normal"]))
     elements.append(Paragraph(f"{u[2]} - {u[3]}", styles["Normal"]))
-    elements.append(Paragraph(f"{u[4]} - {u[5]}", styles["Normal"]))
+    elements.append(Paragraph(f"{u[4]} - {u[5]} - {u[6]}mm", styles["Normal"]))
     elements.append(Paragraph(f"Depo: {u[7]}", styles["Normal"]))
 
     # barcode
