@@ -187,11 +187,17 @@ def kamera():
 
     <video id="v" width="300" autoplay></video>
 
-    <script>
-    navigator.mediaDevices.getUserMedia({video:true})
-    .then(s=>{document.getElementById("v").srcObject=s})
-    </script>
-    """
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+<div id="reader" style="width:300px;"></div>
+
+<script>
+function onScanSuccess(decodedText) {
+    window.location = "/okut?barkod=" + decodedText;
+}
+
+new Html5QrcodeScanner("reader", { fps: 10 }).render(onScanSuccess);
+</script>
 
 # HAREKET
 @app.route("/hareket")
