@@ -182,22 +182,18 @@ def okut():
 @app.route("/kamera")
 def kamera():
     return """
-    <h2>KAMERA OKUT</h2>
-    <p>Telefonla aç → barkodu kameraya tut</p>
-
-    <video id="v" width="300" autoplay></video>
-
+    <h1>Kamera</h1>
     <script src="https://unpkg.com/html5-qrcode"></script>
 
-<div id="reader" style="width:300px;"></div>
+    <div id="reader"></div>
 
-<script>
-function onScanSuccess(decodedText) {
-    window.location = "/okut?barkod=" + decodedText;
-}
-
-new Html5QrcodeScanner("reader", { fps: 10 }).render(onScanSuccess);
-</script>
+    <script>
+    function onScanSuccess(decodedText) {
+        window.location = "/okut?barkod=" + decodedText;
+    }
+    new Html5QrcodeScanner("reader").render(onScanSuccess);
+    </script>
+    """
 
 # HAREKET
 @app.route("/hareket")
