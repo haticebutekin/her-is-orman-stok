@@ -1,5 +1,3 @@
-Flask
-gunicorn
-python-barcode
-Pillow
+flask
 qrcode
+pillow
