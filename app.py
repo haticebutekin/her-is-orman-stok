@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, jsonify
+from flask import Flask, request, redirect, jsonify
 import sqlite3
 import uuid
 import os
@@ -16,7 +16,6 @@ os.makedirs("static/qrcodes", exist_ok=True)
 def get_db():
     return sqlite3.connect("database.db")
 
-# DB oluştur
 def init_db():
     db = get_db()
     db.execute('''CREATE TABLE IF NOT EXISTS products (
@@ -34,23 +33,36 @@ def init_db():
         adet INTEGER,
         tarih DATETIME DEFAULT CURRENT_TIMESTAMP
     )''')
-
     db.commit()
 
 init_db()
-
-# Ana sayfa
-@app.route('/')
-def index():
-    db = get_db()
-    urunler = db.execute("SELECT * FROM products").fetchall()
-    return render_template("index.html", urunler=urunler)
 
 # Barkod üret
 def barkod_uret():
     return str(uuid.uuid4())[:10]
 
-# Ürün ekle
+# ANA SAYFA
+@app.route('/')
+def index():
+    db = get_db()
+    urunler = db.execute("SELECT * FROM products").fetchall()
+
+    html = "<h1>📦 Ürünler</h1>"
+    html += '<a href="/ekle">Ürün Ekle</a> | <a href="/okut">Barkod Oku</a><hr>'
+
+    for u in urunler:
+        html += f"""
+        <p>
+        <b>{u[2]}</b><br>
+        Adet: {u[3]}<br>
+        Depo: {u[4]}<br>
+        Barkod: {u[1]}<br>
+        <img src="/static/barcodes/{u[1]}.png" width="200"><br>
+        </p><hr>
+        """
+    return html
+
+# ÜRÜN EKLE
 @app.route('/ekle', methods=['GET','POST'])
 def ekle():
     if request.method == 'POST':
@@ -60,46 +72,66 @@ def ekle():
 
         barkod = barkod_uret()
 
-        # barkod
+        # barkod oluştur
         code = barcode.get('code128', barkod, writer=ImageWriter())
         code.save(f'static/barcodes/{barkod}')
 
-        # qr
+        # qr oluştur
         img = qrcode.make(barkod)
         img.save(f"static/qrcodes/{barkod}.png")
 
         db = get_db()
         db.execute("INSERT INTO products (barkod, mal_adi, adet, depo) VALUES (?,?,?,?)",
                    (barkod, mal_adi, adet, depo))
-
         db.commit()
 
         return redirect('/')
 
-    return render_template("ekle.html")
+    return '''
+    <h1>Ürün Ekle</h1>
+    <form method="POST">
+    Mal Adı: <input name="mal_adi"><br>
+    Adet: <input name="adet"><br>
 
-# Barkod okutma ekranı
+    Depo:
+    <select name="depo">
+    <option>MDF SATIŞ DEPOSU</option>
+    <option>LAMİNANT DEPOSU</option>
+    <option>KAPI DEPOSU</option>
+    <option>HGLOSS DEPOSU</option>
+    </select>
+
+    <br><br>
+    <button>Kaydet</button>
+    </form>
+    '''
+
+# BARKOD OKUT
 @app.route('/okut')
 def okut():
-    return render_template("okut.html")
+    return '''
+    <h1>Barkod Oku</h1>
 
-# Barkod bul
-@app.route('/barkod/<kod>')
-def barkod_bul(kod):
-    db = get_db()
-    urun = db.execute("SELECT * FROM products WHERE barkod=?", (kod,)).fetchone()
+    <script src="https://unpkg.com/html5-qrcode"></script>
 
-    if urun:
-        return jsonify({
-            "barkod": urun[1],
-            "mal_adi": urun[2],
-            "adet": urun[3],
-            "depo": urun[4]
-        })
-    else:
-        return jsonify({"hata": "Ürün bulunamadı"})
+    <div id="reader"></div>
 
-# Stok düş
+    <form method="POST" action="/stok-dus">
+    Barkod: <input id="barkod" name="barkod"><br>
+    Adet: <input name="adet"><br>
+    <button>Çıkış Yap</button>
+    </form>
+
+    <script>
+    function onScanSuccess(decodedText) {
+        document.getElementById("barkod").value = decodedText;
+    }
+
+    new Html5QrcodeScanner("reader").render(onScanSuccess);
+    </script>
+    '''
+
+# STOK DÜŞ
 @app.route('/stok-dus', methods=['POST'])
 def stok_dus():
     barkod = request.form['barkod']
@@ -108,13 +140,15 @@ def stok_dus():
     db = get_db()
     urun = db.execute("SELECT adet FROM products WHERE barkod=?", (barkod,)).fetchone()
 
+    if not urun:
+        return "Ürün yok!"
+
     if urun[0] < adet:
         return "Yetersiz stok!"
 
     db.execute("UPDATE products SET adet = adet - ? WHERE barkod=?", (adet, barkod))
     db.execute("INSERT INTO movements (barkod, islem, adet) VALUES (?, 'CIKIS', ?)",
                (barkod, adet))
-
     db.commit()
 
     return redirect('/')
