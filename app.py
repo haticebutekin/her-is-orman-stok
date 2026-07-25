@@ -8,7 +8,7 @@ def home():
 
 @app.route("/depocu")
 def depocu():
-    return "<h1>Depocu Sayfası</h1><a href='/'>Geri</a>"
+    return "<h1>Depocu Sayfası 🔥</h1><a href='/'>Geri</a>"
 
 if __name__ == "__main__":
     app.run(debug=True)
