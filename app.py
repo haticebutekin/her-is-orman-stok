@@ -7,7 +7,6 @@ from openpyxl import Workbook
 
 app = Flask(__name__)
 
-DB = "veri.db"
 STATIC = "static"
 
 # ---------------- DB ----------------
