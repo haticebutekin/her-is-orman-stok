@@ -95,7 +95,7 @@ video{width:100%;border-radius:10px}
 
 <h2>🛒 KASA</h2>
 
-<video id="camera" autoplay></video>
+<div id="camera"></div>
 
 <form method="post" id="form">
 <input name="barkod" id="barkod" placeholder="Barkod okut">
