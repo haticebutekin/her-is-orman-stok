@@ -1,172 +1,260 @@
-from flask import Flask, request, redirect, render_template_string
-import sqlite3
+from flask import Flask, request, redirect, session, send_file, render_template_string
+import sqlite3, os, datetime, uuid
+import qrcode
+from barcode import Code128
+from barcode.writer import ImageWriter
 
 app = Flask(__name__)
-DB = "veri.db"
+app.secret_key = "12345"
 
-# ---------------- DB ----------------
+DB = "stok.db"
+
+# ----------------- SABİT DEPOLAR -----------------
+DEPOLAR = [
+"MDF SATIŞ DEPOSU",
+"LAMİNANT DEPOSU",
+"KAPI DEPOSU",
+"HGLOSS DEPOSU (MORAY YANI)",
+"SÜTÇÜ YANI",
+"HELVACI YANI",
+"RÖTBALANSÇI YANI",
+"KESİMHANE"
+]
+
+# ----------------- DB -----------------
 def db():
     return sqlite3.connect(DB)
 
-def init_db():
+def kur():
     with db() as con:
-        con.execute("""CREATE TABLE IF NOT EXISTS urun (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            barkod TEXT,
-            isim TEXT,
-            fiyat REAL,
-            stok INTEGER
-        )""")
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS urunler(
+        id INTEGER PRIMARY KEY,
+        barkod TEXT,
+        ad TEXT,
+        cins TEXT,
+        ebat TEXT,
+        kalinlik TEXT,
+        sinif TEXT,
+        yuzey TEXT,
+        renk TEXT,
+        adet INTEGER,
+        depo TEXT
+        )
+        """)
 
-init_db()
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS hareket(
+        id INTEGER PRIMARY KEY,
+        barkod TEXT,
+        islem TEXT,
+        adet INTEGER,
+        kullanici TEXT,
+        tarih TEXT
+        )
+        """)
 
-# ---------------- PANEL ----------------
-@app.route("/")
-def panel():
-    return render_template_string("""
-    <style>
-    body{
-        margin:0;
-        font-family:Arial;
-        background: linear-gradient(135deg,#0f172a,#020617);
-        color:white;
-        text-align:center;
-    }
+kur()
 
-    h1{padding:20px;}
+# ----------------- BARKOD -----------------
+def yeni_barkod():
+    return "HER-" + str(uuid.uuid4().hex[:6]).upper()
 
-    .container{width:90%;margin:auto;}
+def barkod_uret(kod):
+    path = f"static/{kod}.png"
+    Code128(kod, writer=ImageWriter()).write(open(path, "wb"))
+    return path
 
-    .btn{
-        display:block;
-        padding:25px;
-        margin:15px 0;
-        border-radius:12px;
-        font-size:22px;
-        text-decoration:none;
-        color:white;
-        font-weight:bold;
-        transition:0.2s;
-    }
+def qr_uret(kod):
+    path = f"static/{kod}_qr.png"
+    img = qrcode.make(kod)
+    img.save(path)
+    return path
 
-    .btn:hover{transform:scale(1.02);opacity:0.9;}
-
-    .blue{background:linear-gradient(90deg,#3b82f6,#06b6d4);}
-    .green{background:linear-gradient(90deg,#22c55e,#16a34a);}
-    .orange{background:linear-gradient(90deg,#f97316,#f59e0b);}
-    .purple{background:linear-gradient(90deg,#6366f1,#8b5cf6);}
-    .red{background:linear-gradient(90deg,#ef4444,#dc2626);}
-    </style>
-
-    <h1>📦 STOK PANEL</h1>
-
-    <div class="container">
-        <a href="/urun_ekle" class="btn blue">➕ ÜRÜN EKLE</a>
-        <a href="/satis" class="btn green">🛒 SATIŞ (KASA)</a>
-        <a href="/stok" class="btn purple">📦 STOK</a>
-    </div>
-    """)
-
-# ---------------- ÜRÜN EKLE ----------------
-@app.route("/urun_ekle", methods=["GET","POST"])
-def urun_ekle():
+# ----------------- LOGIN -----------------
+@app.route("/", methods=["GET","POST"])
+def login():
     if request.method == "POST":
-        barkod = request.form["barkod"]
-        isim = request.form["isim"]
-        fiyat = request.form["fiyat"]
-        stok = request.form["stok"]
+        k = request.form["k"]
+        s = request.form["s"]
 
-        with db() as con:
-            con.execute("INSERT INTO urun (barkod,isim,fiyat,stok) VALUES (?,?,?,?)",
-                        (barkod,isim,fiyat,stok))
+        if k == "admin" and s == "123":
+            session["user"] = "admin"
+            return redirect("/panel")
 
+        if k == "depo" and s == "123":
+            session["user"] = "depo"
+            return redirect("/okut")
+
+    return """
+    <h2>GİRİŞ</h2>
+    <form method=post>
+    Kullanıcı: <input name=k><br>
+    Şifre: <input name=s type=password><br>
+    <button>GİR</button>
+    </form>
+    """
+
+# ----------------- PANEL -----------------
+@app.route("/panel")
+def panel():
+    if session.get("user") != "admin":
         return redirect("/")
 
-    return render_template_string("""
-    <style>
-    body{background:#0f172a;color:white;font-family:Arial;text-align:center}
-    input,button{padding:10px;margin:5px;width:90%}
-    </style>
+    return """
+    <h1>STOK PANEL</h1>
+    <a href=/urun>Ekle</a><br>
+    <a href=/stok>Stok</a><br>
+    <a href=/hareket>Hareket</a><br>
+    """
 
-    <h2>Ürün Ekle</h2>
+# ----------------- ÜRÜN EKLE -----------------
+@app.route("/urun", methods=["GET","POST"])
+def urun():
+    if session.get("user") != "admin":
+        return redirect("/")
 
-    <form method="post">
-        <input name="barkod" placeholder="Barkod">
-        <input name="isim" placeholder="Ürün adı">
-        <input name="fiyat" placeholder="Fiyat">
-        <input name="stok" placeholder="Stok">
-        <button>Kaydet</button>
+    if request.method == "POST":
+        kod = yeni_barkod()
+        barkod_uret(kod)
+        qr_uret(kod)
+
+        data = (
+            kod,
+            request.form["ad"],
+            request.form["cins"],
+            request.form["ebat"],
+            request.form["kalinlik"],
+            request.form["sinif"],
+            request.form["yuzey"],
+            request.form["renk"],
+            int(request.form["adet"]),
+            request.form["depo"]
+        )
+
+        with db() as con:
+            con.execute("""
+            INSERT INTO urunler(
+            barkod,ad,cins,ebat,kalinlik,sinif,yuzey,renk,adet,depo
+            ) VALUES(?,?,?,?,?,?,?,?,?,?)
+            """, data)
+
+        return f"OK <br><img src='/static/{kod}.png'><br><img src='/static/{kod}_qr.png'>"
+
+    depo_html = "".join([f"<option>{d}</option>" for d in DEPOLAR])
+
+    return f"""
+    <h2>ÜRÜN KARTI</h2>
+    <form method=post>
+    Ad <input name=ad><br>
+    Cins <input name=cins><br>
+    Ebat <input name=ebat><br>
+    Kalınlık <input name=kalinlik><br>
+    Sınıf <input name=sinif><br>
+
+    HG/MAT
+    <select name=yuzey>
+        <option>HG</option>
+        <option>MAT</option>
+    </select><br>
+
+    Renk <input name=renk><br>
+    Adet <input name=adet><br>
+
+    Depo
+    <select name=depo>{depo_html}</select><br>
+
+    <button>EKLE</button>
     </form>
-    """)
+    """
 
-# ---------------- STOK ----------------
+# ----------------- STOK -----------------
 @app.route("/stok")
 def stok():
     with db() as con:
-        data = con.execute("SELECT * FROM urun").fetchall()
+        urun = con.execute("SELECT * FROM urunler").fetchall()
 
     html = "<h2>STOK</h2>"
-    for u in data:
-        html += f"<div>{u[2]} - {u[3]} ₺ - {u[4]} adet</div>"
+    for u in urun:
+        html += f"{u[1]} | {u[2]} | {u[9]} adet<br>"
 
     return html
 
-# ---------------- KASA ----------------
-sepet = {}
-
-@app.route("/satis", methods=["GET","POST"])
-def satis():
-    global sepet
+# ----------------- BARKOD OKUT -----------------
+@app.route("/okut", methods=["GET","POST"])
+def okut():
+    if session.get("user") not in ["admin","depo"]:
+        return redirect("/")
 
     if request.method == "POST":
-        barkod = request.form["barkod"]
+        kod = request.form["kod"]
 
         with db() as con:
-            urun = con.execute("SELECT * FROM urun WHERE barkod=?",(barkod,)).fetchone()
+            u = con.execute("SELECT * FROM urunler WHERE barkod=?",(kod,)).fetchone()
 
-        if urun:
-            if barkod not in sepet:
-                sepet[barkod] = {"isim":urun[2],"fiyat":urun[3],"adet":1}
-            else:
-                sepet[barkod]["adet"] += 1
+        if not u:
+            return "❌ Ürün yok!"
 
-    toplam = sum(v["fiyat"]*v["adet"] for v in sepet.values())
+        return f"""
+        <h3>{u[2]}</h3>
+        Cins: {u[3]}<br>
+        Ebat: {u[4]}<br>
+        Yüzey: {u[6]}<br>
+        Renk: {u[7]}<br>
+        Depo: {u[9]}<br>
 
-    return render_template_string("""
-    <style>
-    body{background:#020617;color:white;font-family:Arial}
-    input,button{padding:15px;width:100%;margin:5px;font-size:18px}
-    .box{background:#1e293b;padding:10px;margin:5px;border-radius:10px}
-    .toplam{font-size:25px;color:#22c55e}
-    </style>
+        <form action='/cikis' method=post>
+        <input type=hidden name=kod value='{kod}'>
+        Adet <input name=adet><br>
+        <button>ÇIKIŞ YAP</button>
+        </form>
+        """
 
-    <h2>🛒 KASA</h2>
-
-    <form method="post">
-        <input name="barkod" placeholder="Barkod okut">
-        <button>Ekle</button>
+    return """
+    <h2>BARKOD OKUT</h2>
+    <form method=post>
+    Barkod <input name=kod>
+    <button>OKUT</button>
     </form>
+    """
 
-    <h3>Sepet</h3>
+# ----------------- ÇIKIŞ -----------------
+@app.route("/cikis", methods=["POST"])
+def cikis():
+    kod = request.form["kod"]
+    adet = int(request.form["adet"])
 
-    {% for v in sepet.values() %}
-    <div class="box">
-        {{v.isim}} - {{v.adet}} x {{v.fiyat}} ₺
-    </div>
-    {% endfor %}
+    with db() as con:
+        u = con.execute("SELECT adet FROM urunler WHERE barkod=?",(kod,)).fetchone()
 
-    <div class="toplam">TOPLAM: {{toplam}} ₺</div>
+        if not u:
+            return "YOK"
 
-    <a href="/temizle"><button>🗑 Sepeti Temizle</button></a>
-    """, sepet=sepet, toplam=toplam)
+        if u[0] < adet:
+            return "YETERSİZ STOK"
 
-# ---------------- TEMİZLE ----------------
-@app.route("/temizle")
-def temizle():
-    global sepet
-    sepet = {}
-    return redirect("/satis")
+        con.execute("UPDATE urunler SET adet=adet-? WHERE barkod=?", (adet,kod))
 
-# ---------------- RUN ----------------
+        con.execute("""
+        INSERT INTO hareket(barkod,islem,adet,kullanici,tarih)
+        VALUES(?,?,?,?,?)
+        """,(kod,"ÇIKIŞ",adet,session.get("user"),datetime.datetime.now()))
+
+    return "OK"
+
+# ----------------- HAREKET -----------------
+@app.route("/hareket")
+def hareket():
+    with db() as con:
+        h = con.execute("SELECT * FROM hareket ORDER BY id DESC").fetchall()
+
+    html = "<h2>HAREKET</h2>"
+    for x in h:
+        html += f"{x[1]} | {x[2]} | {x[3]} | {x[4]} | {x[5]}<br>"
+
+    return html
+
+# ----------------- RUN -----------------
 if __name__ == "__main__":
-    app.run()
+    os.makedirs("static", exist_ok=True)
+    app.run(debug=True)
