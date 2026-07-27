@@ -208,7 +208,7 @@ def liste():
 <button type="button" onclick="secK(this,'35')">35</button>
 
 </div>
-
+"""
 <input type="hidden" name="kalinlik" id="kalinlik" required>
 # OKUT
 @app.route("/okut", methods=["GET","POST"])
