@@ -7,8 +7,7 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = "12345"
 
-UPLOAD_FOLDER = "static"
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+UPLOAD_FOLDER = "static"   # ✅ sadece bu var, sorun yok
 
 # ---------------- DB ----------------
 def db():
@@ -30,15 +29,6 @@ def kur():
         depo TEXT,
         barkod TEXT,
         foto TEXT
-    )""")
-
-    c.execute("""CREATE TABLE IF NOT EXISTS hareket(
-        id INTEGER PRIMARY KEY,
-        urun TEXT,
-        adet INTEGER,
-        depo TEXT,
-        kim TEXT,
-        saat TEXT
     )""")
 
     con.commit()
@@ -100,10 +90,10 @@ def panel():
     for u in urunler:
         html+=f"""
         <div style='border:1px solid #ccc;padding:10px;margin:10px'>
-        <b>{u[1]}</b> ({u[3]} {u[4]}mm)<br>
+        <b>{u[1]}</b><br>
         Stok: {u[7]} | Depo: {u[8]}<br>
         <img src='/static/{u[10]}' width='100'><br>
-        <a href='/pdf/{u[9]}'>🧾 Etiket PDF</a>
+        <a href='/pdf/{u[9]}'>🧾 PDF</a>
         </div>
         """
 
@@ -143,7 +133,6 @@ def ekle():
 
     return """
     <h2>Ürün Ekle</h2>
-
     <form method="post" enctype="multipart/form-data">
     Ad:<br><input name="ad"><br>
     Cins:<br><input name="cins"><br>
@@ -153,14 +142,12 @@ def ekle():
     Renk:<br><input name="renk"><br>
     Adet:<br><input name="adet"><br>
     Depo:<br><input name="depo"><br><br>
-
     Foto:<br><input type="file" name="foto"><br><br>
-
     <button>Kaydet</button>
     </form>
     """
 
-# ---------------- PDF İNDİR ----------------
+# ---------------- PDF ----------------
 @app.route("/pdf/<barkod>")
 def pdf(barkod):
     con=db()
@@ -183,9 +170,8 @@ def rapor():
     values=[x[1] for x in data]
 
     return f"""
-    <h2>Depo Stok Raporu</h2>
+    <h2>Depo Rapor</h2>
     <canvas id="g"></canvas>
-
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
     new Chart(document.getElementById("g"), {{
@@ -223,43 +209,41 @@ def cikis():
         return f"✅ {urun[1]} | Kalan: {yeni}"
 
     return """
-<style>
-body{background:black;color:white;text-align:center;}
-video{width:100%;height:60vh;}
-button{font-size:30px;width:100%;background:red;color:white;}
-input{font-size:25px;width:100%;}
-</style>
+    <style>
+    body{background:black;color:white;text-align:center;}
+    video{width:100%;height:60vh;}
+    input{font-size:25px;width:100%;}
+    </style>
 
-<h2>📦 Depo</h2>
-<video id="kamera" autoplay></video>
+    <h2>📦 Depo</h2>
+    <video id="kamera" autoplay></video>
 
-<input id="barkod">
-<input id="adet" value="1">
+    <input id="adet" value="1">
 
-<script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
 
-<script>
-const qr=new Html5Qrcode("kamera");
-let kilit=false;
+    <script>
+    const qr=new Html5Qrcode("kamera");
+    let kilit=false;
 
-Html5Qrcode.getCameras().then(d=>{
-qr.start(d[0].id,{fps:10},code=>{
-if(kilit) return;
-kilit=true;
+    Html5Qrcode.getCameras().then(d=>{
+    qr.start(d[0].id,{fps:10},code=>{
+    if(kilit) return;
+    kilit=true;
 
-fetch("/cikis",{
-method:"POST",
-headers:{"Content-Type":"application/x-www-form-urlencoded"},
-body:"barkod="+code+"&adet="+adet.value
-})
-.then(r=>r.text())
-.then(alert);
+    fetch("/cikis",{
+    method:"POST",
+    headers:{"Content-Type":"application/x-www-form-urlencoded"},
+    body:"barkod="+code+"&adet="+adet.value
+    })
+    .then(r=>r.text())
+    .then(alert);
 
-setTimeout(()=>kilit=false,1500);
-});
-});
-</script>
-"""
+    setTimeout(()=>kilit=false,1500);
+    });
+    });
+    </script>
+    """
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
