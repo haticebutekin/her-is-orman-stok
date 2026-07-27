@@ -20,7 +20,7 @@ body {
     margin: 0;
     font-family: Arial, sans-serif;
 
-    /* 👇 SENİN GÖRSEL */
+    * 👇 SENİN GÖRSEL *
     background: url("/static/bg.jpg") no-repeat center center fixed;
     background-size: cover;
 }
