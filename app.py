@@ -114,6 +114,40 @@ def logs():
     <div>{{l[1]}} | {{l[2]}} | {{l[3]}} | {{l[4]}}</div>
     {% endfor %}
     """,data=data)
+    
+    # ---------------- BARKOD OKUTMA ----------------
+@app.route("/kamera")
+def kamera():
+    if not session.get("g"): return redirect("/")
+
+    return """
+    <h2>Barkod Okut</h2>
+    <video id="preview" width="300"></video>
+
+    <script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.min.js"></script>
+
+    <script>
+    Quagga.init({
+        inputStream : {
+            name : "Live",
+            type : "LiveStream",
+            target: document.querySelector('#preview')
+        },
+        decoder : {
+            readers : ["code_128_reader"]
+        }
+    }, function(err) {
+        if (!err) {
+            Quagga.start();
+        }
+    });
+
+    Quagga.onDetected(function(data) {
+        let kod = data.codeResult.code;
+        window.location = "/sat/" + kod;
+    });
+    </script>
+    """
 
 # ---------------- RUN ----------------
 if __name__=="__main__":
