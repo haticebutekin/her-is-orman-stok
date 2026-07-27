@@ -85,13 +85,29 @@ def login():
 @app.route("/panel")
 def panel():
     if "user" not in session: return redirect("/")
+
     return """
-    <h2>PANEL</h2>
-    <a href='/ekle'>ÜRÜN EKLE</a><br><br>
-    <a href='/okut'>BARKOD ÇIKIŞ</a><br><br>
-    <a href='/kamera'>KAMERA OKUT</a><br><br>
-    <a href='/liste'>STOK LİSTE</a><br><br>
-    <a href='/hareket'>HAREKET</a>
+    <html>
+    <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+    body{font-family:Arial;text-align:center;background:#111;color:white}
+    a{display:block;margin:15px;padding:20px;background:#0a84ff;color:white;
+    text-decoration:none;font-size:20px;border-radius:10px}
+    </style>
+    </head>
+
+    <body>
+    <h2>📦 STOK PANEL</h2>
+
+    <a href='/ekle'>➕ ÜRÜN EKLE</a>
+    <a href='/okut'>📤 BARKOD ÇIKIŞ</a>
+    <a href='/kamera'>📷 KAMERA OKUT</a>
+    <a href='/liste'>📋 STOK LİSTE</a>
+    <a href='/hareket'>📊 HAREKET</a>
+
+    </body>
+    </html>
     """
 
 # ÜRÜN EKLE
@@ -138,11 +154,28 @@ def liste():
     data=c.execute("SELECT * FROM products").fetchall()
     conn.close()
 
-    html="<h2>STOK</h2>"
-    for i in data:
-        html+=f"{i[1]} | {i[6]} adet | {i[7]} | Barkod:{i[8]}<br>"
-    return html
+    html = """
+    <html><head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body style="font-family:Arial">
+    <h2>📦 STOK</h2>
+    """
 
+    for i in data:
+        html += f"""
+        <div style='border:1px solid #ccc;padding:10px;margin:10px;border-radius:10px'>
+        <b>{i[1]}</b><br>
+        {i[2]} | {i[3]} mm<br>
+        {i[4]} | {i[5]}<br>
+        Depo: {i[7]}<br>
+        Stok: {i[6]}<br>
+        Barkod: {i[8]}
+        </div>
+        """
+
+    html += "</body></html>"
+    return html
 # BARKOD OKUT
 @app.route("/okut", methods=["GET","POST"])
 def okut():
@@ -191,9 +224,17 @@ def okut():
 @app.route("/kamera")
 def kamera():
     return """
-    <h2>KAMERA OKUT</h2>
+    <html>
+    <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+
+    <body style="text-align:center">
+    <h2>📷 Barkod Oku</h2>
+
     <script src="https://unpkg.com/html5-qrcode"></script>
-    <div id="reader" style="width:300px;"></div>
+
+    <div id="reader" style="width:300px;margin:auto;"></div>
 
     <script>
     function onScanSuccess(decodedText) {
@@ -201,6 +242,9 @@ def kamera():
     }
     new Html5QrcodeScanner("reader", {fps:10}).render(onScanSuccess);
     </script>
+
+    </body>
+    </html>
     """
 
 # HAREKET
