@@ -9,9 +9,10 @@ def db():
 
 # ---------------- DB ----------------
 with db() as con:
-    con.execute("CREATE TABLE IF NOT EXISTS urunler(id INTEGER PRIMARY KEY,barkod TEXT,isim TEXT,adet INT,depo TEXT)")
+    con.execute("CREATE TABLE IF NOT EXISTS urunler(id INTEGER PRIMARY KEY,barkod TEXT,isim TEXT,adet INT,depo TEXT,fiyat REAL)")
     con.execute("CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,username TEXT,password TEXT,role TEXT)")
     con.execute("CREATE TABLE IF NOT EXISTS log(id INTEGER PRIMARY KEY,user TEXT,islem TEXT,barkod TEXT,tarih TEXT)")
+    con.execute("CREATE TABLE IF NOT EXISTS kasa(id INTEGER PRIMARY KEY,tutar REAL,tarih TEXT)")
 
     if not con.execute("SELECT * FROM users").fetchall():
         con.execute("INSERT INTO users VALUES(NULL,'admin','123','admin')")
@@ -54,15 +55,22 @@ def panel():
     if request.method=="POST" and session["role"]=="admin":
         kod="HER-"+str(int(datetime.datetime.now().timestamp()))
         with db() as con:
-            con.execute("INSERT INTO urunler VALUES(NULL,?,?,?,?)",
-                        (kod,request.form["isim"],int(request.form["adet"]),request.form["depo"]))
+            con.execute("INSERT INTO urunler VALUES(NULL,?,?,?,?,?)",
+                        (kod,
+                         request.form["isim"],
+                         int(request.form["adet"]),
+                         request.form["depo"],
+                         float(request.form["fiyat"])))
         log(session["user"],"EKLE",kod)
 
     with db() as con:
         urunler=con.execute("SELECT * FROM urunler ORDER BY id DESC").fetchall()
+        toplam=con.execute("SELECT SUM(tutar) FROM kasa").fetchone()[0] or 0
 
     return render_template_string("""
     <h3>{{session['user']}} ({{session['role']}})</h3>
+
+    <b>💰 KASA TOPLAM: {{toplam}} TL</b><br><br>
 
     <a href="/kamera">📷 Barkod Okut</a><br>
     <a href="/log">📋 Log</a><br><br>
@@ -72,6 +80,7 @@ def panel():
     <input name="isim" placeholder="ürün">
     <input name="adet" placeholder="adet">
     <input name="depo" placeholder="depo">
+    <input name="fiyat" placeholder="fiyat">
     <button>EKLE</button>
     </form>
     {% endif %}
@@ -80,7 +89,7 @@ def panel():
 
     {% for u in urunler %}
     <div style="border:1px solid;padding:6px;margin:6px">
-    {{u[2]}} | {{u[4]}} | Adet: {{u[3]}} <br>
+    {{u[2]}} | {{u[4]}} | {{u[5]}} TL | Adet: {{u[3]}} <br>
 
     {% if u[3] <= 5 %}
     <b style="color:red">DÜŞÜK STOK</b><br>
@@ -89,7 +98,7 @@ def panel():
     <a href="/sat/{{u[1]}}">SAT</a>
     </div>
     {% endfor %}
-    """,urunler=urunler)
+    """,urunler=urunler,toplam=toplam)
 
 # ---------------- SAT ----------------
 @app.route("/sat/<kod>")
@@ -97,9 +106,10 @@ def sat(kod):
     if not session.get("g"): return redirect("/")
 
     with db() as con:
-        s=con.execute("SELECT adet FROM urunler WHERE barkod=?",(kod,)).fetchone()
-        if s and s[0]>0:
+        u=con.execute("SELECT adet,fiyat FROM urunler WHERE barkod=?",(kod,)).fetchone()
+        if u and u[0]>0:
             con.execute("UPDATE urunler SET adet=adet-1 WHERE barkod=?",(kod,))
+            con.execute("INSERT INTO kasa VALUES(NULL,?,?)",(u[1],str(datetime.datetime.now())))
             log(session["user"],"SAT",kod)
 
     return redirect("/panel")
