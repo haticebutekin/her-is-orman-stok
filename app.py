@@ -1,5 +1,5 @@
 from flask import Flask, request, redirect, session, render_template_string
-import sqlite3, datetime, os
+import sqlite3, datetime
 
 app = Flask(__name__)
 app.secret_key = "123"
@@ -36,6 +36,7 @@ def login():
             session["user"]=u[1]
             session["role"]=u[3]
             return redirect("/panel")
+
     return """
     <h2>Giriş</h2>
     <form method="post">
@@ -62,8 +63,9 @@ def panel():
 
     return render_template_string("""
     <h3>{{session['user']}} ({{session['role']}})</h3>
-    <a href="/kamera">📷 Barkod Okut</a>
-    <br><br>
+
+    <a href="/kamera">📷 Barkod Okut</a><br><br>
+    <a href="/log">📋 LOG</a><br><br>
 
     {% if session["role"]=="admin" %}
     <form method="post">
@@ -87,8 +89,6 @@ def panel():
     <a href="/sat/{{u[1]}}">SAT</a>
     </div>
     {% endfor %}
-
-    <br><a href="/log">LOG</a>
     """,urunler=urunler)
 
 # ---------------- SAT ----------------
@@ -116,8 +116,8 @@ def logs():
     <div>{{l[1]}} | {{l[2]}} | {{l[3]}} | {{l[4]}}</div>
     {% endfor %}
     """,data=data)
-    
-    # ---------------- BARKOD OKUTMA ----------------
+
+# ---------------- KAMERA ----------------
 @app.route("/kamera")
 def kamera():
     if not session.get("g"): return redirect("/")
@@ -130,18 +130,16 @@ def kamera():
 
     <script>
     Quagga.init({
-        inputStream : {
-            name : "Live",
-            type : "LiveStream",
+        inputStream: {
+            name: "Live",
+            type: "LiveStream",
             target: document.querySelector('#preview')
         },
-        decoder : {
-            readers : ["code_128_reader"]
+        decoder: {
+            readers: ["code_128_reader"]
         }
     }, function(err) {
-        if (!err) {
-            Quagga.start();
-        }
+        if (!err) Quagga.start();
     });
 
     Quagga.onDetected(function(data) {
