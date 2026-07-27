@@ -1,92 +1,41 @@
-from flask import Flask, request, redirect, session, render_template_string, send_file
-import sqlite3, os, datetime
-import barcode
-from barcode.writer import ImageWriter
-from openpyxl import Workbook
+from flask import Flask, request, redirect, session, render_template_string
+import sqlite3, datetime, os
 
 app = Flask(__name__)
-app.secret_key = "pro123"
+app.secret_key = "123"
 
-# ---------------- DB ----------------
 def db():
     return sqlite3.connect("stok.db")
 
-def init_db():
-    with db() as con:
-        # ürün
-        con.execute("""
-        CREATE TABLE IF NOT EXISTS urunler(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            barkod TEXT,
-            isim TEXT,
-            adet INTEGER,
-            depo TEXT
-        )
-        """)
+# ---------------- DB ----------------
+with db() as con:
+    con.execute("CREATE TABLE IF NOT EXISTS urunler(id INTEGER PRIMARY KEY,barkod TEXT,isim TEXT,adet INT,depo TEXT)")
+    con.execute("CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,username TEXT,password TEXT,role TEXT)")
+    con.execute("CREATE TABLE IF NOT EXISTS log(id INTEGER PRIMARY KEY,user TEXT,islem TEXT,barkod TEXT,tarih TEXT)")
 
-        # kullanıcı
-        con.execute("""
-        CREATE TABLE IF NOT EXISTS users(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT,
-            password TEXT,
-            role TEXT
-        )
-        """)
-
-        # log
-        con.execute("""
-        CREATE TABLE IF NOT EXISTS log(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user TEXT,
-            islem TEXT,
-            barkod TEXT,
-            tarih TEXT
-        )
-        """)
-
-        # default kullanıcılar
-        u = con.execute("SELECT * FROM users").fetchall()
-        if not u:
-            con.execute("INSERT INTO users VALUES (NULL,'admin','123','admin')")
-            con.execute("INSERT INTO users VALUES (NULL,'depo','123','depo')")
-            con.execute("INSERT INTO users VALUES (NULL,'satis','123','satis')")
-
-init_db()
+    if not con.execute("SELECT * FROM users").fetchall():
+        con.execute("INSERT INTO users VALUES(NULL,'admin','123','admin')")
+        con.execute("INSERT INTO users VALUES(NULL,'depo','123','depo')")
+        con.execute("INSERT INTO users VALUES(NULL,'satis','123','satis')")
 
 # ---------------- LOG ----------------
-def log_yaz(user, islem, barkod):
+def log(user,islem,kod):
     with db() as con:
-        con.execute("INSERT INTO log (user,islem,barkod,tarih) VALUES (?,?,?,?)",
-                    (user, islem, barkod, str(datetime.datetime.now())))
-
-# ---------------- BARKOD ----------------
-def yeni_barkod():
-    with db() as con:
-        say = con.execute("SELECT COUNT(*) FROM urunler").fetchone()[0]
-    return f"HER-{str(say+1).zfill(6)}"
-
-def barkod_olustur(kod):
-    os.makedirs("static", exist_ok=True)
-    Code128 = barcode.get_barcode_class('code128')
-    return Code128(kod, writer=ImageWriter()).save(f"static/{kod}")
+        con.execute("INSERT INTO log VALUES(NULL,?,?,?,?)",(user,islem,kod,str(datetime.datetime.now())))
 
 # ---------------- LOGIN ----------------
 @app.route("/", methods=["GET","POST"])
 def login():
-    if request.method == "POST":
-        k = request.form["k"]
-        s = request.form["s"]
-
+    if request.method=="POST":
+        k=request.form["k"]
+        s=request.form["s"]
         with db() as con:
-            u = con.execute("SELECT * FROM users WHERE username=? AND password=?", (k,s)).fetchone()
-
+            u=con.execute("SELECT * FROM users WHERE username=? AND password=?",(k,s)).fetchone()
         if u:
-            session["g"] = True
-            session["user"] = u[1]
-            session["role"] = u[3]
+            session["g"]=1
+            session["user"]=u[1]
+            session["role"]=u[3]
             return redirect("/panel")
-
     return """
     <h2>Giriş</h2>
     <form method="post">
@@ -101,26 +50,20 @@ def login():
 def panel():
     if not session.get("g"): return redirect("/")
 
-    # EKLE (SADECE ADMIN)
-    if request.method == "POST" and session["role"] == "admin":
-        kod = yeni_barkod()
-        barkod_olustur(kod)
-
+    if request.method=="POST" and session["role"]=="admin":
+        kod="HER-"+str(int(datetime.datetime.now().timestamp()))
         with db() as con:
-            con.execute("INSERT INTO urunler (barkod,isim,adet,depo) VALUES (?,?,?,?)",
-                        (kod,
-                         request.form["isim"],
-                         int(request.form["adet"]),
-                         request.form["depo"]))
-        log_yaz(session["user"], "URUN_EKLE", kod)
+            con.execute("INSERT INTO urunler VALUES(NULL,?,?,?,?)",
+                        (kod,request.form["isim"],int(request.form["adet"]),request.form["depo"]))
+        log(session["user"],"EKLE",kod)
 
     with db() as con:
-        urunler = con.execute("SELECT * FROM urunler ORDER BY id DESC").fetchall()
+        urunler=con.execute("SELECT * FROM urunler ORDER BY id DESC").fetchall()
 
     return render_template_string("""
-    <h2>PANEL ({{session['role']}})</h2>
+    <h3>{{session['user']}} ({{session['role']}})</h3>
 
-    {% if session["role"] == "admin" %}
+    {% if session["role"]=="admin" %}
     <form method="post">
     <input name="isim" placeholder="ürün">
     <input name="adet" placeholder="adet">
@@ -132,8 +75,8 @@ def panel():
     <hr>
 
     {% for u in urunler %}
-    <div style="border:1px solid;padding:5px;margin:5px">
-    {{u[2]}} | Adet: {{u[3]}} | {{u[4]}} <br>
+    <div style="border:1px solid;padding:6px;margin:6px">
+    {{u[2]}} | {{u[4]}} | Adet: {{u[3]}} <br>
 
     {% if u[3] <= 5 %}
     <b style="color:red">DÜŞÜK STOK</b><br>
@@ -143,8 +86,8 @@ def panel():
     </div>
     {% endfor %}
 
-    <a href="/log">LOG</a>
-    """, urunler=urunler)
+    <br><a href="/log">LOG</a>
+    """,urunler=urunler)
 
 # ---------------- SAT ----------------
 @app.route("/sat/<kod>")
@@ -152,29 +95,26 @@ def sat(kod):
     if not session.get("g"): return redirect("/")
 
     with db() as con:
-        stok = con.execute("SELECT adet FROM urunler WHERE barkod=?", (kod,)).fetchone()
-
-        if stok and stok[0] > 0:
-            con.execute("UPDATE urunler SET adet = adet-1 WHERE barkod=?", (kod,))
-            log_yaz(session["user"], "SATIS", kod)
+        s=con.execute("SELECT adet FROM urunler WHERE barkod=?",(kod,)).fetchone()
+        if s and s[0]>0:
+            con.execute("UPDATE urunler SET adet=adet-1 WHERE barkod=?",(kod,))
+            log(session["user"],"SAT",kod)
 
     return redirect("/panel")
 
-# ---------------- LOG SAYFA ----------------
+# ---------------- LOG ----------------
 @app.route("/log")
-def log():
+def logs():
     with db() as con:
-        data = con.execute("SELECT * FROM log ORDER BY id DESC").fetchall()
+        data=con.execute("SELECT * FROM log ORDER BY id DESC").fetchall()
 
     return render_template_string("""
-    <h2>İŞLEM GEÇMİŞİ</h2>
+    <h2>LOG</h2>
     {% for l in data %}
-    <div>
-    {{l[1]}} → {{l[2]}} → {{l[3]}} → {{l[4]}}
-    </div>
+    <div>{{l[1]}} | {{l[2]}} | {{l[3]}} | {{l[4]}}</div>
     {% endfor %}
-    """, data=data)
+    """,data=data)
 
 # ---------------- RUN ----------------
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+if __name__=="__main__":
+    app.run(host="0.0.0.0",port=10000)
