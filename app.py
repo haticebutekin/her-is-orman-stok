@@ -111,10 +111,6 @@ def ekle():
         foto_ad = barkod + ".jpg"
         foto.save(f"{UPLOAD_FOLDER}/{foto_ad}")
 
-        <h3>Renk Seç</h3>
-<div id="renkler"></div>
-<input id="renk" name="renk">
-
         data = (
             request.form["ad"],
             request.form["cins"],
@@ -136,117 +132,80 @@ def ekle():
 
         return redirect("/panel")
 
-    # 👇 BURASI ÇOK ÖNEMLİ (if'in DIŞINDA)
     return """
     <style>
     body{font-family:sans-serif;padding:20px}
-    button{
-        font-size:18px;
-        padding:10px;
-        margin:5px;
-        border:none;
-        color:white;
-    }
-    .sec{background:#007aff}
-    .sec2{background:#34c759}
-    .sec3{background:#ff9500}
+    button{padding:10px;margin:5px;border:none;color:white;border-radius:6px}
+    .k{background:#007aff}
+    .y{background:#34c759}
+    .r{background:#5856d6}
+    .d{background:#ff9500}
     input{width:100%;padding:10px;margin:5px}
     </style>
-
 
     <h2>Ürün Ekle</h2>
 
     <form method="post" enctype="multipart/form-data">
 
-    Ad:
-    <input name="ad">
-
-    Cins:
-    <input name="cins">
-
-    Ebat:
-    <input name="ebat">
+    Ad:<input name="ad">
+    Cins:<input name="cins">
+    Ebat:<input name="ebat">
 
     <h3>Kalınlık</h3>
-    <button type="button" class="sec" onclick="secK('4mm')">4 mm</button>
-    <button type="button" class="sec" onclick="secK('8mm')">8 mm</button>
-    <button type="button" class="sec" onclick="secK('18mm')">18 mm</button>
+    <button type="button" class="k" onclick="secK('4mm')">4</button>
+    <button type="button" class="k" onclick="secK('8mm')">8</button>
+    <button type="button" class="k" onclick="secK('18mm')">18</button>
     <input id="kalinlik" name="kalinlik">
 
     <h3>Yüzey</h3>
-    <button type="button" class="sec2" onclick="secY('HG')">HG</button>
-    <button type="button" class="sec2" onclick="secY('Mat')">Mat</button>
+    <button type="button" class="y" onclick="secY('HG')">HG</button>
+    <button type="button" class="y" onclick="secY('Mat')">Mat</button>
     <input id="yuzey" name="yuzey">
 
-    Renk:
-    <input name="renk">
+    <h3>Renk</h3>
+    <div id="renkler"></div>
+    <input id="renk" name="renk">
 
-    Adet:
-    <input name="adet">
+    <h3>Depo</h3>
+    <button type="button" class="d" onclick="secD('Ana Depo')">Ana Depo</button>
+    <button type="button" class="d" onclick="secD('Şube Depo')">Şube Depo</button>
+    <input id="depo" name="depo">
 
-    Depo:
-    <input name="depo">
-
-    Foto:
-    <input type="file" name="foto">
+    Adet:<input name="adet" value="1">
+    Foto:<input type="file" name="foto">
 
     <br><br>
-    <button style="background:#ff3b30;width:100%">Kaydet</button>
+    <button style="background:red;width:100%">Kaydet</button>
 
     </form>
 
     <script>
-const renkList = {
-    HG: ["Beyaz","Krem","Antrasit"],
-    Mat: ["Gri","Siyah"],
-    Parlak: ["Beyaz","Lake"]
-};
+    const renkList = {
+        HG:["Beyaz","Krem","Antrasit"],
+        Mat:["Gri","Siyah"]
+    };
 
-function secY(v){
-    document.getElementById("yuzey").value = v;
-
-    let alan = document.getElementById("renkler");
-    alan.innerHTML = "";
-
-    renkList[v].forEach(r=>{
-        alan.innerHTML += `<button type="button" onclick="secR('${r}')" style="background:#5856d6">${r}</button>`;
-    });
-}
-
-function secR(v){
-    document.getElementById("renk").value = v;
-}
-    </script>
-
-    <script>
-let sonSecim = JSON.parse(localStorage.getItem("secim")) || {};
-
-if(sonSecim.kalinlik){
-    document.getElementById("kalinlik").value = sonSecim.kalinlik;
-}
-if(sonSecim.yuzey){
-    document.getElementById("yuzey").value = sonSecim.yuzey;
-}
-
-function secK(v){
-    document.getElementById("kalinlik").value = v;
-    sonSecim.kalinlik = v;
-    localStorage.setItem("secim", JSON.stringify(sonSecim));
-}
-
-function secY(v){
-    document.getElementById("yuzey").value = v;
-    sonSecim.yuzey = v;
-    localStorage.setItem("secim", JSON.stringify(sonSecim));
-}
-   </script>
-
-    <script>
     function secK(v){
         document.getElementById("kalinlik").value = v;
     }
+
     function secY(v){
         document.getElementById("yuzey").value = v;
+
+        let alan = document.getElementById("renkler");
+        alan.innerHTML = "";
+
+        renkList[v].forEach(r=>{
+            alan.innerHTML += `<button type="button" class="r" onclick="secR('${r}')">${r}</button>`;
+        });
+    }
+
+    function secR(v){
+        document.getElementById("renk").value = v;
+    }
+
+    function secD(v){
+        document.getElementById("depo").value = v;
     }
     </script>
     """
@@ -315,23 +274,24 @@ def cikis():
     <style>
     body{background:black;color:white;text-align:center;}
     video{width:100%;height:60vh;}
-    input{font-size:25px;width:100%;}
-    <h3>Depo</h3>
+    input{font-size:25px;width:100%;margin:10px}
+    button{padding:15px;width:100%;font-size:20px}
     </style>
 
-    <h2>📦 Depo</h2>
+    <h2>📦 Depo Çıkış</h2>
+
     <video id="kamera" autoplay></video>
 
     <input id="adet" value="1">
-        <h3>Depo</h3>
-    <button type="button" onclick="secD('Ana')">Ana</button>
-    <button type="button" onclick="secD('Şube')">Şube</button>
-    <input id="depo" name="depo">
+
+    <button onclick="secD('Ana Depo')">Ana Depo</button>
+    <button onclick="secD('Şube Depo')">Şube Depo</button>
+    <input id="depo">
 
     <script>
-function secD(v){
-    document.getElementById("depo").value = v;
-}
+    function secD(v){
+        document.getElementById("depo").value = v;
+    }
     </script>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
