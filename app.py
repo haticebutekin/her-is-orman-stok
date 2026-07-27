@@ -163,15 +163,14 @@ def ekle():
     <input name="ebat">
 
     <h3>Kalınlık</h3>
+    <button type="button" class="sec" onclick="secK('4mm')">4 mm</button>
     <button type="button" class="sec" onclick="secK('8mm')">8 mm</button>
     <button type="button" class="sec" onclick="secK('18mm')">18 mm</button>
-    <button type="button" class="sec" onclick="secK('25mm')">25 mm</button>
     <input id="kalinlik" name="kalinlik">
 
     <h3>Yüzey</h3>
     <button type="button" class="sec2" onclick="secY('HG')">HG</button>
     <button type="button" class="sec2" onclick="secY('Mat')">Mat</button>
-    <button type="button" class="sec2" onclick="secY('Parlak')">Parlak</button>
     <input id="yuzey" name="yuzey">
 
     Renk:
