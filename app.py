@@ -1,6 +1,5 @@
-from flask import Flask, request, redirect, session
-import sqlite3
-import uuid
+from flask import Flask, request, redirect, session, send_file
+import sqlite3, uuid, os
 import qrcode
 from reportlab.pdfgen import canvas
 from datetime import datetime
@@ -8,31 +7,13 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = "12345"
 
+UPLOAD_FOLDER = "static"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 # ---------------- DB ----------------
 def db():
     return sqlite3.connect("db.sqlite3")
 
-def etiket_olustur(barkod, ad):
-
-    qr = qrcode.make(barkod)
-    qr.save("qr.png")
-
-    pdf = canvas.Canvas("etiket.pdf")
-
-    x=50
-    y=750
-
-    for i in range(20):
-        pdf.drawString(x, y, ad)
-        pdf.drawImage("qr.png", x, y-80, width=80, height=80)
-
-        x += 120
-        if x > 400:
-            x = 50
-            y -= 120
-
-    pdf.save()
-    
 def kur():
     con = db()
     c = con.cursor()
@@ -47,7 +28,8 @@ def kur():
         renk TEXT,
         adet INTEGER,
         depo TEXT,
-        barkod TEXT
+        barkod TEXT,
+        foto TEXT
     )""")
 
     c.execute("""CREATE TABLE IF NOT EXISTS hareket(
@@ -64,28 +46,41 @@ def kur():
 
 kur()
 
+# ---------------- PDF ----------------
+def etiket_pdf(barkod, ad):
+    qr = qrcode.make(barkod)
+    qr_path = f"{UPLOAD_FOLDER}/{barkod}.png"
+    qr.save(qr_path)
+
+    pdf_path = f"{UPLOAD_FOLDER}/{barkod}.pdf"
+    pdf = canvas.Canvas(pdf_path)
+
+    x,y = 50,750
+    for i in range(20):
+        pdf.drawString(x,y,ad)
+        pdf.drawImage(qr_path,x,y-80,80,80)
+        x+=120
+        if x>400:
+            x=50
+            y-=120
+
+    pdf.save()
+    return pdf_path
+
 # ---------------- LOGIN ----------------
 @app.route("/", methods=["GET","POST"])
 def login():
-    if request.method == "POST":
-        u = request.form["kullanici"]
-        p = request.form["sifre"]
-
-        if u == "admin" and p == "123":
+    if request.method=="POST":
+        if request.form["kullanici"]=="admin":
             session["user"]="admin"
             return redirect("/panel")
-
-        if u == "depo" and p == "123":
+        if request.form["kullanici"]=="depo":
             session["user"]="depo"
             return redirect("/cikis")
-
-        return "Hatalı giriş"
-
     return """
     <h2>Giriş</h2>
     <form method="post">
-    Kullanıcı: <input name="kullanici"><br><br>
-    Şifre: <input type="password" name="sifre"><br><br>
+    <input name="kullanici" placeholder="admin / depo"><br><br>
     <button>Giriş</button>
     </form>
     """
@@ -93,18 +88,24 @@ def login():
 # ---------------- PANEL ----------------
 @app.route("/panel")
 def panel():
-    if session.get("user")!="admin":
-        return redirect("/")
-
     con=db()
     c=con.cursor()
     urunler=c.execute("SELECT * FROM urun").fetchall()
     con.close()
 
-    html="<h2>Panel</h2><a href='/ekle'>+ Ürün Ekle</a><br><br>"
+    html="<h2>Panel</h2>"
+    html+="<a href='/ekle'>+ Ürün</a> | "
+    html+="<a href='/rapor'>📊 Rapor</a><br><br>"
 
     for u in urunler:
-        html+=f"{u[1]} | {u[3]} | {u[4]}mm | {u[6]} | Stok:{u[7]} | Barkod:{u[9]}<br>"
+        html+=f"""
+        <div style='border:1px solid #ccc;padding:10px;margin:10px'>
+        <b>{u[1]}</b> ({u[3]} {u[4]}mm)<br>
+        Stok: {u[7]} | Depo: {u[8]}<br>
+        <img src='/static/{u[10]}' width='100'><br>
+        <a href='/pdf/{u[9]}'>🧾 Etiket PDF</a>
+        </div>
+        """
 
     return html
 
@@ -113,9 +114,13 @@ def panel():
 def ekle():
     if request.method=="POST":
 
-        barkod = str(uuid.uuid4())[:8]
+        barkod=str(uuid.uuid4())[:8]
 
-        data = (
+        foto=request.files["foto"]
+        foto_ad=barkod+".jpg"
+        foto.save(f"{UPLOAD_FOLDER}/{foto_ad}")
+
+        data=(
             request.form["ad"],
             request.form["cins"],
             request.form["ebat"],
@@ -124,117 +129,76 @@ def ekle():
             request.form["renk"],
             int(request.form["adet"]),
             request.form["depo"],
-            barkod
+            barkod,
+            foto_ad
         )
 
         con=db()
         c=con.cursor()
-        c.execute("INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,renk,adet,depo,barkod) VALUES (?,?,?,?,?,?,?,?,?)",data)
+        c.execute("INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,renk,adet,depo,barkod,foto) VALUES (?,?,?,?,?,?,?,?,?,?)",data)
         con.commit()
         con.close()
-
-        # 🔥 PDF ETİKET
-        etiket_olustur(barkod, request.form["ad"])
 
         return redirect("/panel")
 
     return """
     <h2>Ürün Ekle</h2>
 
-    <style>
-    button{
-        padding:15px;
-        margin:5px;
-        border:none;
-        border-radius:8px;
-        color:white;
-        font-size:18px;
-    }
-    .k{background:#ff3b30;}
-    .y{background:#34c759;}
-    </style>
+    <form method="post" enctype="multipart/form-data">
+    Ad:<br><input name="ad"><br>
+    Cins:<br><input name="cins"><br>
+    Ebat:<br><input name="ebat"><br>
+    Kalınlık:<br><input name="kalinlik"><br>
+    Yüzey:<br><input name="yuzey"><br>
+    Renk:<br><input name="renk"><br>
+    Adet:<br><input name="adet"><br>
+    Depo:<br><input name="depo"><br><br>
 
-    <form method="post">
-
-    Mal adı:<br><input name="ad"><br><br>
-    Cinsi:<br><input name="cins"><br><br>
-    Ebat:<br><input name="ebat"><br><br>
-
-    <h3>Kalınlık</h3>
-    <div id="kalinlikGrup">
-    <button type="button" class="k" onclick="secK(this,'4')">4</button>
-    <button type="button" class="k" onclick="secK(this,'6')">6</button>
-    <button type="button" class="k" onclick="secK(this,'8')">8</button>
-    <button type="button" class="k" onclick="secK(this,'10')">10</button>
-    <button type="button" class="k" onclick="secK(this,'12')">12</button>
-    <button type="button" class="k" onclick="secK(this,'18')">18</button>
-    </div>
-
-    <input type="hidden" name="kalinlik" id="kalinlik"><br>
-
-    <h3>Yüzey</h3>
-    <button type="button" class="y" onclick="secY(this,'HG')">HG</button>
-    <button type="button" class="y" onclick="secY(this,'MAT')">MAT</button>
-
-    <input type="hidden" name="yuzey" id="yuzey"><br><br>
-
-    Renk:<br><input name="renk"><br><br>
-    Adet:<br><input name="adet" type="number"><br><br>
-
-    Depo:<br>
-    <select name="depo">
-    <option>MDF SATIŞ DEPOSU</option>
-    <option>LAMİNANT DEPOSU</option>
-    </select><br><br>
+    Foto:<br><input type="file" name="foto"><br><br>
 
     <button>Kaydet</button>
     </form>
-
-    <script>
-    function secK(btn,val){
-        document.getElementById("kalinlik").value=val;
-        document.querySelectorAll("#kalinlikGrup button").forEach(b=>b.style.opacity="0.5");
-        btn.style.opacity="1";
-    }
-
-    function secY(btn,val){
-        document.getElementById("yuzey").value=val;
-        document.querySelectorAll(".y").forEach(b=>b.style.opacity="0.5");
-        btn.style.opacity="1";
-    }
-    </script>
     """
-@app.route("/grafik")
-def grafik():
+
+# ---------------- PDF İNDİR ----------------
+@app.route("/pdf/<barkod>")
+def pdf(barkod):
     con=db()
     c=con.cursor()
-    data=c.execute("SELECT ad, adet FROM urun").fetchall()
+    urun=c.execute("SELECT ad FROM urun WHERE barkod=?",(barkod,)).fetchone()
+    con.close()
+
+    path=etiket_pdf(barkod, urun[0])
+    return send_file(path, as_attachment=True)
+
+# ---------------- RAPOR ----------------
+@app.route("/rapor")
+def rapor():
+    con=db()
+    c=con.cursor()
+    data=c.execute("SELECT depo, SUM(adet) FROM urun GROUP BY depo").fetchall()
     con.close()
 
     labels=[x[0] for x in data]
     values=[x[1] for x in data]
 
     return f"""
-    <h2>Stok Grafik</h2>
-
+    <h2>Depo Stok Raporu</h2>
     <canvas id="g"></canvas>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
     new Chart(document.getElementById("g"), {{
-        type: "bar",
+        type: "pie",
         data: {{
             labels: {labels},
-            datasets: [{{
-                label: "Stok",
-                data: {values}
-            }}]
+            datasets: [{{ data: {values} }}]
         }}
     }});
     </script>
     """
-    
-# ---------------- DEPO ÇIKIŞ ----------------
+
+# ---------------- QR ÇIKIŞ ----------------
 @app.route("/cikis", methods=["GET","POST"])
 def cikis():
     if request.method=="POST":
@@ -243,85 +207,57 @@ def cikis():
 
         con=db()
         c=con.cursor()
-
         urun=c.execute("SELECT * FROM urun WHERE barkod=?",(barkod,)).fetchone()
 
         if not urun:
-            return "Ürün yok"
+            return "❌ Ürün yok"
 
         yeni=urun[7]-adet
-
         if yeni<0:
-            return "Yetersiz stok"
+            return "⚠️ Yetersiz stok"
 
         c.execute("UPDATE urun SET adet=? WHERE barkod=?",(yeni,barkod))
-
-        c.execute("INSERT INTO hareket(urun,adet,depo,kim,saat) VALUES (?,?,?,?,?)",
-        (urun[1],adet,urun[8],"depo",datetime.now().strftime("%H:%M")))
-
         con.commit()
         con.close()
 
-        return "Çıkış yapıldı"
+        return f"✅ {urun[1]} | Kalan: {yeni}"
 
-   return """
+    return """
 <style>
-body{
-    margin:0;
-    background:black;
-    color:white;
-    text-align:center;
-}
-video{
-    width:100%;
-    height:60vh;
-}
-button{
-    font-size:30px;
-    padding:20px;
-    width:100%;
-    background:#ff3b30;
-    color:white;
-    border:none;
-}
-input{
-    font-size:25px;
-    padding:15px;
-    width:100%;
-}
+body{background:black;color:white;text-align:center;}
+video{width:100%;height:60vh;}
+button{font-size:30px;width:100%;background:red;color:white;}
+input{font-size:25px;width:100%;}
 </style>
 
-<h2>📦 Depo Çıkış</h2>
-
+<h2>📦 Depo</h2>
 <video id="kamera" autoplay></video>
 
-<input id="barkod" placeholder="QR otomatik">
-<input id="adet" placeholder="Adet">
-
-<button onclick="gonder()">ÇIKIŞ YAP</button>
+<input id="barkod">
+<input id="adet" value="1">
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <script>
-const html5QrCode = new Html5Qrcode("kamera");
+const qr=new Html5Qrcode("kamera");
+let kilit=false;
 
-Html5Qrcode.getCameras().then(devices => {
-    html5QrCode.start(
-        devices[0].id,
-        { fps: 10, qrbox: 250 },
-        qr => {
-            document.getElementById("barkod").value = qr;
-        }
-    );
+Html5Qrcode.getCameras().then(d=>{
+qr.start(d[0].id,{fps:10},code=>{
+if(kilit) return;
+kilit=true;
+
+fetch("/cikis",{
+method:"POST",
+headers:{"Content-Type":"application/x-www-form-urlencoded"},
+body:"barkod="+code+"&adet="+adet.value
+})
+.then(r=>r.text())
+.then(alert);
+
+setTimeout(()=>kilit=false,1500);
 });
-
-function gonder(){
-    fetch("/cikis", {
-        method:"POST",
-        headers: {"Content-Type":"application/x-www-form-urlencoded"},
-        body: "barkod="+barkod.value+"&adet="+adet.value
-    }).then(r=>r.text()).then(alert)
-}
+});
 </script>
 """
 
