@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, send_file, render_template_string
+from flask import Flask, request, redirect, render_template_string, send_file
 import sqlite3, os, uuid
 from datetime import datetime
 import barcode
@@ -10,30 +10,51 @@ app = Flask(__name__)
 DB = "veri.db"
 STATIC = "static"
 
-# --- DB ---
+# ---------------- DB ----------------
 def db():
     return sqlite3.connect(DB)
 
 def init_db():
     with db() as con:
+        # ürünler
         con.execute("""
         CREATE TABLE IF NOT EXISTS urunler(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             barkod TEXT,
             isim TEXT,
-            cins TEXT,
-            ebat TEXT,
-            kalinlik TEXT,
-            sinif TEXT,
-            yuzey TEXT,
-            renk TEXT,
             adet INTEGER,
-            depo TEXT,
+            fiyat REAL,
             tarih TEXT
         )
         """)
 
-# --- BARKOD ---
+        # kullanıcılar
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS users(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            password TEXT
+        )
+        """)
+
+        # satışlar
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS sales(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            barkod TEXT,
+            isim TEXT,
+            adet INTEGER,
+            toplam REAL,
+            tarih TEXT
+        )
+        """)
+
+        # default kullanıcı
+        cur = con.execute("SELECT * FROM users")
+        if not cur.fetchone():
+            con.execute("INSERT INTO users VALUES (NULL,'admin','1234')")
+
+# ---------------- BARKOD ----------------
 def barkod_olustur():
     return str(uuid.uuid4())[:12]
 
@@ -41,171 +62,199 @@ def barkod_png(kod):
     os.makedirs(STATIC, exist_ok=True)
     EAN = barcode.get_barcode_class('code128')
     ean = EAN(kod, writer=ImageWriter())
-    yol = os.path.join(STATIC, f"{kod}")
-    ean.save(yol)
-    return f"/static/{kod}.png"
+    path = os.path.join(STATIC, kod)
+    ean.save(path)
 
-# --- LOGIN ---
+# ---------------- LOGIN ----------------
 @app.route("/", methods=["GET","POST"])
 def login():
     if request.method == "POST":
-        if request.form["kullanici"]=="admin" and request.form["sifre"]=="1234":
-            return redirect("/panel")
+        u = request.form["kullanici"]
+        p = request.form["sifre"]
+
+        with db() as con:
+            user = con.execute(
+                "SELECT * FROM users WHERE username=? AND password=?",
+                (u,p)
+            ).fetchone()
+
+        if user:
+            return redirect("/satis")
+
     return """
     <style>
-    body{background:#0f172a;color:white;font-family:Arial;text-align:center}
-    input{padding:12px;margin:8px;border-radius:8px;border:none;width:220px}
-    button{padding:12px 24px;border:none;border-radius:10px;background:#22c55e;color:white;font-size:16px}
-    .card{margin-top:120px}
+    body{background:#0f172a;color:white;text-align:center;font-family:Arial}
+    input,button{padding:12px;margin:8px;border-radius:8px;border:none}
+    button{background:#22c55e;color:white}
     </style>
-    <div class='card'>
-    <h2>🌲 HER İŞ ORMAN</h2>
-    <form method='post'>
-    <input name='kullanici' placeholder='Kullanıcı'><br>
-    <input name='sifre' type='password' placeholder='Şifre'><br>
+
+    <h2>🌲 KASA GİRİŞ</h2>
+    <form method="post">
+    <input name="kullanici" placeholder="Kullanıcı"><br>
+    <input name="sifre" type="password" placeholder="Şifre"><br>
     <button>GİRİŞ</button>
     </form>
-    </div>
     """
 
-# --- PANEL ---
+# ---------------- ÜRÜN PANEL ----------------
 @app.route("/panel", methods=["GET","POST"])
 def panel():
     if request.method == "POST":
         kod = barkod_olustur()
-        img = barkod_png(kod)
+        barkod_png(kod)
 
         with db() as con:
             con.execute("""
-            INSERT INTO urunler (barkod,isim,cins,ebat,kalinlik,sinif,yuzey,renk,adet,depo,tarih)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO urunler (barkod,isim,adet,fiyat,tarih)
+            VALUES (?,?,?,?,?)
             """,(
                 kod,
                 request.form["isim"],
-                request.form["cins"],
-                request.form["ebat"],
-                request.form["kalinlik"],
-                request.form["sinif"],
-                request.form["yuzey"],
-                request.form["renk"],
-                request.form["adet"],
-                request.form["depo"],
+                int(request.form["adet"]),
+                float(request.form["fiyat"]),
                 datetime.now().strftime("%Y-%m-%d %H:%M")
             ))
+
         return redirect("/panel")
 
     with db() as con:
-        urunler = con.execute("SELECT * FROM urunler ORDER BY id DESC").fetchall()
+        data = con.execute("SELECT * FROM urunler").fetchall()
 
     return render_template_string("""
-<style>
-body{background:#0f172a;color:white;font-family:Arial}
-.header{background:#22c55e;padding:15px;text-align:center;font-size:22px}
-.container{display:flex}
-.left{width:40%;padding:10px}
-.right{width:60%;padding:10px}
-.card{background:#1e293b;padding:10px;border-radius:10px;margin-bottom:10px}
-input,select{width:100%;padding:10px;margin:5px;border-radius:8px;border:none}
-button{width:100%;padding:15px;margin-top:5px;border:none;border-radius:10px}
-.btn-green{background:#22c55e}
-.btn-red{background:#ef4444}
-.btn-blue{background:#3b82f6}
-table{width:100%}
-th{background:#22c55e;color:black;padding:10px}
-td{padding:10px;text-align:center}
-tr:nth-child(even){background:#1e293b}
-tr:nth-child(odd){background:#334155}
-</style>
+    <style>
+    body{background:#0f172a;color:white;font-family:Arial}
+    input,button{padding:10px;margin:5px;width:100%}
+    </style>
 
-<div class="header">🌲 KASA PANEL</div>
+    <h2>📦 Ürün Panel</h2>
 
-<div class="container">
+    <form method="post">
+    <input name="isim" placeholder="İsim">
+    <input name="adet" type="number" placeholder="Adet">
+    <input name="fiyat" type="number" step="0.01" placeholder="Fiyat ₺">
+    <button>EKLE</button>
+    </form>
 
-<div class="left">
-<div class="card">
-<form method="post">
-<input name="isim" placeholder="İsim">
-<input name="cins" placeholder="Cins">
-<input name="ebat" placeholder="Ebat">
-<input name="kalinlik" placeholder="Kalınlık">
-<input name="sinif" placeholder="Sınıf">
+    <hr>
 
-<select name="yuzey">
-<option>HG</option><option>MAT</option>
-</select>
+    {% for u in data %}
+    <div>{{u[2]}} - {{u[3]}} adet - {{u[4]}} ₺</div>
+    {% endfor %}
 
-<input name="renk" placeholder="Renk">
-<input name="adet" type="number" placeholder="Adet">
+    <a href="/excel"><button>Excel</button></a>
+    """ , data=data)
 
-<select name="depo">
-<option>MDF</option><option>KAPI</option>
-</select>
+# ---------------- SEPET ----------------
+sepet = {}
 
-<button class="btn-green">➕ EKLE</button>
-</form>
-</div>
+@app.route("/satis", methods=["GET","POST"])
+def satis():
+    global sepet
 
-<a href="/excel"><button class="btn-blue">📊 Excel</button></a>
+    if request.method == "POST":
+        kod = request.form["barkod"]
 
-</div>
+        with db() as con:
+            u = con.execute("SELECT * FROM urunler WHERE barkod=?", (kod,)).fetchone()
 
-<div class="right">
-<table>
-<tr><th>Barkod</th><th>İsim</th><th>Adet</th><th>İşlem</th></tr>
+        if u:
+            if kod in sepet:
+                sepet[kod]["adet"] += 1
+            else:
+                sepet[kod] = {
+                    "isim": u[2],
+                    "fiyat": u[4],
+                    "adet": 1
+                }
 
-{% for u in urunler %}
-<tr>
-<td>{{u[1]}}</td>
-<td>{{u[2]}}</td>
-<td>{{u[9]}}</td>
-<td>
-<a href="/dus/{{u[1]}}"><button class="btn-red">➖</button></a>
-<a href="/etiket/{{u[1]}}"><button class="btn-blue">🧾</button></a>
-</td>
-</tr>
-{% endfor %}
+    toplam = sum(v["fiyat"] * v["adet"] for v in sepet.values())
 
-</table>
-</div>
+    return render_template_string("""
+    <style>
+    body{background:#0f172a;color:white;font-family:Arial}
+    input,button{padding:10px;width:100%;margin:5px}
+    .box{background:#1e293b;padding:10px;margin:5px}
+    </style>
 
-</div>
-""", urunler=urunler)
+    <h2>🛒 KASA</h2>
 
-# --- STOK DÜŞ ---
-@app.route("/dus/<kod>")
-def dus(kod):
+    <form method="post">
+    <input name="barkod" placeholder="Barkod okut">
+    <button>Ekle</button>
+    </form>
+
+    <h3>Sepet</h3>
+
+    {% for v in sepet.values() %}
+    <div class="box">
+    {{v.isim}} - {{v.adet}} x {{v.fiyat}} ₺
+    </div>
+    {% endfor %}
+
+    <h2>💰 Toplam: {{toplam}} ₺</h2>
+
+    <a href="/fis"><button>🧾 Fiş</button></a>
+    <a href="/tamamla"><button>💳 Tamamla</button></a>
+    """, sepet=sepet, toplam=toplam)
+
+# ---------------- SATIŞ TAMAMLA ----------------
+@app.route("/tamamla")
+def tamamla():
+    global sepet
+
     with db() as con:
-        con.execute("UPDATE urunler SET adet=adet-1 WHERE barkod=?", (kod,))
-    return redirect("/panel")
+        for kod,v in sepet.items():
+            con.execute("UPDATE urunler SET adet=adet-? WHERE barkod=?",
+                        (v["adet"],kod))
 
-# --- ETİKET ---
-@app.route("/etiket/<kod>")
-def etiket(kod):
-    with db() as con:
-        u = con.execute("SELECT * FROM urunler WHERE barkod=?", (kod,)).fetchone()
-    return f"""
-    <h2>{u[2]}</h2>
-    <img src="/static/{kod}.png">
-    <p>Adet: {u[9]}</p>
-    """
+            con.execute("""
+            INSERT INTO sales (barkod,isim,adet,toplam,tarih)
+            VALUES (?,?,?,?,?)
+            """,(
+                kod,
+                v["isim"],
+                v["adet"],
+                v["fiyat"]*v["adet"],
+                datetime.now().strftime("%Y-%m-%d %H:%M")
+            ))
 
-# --- EXCEL ---
+    sepet = {}
+    return redirect("/satis")
+
+# ---------------- FİŞ ----------------
+@app.route("/fis")
+def fis():
+    global sepet
+    toplam = sum(v["fiyat"] * v["adet"] for v in sepet.values())
+
+    html = "<body onload='window.print()'>"
+    html += "<h2>🌲 HER İŞ ORMAN</h2><hr>"
+
+    for v in sepet.values():
+        html += f"{v['isim']} - {v['adet']} x {v['fiyat']} ₺<br>"
+
+    html += f"<hr><h2>Toplam: {toplam} ₺</h2>"
+    html += "</body>"
+
+    return html
+
+# ---------------- EXCEL ----------------
 @app.route("/excel")
 def excel():
     wb = Workbook()
     ws = wb.active
-    ws.append(["Barkod","İsim","Adet","Depo"])
+    ws.append(["İsim","Adet","Fiyat"])
 
     with db() as con:
         for u in con.execute("SELECT * FROM urunler"):
-            ws.append([u[1],u[2],u[9],u[10]])
+            ws.append([u[2],u[3],u[4]])
 
-    file = "stok.xlsx"
+    file="stok.xlsx"
     wb.save(file)
     return send_file(file, as_attachment=True)
 
-# --- MAIN ---
+# ---------------- RUN ----------------
 if __name__ == "__main__":
     init_db()
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT",10000))
     app.run(host="0.0.0.0", port=port)
