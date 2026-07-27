@@ -9,7 +9,6 @@ app.secret_key = "12345"
 
 DB = "stok.db"
 
-# ---------------- DB ----------------
 def db():
     return sqlite3.connect(DB)
 
@@ -31,16 +30,6 @@ def init_db():
             tarih TEXT
         )
         """)
-        con.execute("""
-        CREATE TABLE IF NOT EXISTS hareketler(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            barkod TEXT,
-            islem TEXT,
-            adet INTEGER,
-            tarih TEXT
-        )
-        """)
-
 init_db()
 
 # ---------------- LOGIN ----------------
@@ -50,13 +39,23 @@ def login():
         if request.form["k"] == "admin" and request.form["s"] == "1234":
             session["ok"] = True
             return redirect("/panel")
+
     return """
-    <h2>HER İŞ ORMAN STOK PRO</h2>
+    <style>
+    body {background:#0f172a;color:white;font-family:sans-serif;text-align:center;}
+    .box {margin-top:100px;}
+    input {padding:10px;margin:5px;border-radius:8px;border:none;}
+    button {padding:10px 20px;background:#22c55e;color:white;border:none;border-radius:8px;}
+    </style>
+
+    <div class="box">
+    <h1>🌲 HER İŞ ORMAN STOK PRO</h1>
     <form method="post">
-    Kullanıcı: <input name="k"><br>
-    Şifre: <input name="s" type="password"><br>
+    <input name="k" placeholder="Kullanıcı"><br>
+    <input name="s" type="password" placeholder="Şifre"><br>
     <button>Giriş</button>
     </form>
+    </div>
     """
 
 # ---------------- PANEL ----------------
@@ -67,47 +66,79 @@ def panel():
 
     if request.method == "POST":
         barkod = "HER-" + str(int(datetime.datetime.now().timestamp()))
-        isim = request.form["isim"]
-        cins = request.form["cins"]
-        ebat = request.form["ebat"]
-        kalinlik = request.form["kalinlik"]
-        sinif = request.form["sinif"]
-        yuzey = request.form["yuzey"]
-        renk = request.form["renk"]
-        adet = int(request.form["adet"])
-        depo = request.form["depo"]
 
-        # barkod üret
         Code128(barkod, writer=ImageWriter()).save("static/" + barkod)
 
         with db() as con:
             con.execute("""
             INSERT INTO urunler(barkod,isim,cins,ebat,kalinlik,sinif,yuzey,renk,adet,depo,tarih)
             VALUES(?,?,?,?,?,?,?,?,?,?,?)
-            """,(barkod,isim,cins,ebat,kalinlik,sinif,yuzey,renk,adet,depo,str(datetime.datetime.now())))
+            """,(
+                barkod,
+                request.form["isim"],
+                request.form["cins"],
+                request.form["ebat"],
+                request.form["kalinlik"],
+                request.form["sinif"],
+                request.form["yuzey"],
+                request.form["renk"],
+                int(request.form["adet"]),
+                request.form["depo"],
+                str(datetime.datetime.now())
+            ))
 
         return redirect("/panel")
 
     urunler = db().execute("SELECT * FROM urunler ORDER BY id DESC").fetchall()
 
     return render_template_string("""
-    <h1>HER İŞ ORMAN ÜRÜNLERİ STOK TAKİBİ</h1>
+    <style>
+    body {background:#0f172a;color:white;font-family:sans-serif;}
+    h1 {color:#22c55e;}
+    form input, select {
+        padding:8px;
+        margin:4px;
+        border-radius:6px;
+        border:none;
+    }
+    button {
+        background:#22c55e;
+        color:white;
+        border:none;
+        padding:10px;
+        border-radius:6px;
+        cursor:pointer;
+    }
+    table {
+        width:100%;
+        margin-top:20px;
+        border-collapse:collapse;
+    }
+    th {background:#22c55e;color:black;}
+    td, th {padding:8px;text-align:center;}
+    tr:nth-child(even){background:#1e293b;}
+    tr:nth-child(odd){background:#334155;}
+    a {color:#38bdf8;text-decoration:none;}
+    </style>
+
+    <h1>🌲 HER İŞ ORMAN STOK TAKİBİ</h1>
 
     <form method="post">
-    İsim <input name="isim">
-    Cins <input name="cins">
-    Ebat(mm) <input name="ebat">
-    Kalınlık <input name="kalinlik">
-    Sınıf <input name="sinif">
-    Yüzey 
+    <input name="isim" placeholder="İsim">
+    <input name="cins" placeholder="Cins">
+    <input name="ebat" placeholder="Ebat mm">
+    <input name="kalinlik" placeholder="Kalınlık">
+    <input name="sinif" placeholder="Sınıf">
+    
     <select name="yuzey">
         <option>HG</option>
         <option>MAT</option>
         <option>PARLAK</option>
     </select>
-    Renk <input name="renk">
-    Adet <input name="adet" type="number">
-    Depo 
+
+    <input name="renk" placeholder="Renk">
+    <input name="adet" type="number" placeholder="Adet">
+
     <select name="depo">
         <option>MDF SATIŞ DEPOSU</option>
         <option>LAMİNANT DEPOSU</option>
@@ -118,17 +149,21 @@ def panel():
         <option>RÖTBALANSÇI YANI</option>
         <option>KESİMHANE</option>
     </select>
-    <button>EKLE</button>
+
+    <button>➕ EKLE</button>
     </form>
 
-    <hr>
-
+    <br>
     <a href="/kamera">📷 Barkod Oku</a> |
     <a href="/excel">📊 Excel</a>
 
-    <table border=1>
+    <table>
     <tr>
-    <th>Barkod</th><th>İsim</th><th>Adet</th><th>Depo</th><th>İşlem</th>
+    <th>Barkod</th>
+    <th>İsim</th>
+    <th>Adet</th>
+    <th>Depo</th>
+    <th>İşlem</th>
     </tr>
 
     {% for u in urunler %}
@@ -138,21 +173,19 @@ def panel():
     <td>{{u[9]}}</td>
     <td>{{u[10]}}</td>
     <td>
-    <a href="/dus/{{u[1]}}">-1</a>
-    <a href="/etiket/{{u[1]}}">Etiket</a>
+    <a href="/dus/{{u[1]}}">➖</a>
+    <a href="/etiket/{{u[1]}}">🧾</a>
     </td>
     </tr>
     {% endfor %}
     </table>
-    """ , urunler=urunler)
+    """, urunler=urunler)
 
 # ---------------- STOK DÜŞ ----------------
 @app.route("/dus/<kod>")
 def dus(kod):
     with db() as con:
         con.execute("UPDATE urunler SET adet = adet - 1 WHERE barkod=?",(kod,))
-        con.execute("INSERT INTO hareketler(barkod,islem,adet,tarih) VALUES(?,?,?,?)",
-                    (kod,"ÇIKIŞ",1,str(datetime.datetime.now())))
     return redirect("/panel")
 
 # ---------------- KAMERA ----------------
