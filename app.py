@@ -1,6 +1,8 @@
 from flask import Flask, request, redirect, session
 import sqlite3
 import uuid
+import qrcode
+from reportlab.pdfgen import canvas
 from datetime import datetime
 
 app = Flask(__name__)
@@ -10,6 +12,17 @@ app.secret_key = "12345"
 def db():
     return sqlite3.connect("db.sqlite3")
 
+def etiket_olustur(barkod, ad):
+
+    qr = qrcode.make(barkod)
+    qr.save("qr.png")
+
+    pdf = canvas.Canvas("etiket.pdf")
+    pdf.drawString(50, 800, f"Ürün: {ad}")
+    pdf.drawString(50, 780, f"Barkod: {barkod}")
+    pdf.drawImage("qr.png", 50, 650, width=150, height=150)
+    pdf.save()
+    
 def kur():
     con = db()
     c = con.cursor()
@@ -119,6 +132,8 @@ def ekle():
 
     Ebat (2100x2800):<br>
     <input name="ebat"><br><br>
+    
+    etiket_olustur(data[8], data[0])
 
     <h3>Kalınlık</h3>
     <div id="kalinlikGrup">
@@ -204,14 +219,39 @@ def cikis():
         return "Çıkış yapıldı"
 
     return """
-    <h2>Depodan Çıkış</h2>
-    <form method="post">
-    Barkod:<br><input name="barkod"><br><br>
-    Adet:<br><input name="adet"><br><br>
-    <button>Çıkış</button>
-    </form>
-    """
+<h2>QR ile Çıkış</h2>
 
+<video id="kamera" width="300" autoplay></video>
+<br><br>
+
+<input id="barkod" name="barkod" placeholder="Barkod">
+<input id="adet" name="adet" placeholder="Adet">
+
+<button onclick="gonder()">Çıkış</button>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<script>
+const html5QrCode = new Html5Qrcode("kamera");
+
+Html5Qrcode.getCameras().then(devices => {
+    html5QrCode.start(
+        devices[0].id,
+        { fps: 10, qrbox: 250 },
+        qr => {
+            document.getElementById("barkod").value = qr;
+        }
+    );
+});
+
+function gonder(){
+    fetch("/cikis", {
+        method:"POST",
+        headers: {"Content-Type":"application/x-www-form-urlencoded"},
+        body: "barkod="+barkod.value+"&adet="+adet.value
+    }).then(r=>r.text()).then(alert)
+}
+</script>
 # ---------------- RUN ----------------
 if __name__ == "__main__":
     app.run()
