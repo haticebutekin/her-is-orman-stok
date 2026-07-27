@@ -18,9 +18,19 @@ def etiket_olustur(barkod, ad):
     qr.save("qr.png")
 
     pdf = canvas.Canvas("etiket.pdf")
-    pdf.drawString(50, 800, f"Ürün: {ad}")
-    pdf.drawString(50, 780, f"Barkod: {barkod}")
-    pdf.drawImage("qr.png", 50, 650, width=150, height=150)
+
+    x=50
+    y=750
+
+    for i in range(20):
+        pdf.drawString(x, y, ad)
+        pdf.drawImage("qr.png", x, y-80, width=80, height=80)
+
+        x += 120
+        if x > 400:
+            x = 50
+            y -= 120
+
     pdf.save()
     
 def kur():
@@ -102,6 +112,9 @@ def panel():
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
     if request.method=="POST":
+
+        barkod = str(uuid.uuid4())[:8]
+
         data = (
             request.form["ad"],
             request.form["cins"],
@@ -111,7 +124,7 @@ def ekle():
             request.form["renk"],
             int(request.form["adet"]),
             request.form["depo"],
-            str(uuid.uuid4())[:8]
+            barkod
         )
 
         con=db()
@@ -120,74 +133,107 @@ def ekle():
         con.commit()
         con.close()
 
+        # 🔥 PDF ETİKET
+        etiket_olustur(barkod, request.form["ad"])
+
         return redirect("/panel")
 
     return """
     <h2>Ürün Ekle</h2>
 
+    <style>
+    button{
+        padding:15px;
+        margin:5px;
+        border:none;
+        border-radius:8px;
+        color:white;
+        font-size:18px;
+    }
+    .k{background:#ff3b30;}
+    .y{background:#34c759;}
+    </style>
+
     <form method="post">
 
     Mal adı:<br><input name="ad"><br><br>
     Cinsi:<br><input name="cins"><br><br>
-
-    Ebat (2100x2800):<br>
-    <input name="ebat"><br><br>
-    
-    etiket_olustur(data[8], data[0])
+    Ebat:<br><input name="ebat"><br><br>
 
     <h3>Kalınlık</h3>
     <div id="kalinlikGrup">
-    <button type="button" onclick="secK(this,'4')">4</button>
-    <button type="button" onclick="secK(this,'6')">6</button>
-    <button type="button" onclick="secK(this,'8')">8</button>
-    <button type="button" onclick="secK(this,'10')">10</button>
-    <button type="button" onclick="secK(this,'12')">12</button>
-    <button type="button" onclick="secK(this,'18')">18</button>
-    <button type="button" onclick="secK(this,'30')">30</button>
-    <button type="button" onclick="secK(this,'35')">35</button>
+    <button type="button" class="k" onclick="secK(this,'4')">4</button>
+    <button type="button" class="k" onclick="secK(this,'6')">6</button>
+    <button type="button" class="k" onclick="secK(this,'8')">8</button>
+    <button type="button" class="k" onclick="secK(this,'10')">10</button>
+    <button type="button" class="k" onclick="secK(this,'12')">12</button>
+    <button type="button" class="k" onclick="secK(this,'18')">18</button>
     </div>
 
     <input type="hidden" name="kalinlik" id="kalinlik"><br>
 
-    <h3>HG / MAT</h3>
-    <button type="button" onclick="secY(this,'HG')">HG</button>
-    <button type="button" onclick="secY(this,'MAT')">MAT</button>
+    <h3>Yüzey</h3>
+    <button type="button" class="y" onclick="secY(this,'HG')">HG</button>
+    <button type="button" class="y" onclick="secY(this,'MAT')">MAT</button>
+
     <input type="hidden" name="yuzey" id="yuzey"><br><br>
 
     Renk:<br><input name="renk"><br><br>
-
     Adet:<br><input name="adet" type="number"><br><br>
 
     Depo:<br>
     <select name="depo">
     <option>MDF SATIŞ DEPOSU</option>
     <option>LAMİNANT DEPOSU</option>
-    <option>KAPI DEPOSU</option>
-    <option>HGLOSS DEPOSU</option>
-    <option>SÜTÇÜ YANI</option>
-    <option>HELVACI YANI</option>
-    <option>RÖTBALANSÇI YANI</option>
     </select><br><br>
 
     <button>Kaydet</button>
-
     </form>
 
     <script>
     function secK(btn,val){
         document.getElementById("kalinlik").value=val;
-        document.querySelectorAll("#kalinlikGrup button").forEach(b=>b.style.background="");
-        btn.style.background="blue";
+        document.querySelectorAll("#kalinlikGrup button").forEach(b=>b.style.opacity="0.5");
+        btn.style.opacity="1";
     }
 
     function secY(btn,val){
         document.getElementById("yuzey").value=val;
-        document.querySelectorAll("button").forEach(b=>b.style.border="");
-        btn.style.border="3px solid red";
+        document.querySelectorAll(".y").forEach(b=>b.style.opacity="0.5");
+        btn.style.opacity="1";
     }
     </script>
     """
+@app.route("/grafik")
+def grafik():
+    con=db()
+    c=con.cursor()
+    data=c.execute("SELECT ad, adet FROM urun").fetchall()
+    con.close()
 
+    labels=[x[0] for x in data]
+    values=[x[1] for x in data]
+
+    return f"""
+    <h2>Stok Grafik</h2>
+
+    <canvas id="g"></canvas>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+    new Chart(document.getElementById("g"), {{
+        type: "bar",
+        data: {{
+            labels: {labels},
+            datasets: [{{
+                label: "Stok",
+                data: {values}
+            }}]
+        }}
+    }});
+    </script>
+    """
+    
 # ---------------- DEPO ÇIKIŞ ----------------
 @app.route("/cikis", methods=["GET","POST"])
 def cikis():
@@ -208,20 +254,6 @@ def cikis():
         if yeni<0:
             return "Yetersiz stok"
 
-        <style>
-button{
-    font-size:30px;
-    padding:20px;
-    width:100%;
-    margin-top:10px;
-}
-input{
-    font-size:25px;
-    padding:15px;
-    width:100%;
-}
-</style>
-
         c.execute("UPDATE urun SET adet=? WHERE barkod=?",(yeni,barkod))
 
         c.execute("INSERT INTO hareket(urun,adet,depo,kim,saat) VALUES (?,?,?,?,?)",
@@ -232,16 +264,41 @@ input{
 
         return "Çıkış yapıldı"
 
-    return """
-<h2>QR ile Çıkış</h2>
+   return """
+<style>
+body{
+    margin:0;
+    background:black;
+    color:white;
+    text-align:center;
+}
+video{
+    width:100%;
+    height:60vh;
+}
+button{
+    font-size:30px;
+    padding:20px;
+    width:100%;
+    background:#ff3b30;
+    color:white;
+    border:none;
+}
+input{
+    font-size:25px;
+    padding:15px;
+    width:100%;
+}
+</style>
 
-<video id="kamera" width="300" autoplay></video>
-<br><br>
+<h2>📦 Depo Çıkış</h2>
 
-<input id="barkod" name="barkod" placeholder="Barkod">
-<input id="adet" name="adet" placeholder="Adet">
+<video id="kamera" autoplay></video>
 
-<button onclick="gonder()">Çıkış</button>
+<input id="barkod" placeholder="QR otomatik">
+<input id="adet" placeholder="Adet">
+
+<button onclick="gonder()">ÇIKIŞ YAP</button>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 
@@ -267,6 +324,7 @@ function gonder(){
 }
 </script>
 """
+
 # ---------------- RUN ----------------
 if __name__ == "__main__":
     app.run()
