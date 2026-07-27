@@ -111,6 +111,10 @@ def ekle():
         foto_ad = barkod + ".jpg"
         foto.save(f"{UPLOAD_FOLDER}/{foto_ad}")
 
+        <h3>Renk Seç</h3>
+<div id="renkler"></div>
+<input id="renk" name="renk">
+
         data = (
             request.form["ad"],
             request.form["cins"],
@@ -148,6 +152,7 @@ def ekle():
     .sec3{background:#ff9500}
     input{width:100%;padding:10px;margin:5px}
     </style>
+
 
     <h2>Ürün Ekle</h2>
 
@@ -189,6 +194,52 @@ def ekle():
     <button style="background:#ff3b30;width:100%">Kaydet</button>
 
     </form>
+
+    <script>
+const renkList = {
+    HG: ["Beyaz","Krem","Antrasit"],
+    Mat: ["Gri","Siyah"],
+    Parlak: ["Beyaz","Lake"]
+};
+
+function secY(v){
+    document.getElementById("yuzey").value = v;
+
+    let alan = document.getElementById("renkler");
+    alan.innerHTML = "";
+
+    renkList[v].forEach(r=>{
+        alan.innerHTML += `<button type="button" onclick="secR('${r}')" style="background:#5856d6">${r}</button>`;
+    });
+}
+
+function secR(v){
+    document.getElementById("renk").value = v;
+}
+    </script>
+
+    <script>
+let sonSecim = JSON.parse(localStorage.getItem("secim")) || {};
+
+if(sonSecim.kalinlik){
+    document.getElementById("kalinlik").value = sonSecim.kalinlik;
+}
+if(sonSecim.yuzey){
+    document.getElementById("yuzey").value = sonSecim.yuzey;
+}
+
+function secK(v){
+    document.getElementById("kalinlik").value = v;
+    sonSecim.kalinlik = v;
+    localStorage.setItem("secim", JSON.stringify(sonSecim));
+}
+
+function secY(v){
+    document.getElementById("yuzey").value = v;
+    sonSecim.yuzey = v;
+    localStorage.setItem("secim", JSON.stringify(sonSecim));
+}
+   </script>
 
     <script>
     function secK(v){
@@ -265,12 +316,23 @@ def cikis():
     body{background:black;color:white;text-align:center;}
     video{width:100%;height:60vh;}
     input{font-size:25px;width:100%;}
+    <h3>Depo</h3>
     </style>
 
     <h2>📦 Depo</h2>
     <video id="kamera" autoplay></video>
 
     <input id="adet" value="1">
+        <h3>Depo</h3>
+    <button type="button" onclick="secD('Ana')">Ana</button>
+    <button type="button" onclick="secD('Şube')">Şube</button>
+    <input id="depo" name="depo">
+
+    <script>
+function secD(v){
+    document.getElementById("depo").value = v;
+}
+    </script>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
 
