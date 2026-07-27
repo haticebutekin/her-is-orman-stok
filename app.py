@@ -40,23 +40,180 @@ def login():
             session["ok"] = True
             return redirect("/panel")
 
-    return """
-    <style>
-    body {background:#0f172a;color:white;font-family:sans-serif;text-align:center;}
-    .box {margin-top:100px;}
-    input {padding:10px;margin:5px;border-radius:8px;border:none;}
-    button {padding:10px 20px;background:#22c55e;color:white;border:none;border-radius:8px;}
-    </style>
+   return render_template_string("""
+<style>
+body {
+    background:#0f172a;
+    color:white;
+    font-family:Arial;
+}
 
-    <div class="box">
-    <h1>🌲 HER İŞ ORMAN STOK PRO</h1>
-    <form method="post">
-    <input name="k" placeholder="Kullanıcı"><br>
-    <input name="s" type="password" placeholder="Şifre"><br>
-    <button>Giriş</button>
-    </form>
-    </div>
-    """
+.header {
+    background:#22c55e;
+    padding:15px;
+    font-size:22px;
+    font-weight:bold;
+    text-align:center;
+}
+
+.container {
+    display:flex;
+}
+
+.left {
+    width:40%;
+    padding:10px;
+}
+
+.right {
+    width:60%;
+    padding:10px;
+}
+
+.card {
+    background:#1e293b;
+    padding:10px;
+    border-radius:10px;
+    margin-bottom:10px;
+}
+
+input, select {
+    width:100%;
+    padding:10px;
+    margin:5px 0;
+    border-radius:8px;
+    border:none;
+}
+
+button {
+    width:100%;
+    padding:15px;
+    margin-top:5px;
+    border:none;
+    border-radius:10px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+.btn-green {background:#22c55e;}
+.btn-red {background:#ef4444;}
+.btn-blue {background:#3b82f6;}
+
+.table {
+    width:100%;
+    border-collapse:collapse;
+}
+
+.table th {
+    background:#22c55e;
+    color:black;
+    padding:10px;
+}
+
+.table td {
+    padding:10px;
+    text-align:center;
+}
+
+.table tr:nth-child(even){background:#1e293b;}
+.table tr:nth-child(odd){background:#334155;}
+
+.big-btn {
+    font-size:20px;
+    padding:20px;
+}
+</style>
+
+<div class="header">🌲 HER İŞ ORMAN KASA PRO</div>
+
+<div class="container">
+
+<div class="left">
+
+<div class="card">
+<h3>➕ Ürün Ekle</h3>
+
+<form method="post">
+<input name="isim" placeholder="İsim">
+<input name="cins" placeholder="Cins">
+<input name="ebat" placeholder="Ebat mm">
+<input name="kalinlik" placeholder="Kalınlık">
+<input name="sinif" placeholder="Sınıf">
+
+<select name="yuzey">
+<option>HG</option>
+<option>MAT</option>
+<option>PARLAK</option>
+</select>
+
+<input name="renk" placeholder="Renk">
+<input name="adet" type="number" placeholder="Adet">
+
+<select name="depo">
+<option>MDF SATIŞ DEPOSU</option>
+<option>LAMİNANT DEPOSU</option>
+<option>KAPI DEPOSU</option>
+<option>HGLOSS DEPOSU</option>
+<option>SÜTÇÜ YANI</option>
+<option>HELVACI YANI</option>
+<option>RÖTBALANSÇI YANI</option>
+<option>KESİMHANE</option>
+</select>
+
+<button class="btn-green big-btn">➕ EKLE</button>
+</form>
+</div>
+
+<div class="card">
+<a href="/kamera"><button class="btn-blue big-btn">📷 BARKOD OKU</button></a>
+<a href="/excel"><button class="btn-green big-btn">📊 EXCEL</button></a>
+</div>
+
+</div>
+
+<div class="right">
+
+<table class="table">
+<tr>
+<th>Barkod</th>
+<th>İsim</th>
+<th>Adet</th>
+<th>Depo</th>
+<th>İşlem</th>
+</tr>
+
+{% for u in urunler %}
+<tr>
+<td>{{u[1]}}</td>
+<td>{{u[2]}}</td>
+<td>{{u[9]}}</td>
+<td>{{u[10]}}</td>
+<td>
+<a href="/dus/{{u[1]}}">
+<button class="btn-red">➖</button>
+</a>
+
+<a href="/etiket/{{u[1]}}">
+<button class="btn-blue">🧾</button>
+</a>
+</td>
+</tr>
+{% endfor %}
+</table>
+
+</div>
+
+</div>
+
+<!-- 🔊 BİP SESİ -->
+<audio id="bip" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+
+<script>
+function bip(){
+    document.getElementById("bip").play();
+}
+</script>
+""", urunler=urunler)
 
 # ---------------- PANEL ----------------
 @app.route("/panel", methods=["GET","POST"])
@@ -186,21 +343,10 @@ def panel():
 def dus(kod):
     with db() as con:
         con.execute("UPDATE urunler SET adet = adet - 1 WHERE barkod=?",(kod,))
-    return redirect("/panel")
-
-# ---------------- KAMERA ----------------
-@app.route("/kamera")
-def kamera():
     return """
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
-    <video id="v" width="300"></video>
     <script>
-    let codeReader = new ZXing.BrowserBarcodeReader()
-    codeReader.decodeFromVideoDevice(null, 'v', (result, err) => {
-        if(result){
-            window.location="/dus/"+result.text
-        }
-    })
+    document.write("Bip!");
+    setTimeout(()=>{window.location='/panel'},500);
     </script>
     """
 
