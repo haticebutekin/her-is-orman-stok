@@ -252,6 +252,7 @@ function gonder(){
     }).then(r=>r.text()).then(alert)
 }
 </script>
+"""
 # ---------------- RUN ----------------
 if __name__ == "__main__":
     app.run()
