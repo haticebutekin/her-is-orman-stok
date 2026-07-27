@@ -6,6 +6,7 @@ from barcode.writer import ImageWriter
 from openpyxl import Workbook
 
 app = Flask(__name__)
+init_db()
 
 STATIC = "static"
 
