@@ -87,27 +87,37 @@ def login():
 # ---------------- PANEL ----------------
 @app.route("/panel", methods=["GET","POST"])
 def panel():
-    if not session.get("g"): return redirect("/")
+    if not session.get("g"):
+        return redirect("/")
 
-    if request.method=="POST" and session["role"]=="admin":
-        kod="HER-"+str(int(datetime.datetime.now().timestamp()))
+    if request.method == "POST" and session["role"] == "admin":
+        kod = "HER-" + str(int(datetime.datetime.now().timestamp()))
+
         with db() as con:
             con.execute("""INSERT INTO urunler VALUES(NULL,?,?,?,?,?,?,?,?,?,?)""",
-            (kod,
-             request.form["isim"],
-             request.form["cins"],
-             request.form["ebat"],
-             request.form["kalinlik"],
-             request.form["sinif"],
-             request.form["yuzey"],
-             request.form["renk"],
-             int(request.form["adet"]),
-             request.form["depo"]
-             ))
-        log(session["user"],"EKLE",kod,request.form["depo"],request.form["adet"])
+                (
+                    kod,
+                    request.form["isim"],
+                    request.form["cins"],
+                    request.form["ebat"],
+                    request.form["kalinlik"],
+                    request.form["sinif"],
+                    request.form["yuzey"],
+                    request.form["renk"],
+                    int(request.form["adet"]),
+                    request.form["depo"]
+                )
+            )
+
+        log(session["user"], "EKLE", kod, request.form["depo"], request.form["adet"])
 
     with db() as con:
-        urunler=con.execute("SELECT * FROM urunler ORDER BY id DESC").fetchall()
+        urunler = con.execute("SELECT * FROM urunler ORDER BY id DESC").fetchall()
+
+    return render_template_string("""BURAYA TASARIM KODUN GELECEK""",
+        urunler=urunler,
+        depolar=DEPOLAR
+    )
 
   return render_template_string("""
 <!DOCTYPE html>
