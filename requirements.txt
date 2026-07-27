@@ -1,5 +1,6 @@
 flask
 gunicorn
-python-barcode
+qrcode
 pillow
+python-barcode
 openpyxl
