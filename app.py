@@ -2,12 +2,12 @@ from flask import Flask, request, redirect, session, send_file
 import sqlite3, uuid, os
 import qrcode
 from reportlab.pdfgen import canvas
-from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "12345"
 
-UPLOAD_FOLDER = "static"   # ✅ sadece bu var, sorun yok
+UPLOAD_FOLDER = "static"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ---------------- DB ----------------
 def db():
@@ -45,13 +45,13 @@ def etiket_pdf(barkod, ad):
     pdf_path = f"{UPLOAD_FOLDER}/{barkod}.pdf"
     pdf = canvas.Canvas(pdf_path)
 
-    x,y = 50,750
+    x,y = 40,750
     for i in range(20):
         pdf.drawString(x,y,ad)
         pdf.drawImage(qr_path,x,y-80,80,80)
         x+=120
         if x>400:
-            x=50
+            x=40
             y-=120
 
     pdf.save()
@@ -67,10 +67,11 @@ def login():
         if request.form["kullanici"]=="depo":
             session["user"]="depo"
             return redirect("/cikis")
+
     return """
     <h2>Giriş</h2>
     <form method="post">
-    <input name="kullanici" placeholder="admin / depo"><br><br>
+    <input name="kullanici" placeholder="admin / depo">
     <button>Giriş</button>
     </form>
     """
@@ -91,9 +92,10 @@ def panel():
         html+=f"""
         <div style='border:1px solid #ccc;padding:10px;margin:10px'>
         <b>{u[1]}</b><br>
+        {u[4]} | {u[5]} | {u[6]}<br>
         Stok: {u[7]} | Depo: {u[8]}<br>
         <img src='/static/{u[10]}' width='100'><br>
-        <a href='/pdf/{u[9]}'>🧾 PDF</a>
+        <a href='/pdf/{u[9]}'>🧾 PDF indir</a>
         </div>
         """
 
@@ -135,11 +137,10 @@ def ekle():
     return """
     <style>
     body{font-family:sans-serif;padding:20px}
-    button{padding:10px;margin:5px;border:none;color:white;border-radius:6px}
+    button{padding:10px;margin:5px;color:white;border:none}
     .k{background:#007aff}
     .y{background:#34c759}
     .r{background:#5856d6}
-    .d{background:#ff9500}
     input{width:100%;padding:10px;margin:5px}
     </style>
 
@@ -153,8 +154,12 @@ def ekle():
 
     <h3>Kalınlık</h3>
     <button type="button" class="k" onclick="secK('4mm')">4</button>
+    <button type="button" class="k" onclick="secK('6mm')">6</button>
     <button type="button" class="k" onclick="secK('8mm')">8</button>
-    <button type="button" class="k" onclick="secK('18mm')">18</button>
+    <button type="button" class="k" onclick="secK('10mm')">10</button>
+    <button type="button" class="k" onclick="secK('12mm')">12</button>
+    <button type="button" class="k" onclick="secK('30mm')">30</button>
+    <button type="button" class="k" onclick="secK('35mm')">35</button>
     <input id="kalinlik" name="kalinlik">
 
     <h3>Yüzey</h3>
@@ -166,17 +171,16 @@ def ekle():
     <div id="renkler"></div>
     <input id="renk" name="renk">
 
+    Adet:<input name="adet">
+
     <h3>Depo</h3>
-    <button type="button" class="d" onclick="secD('Ana Depo')">Ana Depo</button>
-    <button type="button" class="d" onclick="secD('Şube Depo')">Şube Depo</button>
+    <button type="button" onclick="secD('Ana')">Ana</button>
+    <button type="button" onclick="secD('Şube')">Şube</button>
     <input id="depo" name="depo">
 
-    Adet:<input name="adet" value="1">
     Foto:<input type="file" name="foto">
 
-    <br><br>
     <button style="background:red;width:100%">Kaydet</button>
-
     </form>
 
     <script>
@@ -186,29 +190,30 @@ def ekle():
     };
 
     function secK(v){
-        document.getElementById("kalinlik").value = v;
+        document.getElementById("kalinlik").value=v;
     }
 
     function secY(v){
-        document.getElementById("yuzey").value = v;
+        document.getElementById("yuzey").value=v;
 
-        let alan = document.getElementById("renkler");
-        alan.innerHTML = "";
+        let alan=document.getElementById("renkler");
+        alan.innerHTML="";
 
         renkList[v].forEach(r=>{
-            alan.innerHTML += `<button type="button" class="r" onclick="secR('${r}')">${r}</button>`;
+            alan.innerHTML += `<button type='button' class='r' onclick="secR('${r}')">${r}</button>`;
         });
     }
 
     function secR(v){
-        document.getElementById("renk").value = v;
+        document.getElementById("renk").value=v;
     }
 
     function secD(v){
-        document.getElementById("depo").value = v;
+        document.getElementById("depo").value=v;
     }
     </script>
     """
+
 # ---------------- PDF ----------------
 @app.route("/pdf/<barkod>")
 def pdf(barkod):
@@ -228,9 +233,6 @@ def rapor():
     data=c.execute("SELECT depo, SUM(adet) FROM urun GROUP BY depo").fetchall()
     con.close()
 
-    labels=[x[0] for x in data]
-    values=[x[1] for x in data]
-
     return f"""
     <h2>Depo Rapor</h2>
     <canvas id="g"></canvas>
@@ -239,14 +241,14 @@ def rapor():
     new Chart(document.getElementById("g"), {{
         type: "pie",
         data: {{
-            labels: {labels},
-            datasets: [{{ data: {values} }}]
+            labels: {[x[0] for x in data]},
+            datasets: [{{ data: {[x[1] for x in data]} }}]
         }}
     }});
     </script>
     """
 
-# ---------------- QR ÇIKIŞ ----------------
+# ---------------- DEPO (QR OKUTMA) ----------------
 @app.route("/cikis", methods=["GET","POST"])
 def cikis():
     if request.method=="POST":
@@ -272,48 +274,28 @@ def cikis():
 
     return """
     <style>
-    body{background:black;color:white;text-align:center;}
-    video{width:100%;height:60vh;}
-    input{font-size:25px;width:100%;margin:10px}
-    button{padding:15px;width:100%;font-size:20px}
+    body{background:black;color:white;text-align:center}
+    video{width:100%;height:60vh}
+    input{font-size:25px;width:100%}
     </style>
 
-    <h2>📦 Depo Çıkış</h2>
-
-    <video id="kamera" autoplay></video>
-
+    <h2>📦 Depo Modu</h2>
+    <div id="kamera"></div>
     <input id="adet" value="1">
 
-    <button onclick="secD('Ana Depo')">Ana Depo</button>
-    <button onclick="secD('Şube Depo')">Şube Depo</button>
-    <input id="depo">
-
-    <script>
-    function secD(v){
-        document.getElementById("depo").value = v;
-    }
-    </script>
-
     <script src="https://unpkg.com/html5-qrcode"></script>
-
     <script>
     const qr=new Html5Qrcode("kamera");
-    let kilit=false;
 
     Html5Qrcode.getCameras().then(d=>{
     qr.start(d[0].id,{fps:10},code=>{
-    if(kilit) return;
-    kilit=true;
-
-    fetch("/cikis",{
-    method:"POST",
-    headers:{"Content-Type":"application/x-www-form-urlencoded"},
-    body:"barkod="+code+"&adet="+adet.value
-    })
-    .then(r=>r.text())
-    .then(alert);
-
-    setTimeout(()=>kilit=false,1500);
+        fetch("/cikis",{
+        method:"POST",
+        headers:{"Content-Type":"application/x-www-form-urlencoded"},
+        body:"barkod="+code+"&adet="+adet.value
+        })
+        .then(r=>r.text())
+        .then(alert);
     });
     });
     </script>
@@ -321,4 +303,4 @@ def cikis():
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
