@@ -2,6 +2,80 @@ from flask import Flask, request, redirect, session, send_file
 import sqlite3, uuid, os
 import qrcode
 from reportlab.pdfgen import canvas
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+    <!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Stok Panel</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+
+    /* 👇 SENİN GÖRSEL */
+    background: url("/static/bg.jpg") no-repeat center center fixed;
+    background-size: cover;
+}
+
+/* üst karartma (okunabilirlik için) */
+.overlay {
+    background: rgba(0,0,0,0.6);
+    min-height: 100vh;
+    padding: 30px;
+}
+
+h1 {
+    text-align: center;
+    color: #fff;
+}
+
+/* butonlar */
+.btn {
+    display: block;
+    width: 80%;
+    margin: 15px auto;
+    padding: 20px;
+    font-size: 18px;
+    border-radius: 10px;
+    text-align: center;
+    color: white;
+    text-decoration: none;
+}
+
+/* renkler (senin eski sistem) */
+.ekle { background: #007bff; }
+.cikis { background: #28a745; }
+.okut { background: #ff9800; }
+.stok { background: #3f51b5; }
+.hareket { background: #f44336; }
+
+</style>
+</head>
+
+<body>
+
+<div class="overlay">
+
+<h1>📦 STOK PANEL</h1>
+
+<a href="/urun-ekle" class="btn ekle">➕ ÜRÜN EKLE</a>
+<a href="/cikis" class="btn cikis">📤 ÇIKIŞ</a>
+<a href="/okut" class="btn okut">📷 OKUT</a>
+<a href="/stok" class="btn stok">📋 STOK</a>
+<a href="/hareket" class="btn hareket">📊 HAREKET</a>
+
+</div>
+
+</body>
+</html>
 
 app = Flask(__name__)
 app.secret_key = "12345"
