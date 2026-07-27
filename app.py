@@ -109,48 +109,165 @@ def panel():
     with db() as con:
         urunler=con.execute("SELECT * FROM urunler ORDER BY id DESC").fetchall()
 
-    return render_template_string("""
-    <h3>{{session['user']}} ({{session['role']}})</h3>
+  return render_template_string("""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Stok Paneli</title>
 
-    <a href="/kamera">📷 Barkod Okut</a><br>
-    <a href="/log">📋 Hareket</a><br><br>
+<style>
+body{
+    font-family: Arial;
+    background:#0f172a;
+    color:white;
+    margin:0;
+}
 
-    {% if session["role"]=="admin" %}
-    <h3>ÜRÜN EKLE</h3>
-    <form method="post">
-    <input name="isim" placeholder="Mal adı"><br>
-    <input name="cins" placeholder="Cins"><br>
-    <input name="ebat" placeholder="Ebat"><br>
-    <input name="kalinlik" placeholder="mm"><br>
-    <input name="sinif" placeholder="Sınıf"><br>
-    <select name="yuzey">
-        <option>HG</option>
-        <option>MAT</option>
-    </select><br>
-    <input name="renk" placeholder="Renk"><br>
-    <input name="adet" placeholder="Adet"><br>
+.header{
+    background:#111827;
+    padding:15px;
+    display:flex;
+    justify-content:space-between;
+}
 
-    <select name="depo">
-    {% for d in depolar %}
-        <option>{{d}}</option>
-    {% endfor %}
-    </select><br>
+.container{
+    padding:20px;
+}
 
-    <button>EKLE</button>
-    </form>
-    {% endif %}
+.card{
+    background:#1e293b;
+    padding:15px;
+    border-radius:10px;
+    margin-bottom:15px;
+    box-shadow:0 0 10px rgba(0,0,0,0.4);
+}
 
-    <hr>
+input,select{
+    width:100%;
+    padding:10px;
+    margin:5px 0;
+    border-radius:6px;
+    border:none;
+}
 
-    {% for u in urunler %}
-    <div style="border:1px solid;padding:6px;margin:6px">
-    {{u[2]}} | {{u[3]}} | {{u[4]}} | {{u[5]}}mm | {{u[6]}} | {{u[7]}} | {{u[8]}}<br>
-    Depo: {{u[10]}} | Adet: {{u[9]}}<br>
+button{
+    background:#22c55e;
+    border:none;
+    padding:10px;
+    width:100%;
+    border-radius:6px;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
+}
 
-    <a href="/etiket/{{u[1]}}">🏷️ Etiket</a>
-    </div>
-    {% endfor %}
-    """,urunler=urunler,depolar=DEPOLAR)
+button:hover{
+    background:#16a34a;
+}
+
+.badge{
+    padding:5px 10px;
+    border-radius:6px;
+    font-size:12px;
+}
+
+.hg{background:#22c55e;}
+.mat{background:#3b82f6;}
+
+.top-btn{
+    background:#3b82f6;
+    padding:8px 12px;
+    border-radius:6px;
+    text-decoration:none;
+    color:white;
+    margin-right:5px;
+}
+
+.top-btn:hover{
+    background:#2563eb;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+<div>
+<b>{{session['user']}}</b> ({{session['role']}})
+</div>
+
+<div>
+<a class="top-btn" href="/kamera">📷 Okut</a>
+<a class="top-btn" href="/log">📋 Log</a>
+</div>
+</div>
+
+<div class="container">
+
+{% if session["role"]=="admin" %}
+<div class="card">
+<h3>➕ Yeni Ürün</h3>
+
+<form method="post">
+<input name="isim" placeholder="Mal adı">
+<input name="cins" placeholder="Cins">
+<input name="ebat" placeholder="Ebat">
+<input name="kalinlik" placeholder="Kalınlık mm">
+<input name="sinif" placeholder="Sınıf">
+
+<select name="yuzey">
+<option>HG</option>
+<option>MAT</option>
+</select>
+
+<input name="renk" placeholder="Renk">
+<input name="adet" placeholder="Adet">
+
+<select name="depo">
+{% for d in depolar %}
+<option>{{d}}</option>
+{% endfor %}
+</select>
+
+<button>Kaydet</button>
+</form>
+</div>
+{% endif %}
+
+<h3>📦 Ürünler</h3>
+
+{% for u in urunler %}
+<div class="card">
+
+<b>{{u[2]}}</b><br>
+
+{{u[3]}} | {{u[4]}} | {{u[5]}} mm<br>
+
+<span class="badge {% if u[7]=='HG' %}hg{% else %}mat{% endif %}">
+{{u[7]}}
+</span>
+
+<span class="badge">{{u[8]}}</span>
+
+<br><br>
+
+🏬 {{u[10]}}<br>
+📦 Stok: <b>{{u[9]}}</b>
+
+<br><br>
+
+<a class="top-btn" href="/etiket/{{u[1]}}">🏷️ Etiket</a>
+
+</div>
+{% endfor %}
+
+</div>
+
+</body>
+</html>
+""", urunler=urunler, depolar=DEPOLAR)
 
 # ---------------- ETİKET (QR + barkod) ----------------
 @app.route("/etiket/<kod>")
