@@ -64,8 +64,8 @@ def panel():
     return render_template_string("""
     <h3>{{session['user']}} ({{session['role']}})</h3>
 
-    <a href="/kamera">📷 Barkod Okut</a><br><br>
-    <a href="/log">📋 LOG</a><br><br>
+    <a href="/kamera">📷 Barkod Okut</a><br>
+    <a href="/log">📋 Log</a><br><br>
 
     {% if session["role"]=="admin" %}
     <form method="post">
