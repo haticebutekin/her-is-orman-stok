@@ -134,19 +134,60 @@ def ekle():
     depo_options = "".join([f"<option>{d}</option>" for d in DEPOLAR])
 
     return f"""
-    <h2>ÜRÜN EKLE</h2>
-    <form method=post>
-    Ad<input name=name><br>
-    Cins<input name=type><br>
-    Ebat<input name=size><br>
-    HG/MAT<input name=class><br>
-    Renk<input name=color><br>
-    Adet<input name=adet><br>
-    Depo<select name=depo>{depo_options}</select><br>
-    <button>EKLE</button>
-    </form>
-    """
+    <html>
+    <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+    body {{font-family:Arial;text-align:center}}
+    input, select {{padding:10px;margin:5px;width:80%}}
+    .btn {{
+        padding:15px;
+        margin:5px;
+        font-size:20px;
+        border:none;
+        border-radius:10px;
+        width:40%;
+    }}
+    .hg {{background:#0a84ff;color:white}}
+    .mat {{background:#555;color:white}}
+    </style>
+    </head>
 
+    <body>
+    <h2>ÜRÜN EKLE</h2>
+
+    <form method="post">
+    <input name="name" placeholder="Malın adı"><br>
+    <input name="type" placeholder="Cinsi"><br>
+    <input name="size" placeholder="Ebat (mm)"><br>
+
+    <h3>Yüzey Seç</h3>
+    <button type="button" class="btn hg" onclick="sec('HG')">HG</button>
+    <button type="button" class="btn mat" onclick="sec('MAT')">MAT</button>
+
+    <input type="hidden" name="class" id="secim">
+
+    <br>
+    <input name="color" placeholder="Renk"><br>
+    <input name="adet" placeholder="Adet"><br>
+
+    <select name="depo">
+    {depo_options}
+    </select><br>
+
+    <button style="padding:15px;font-size:20px">EKLE</button>
+    </form>
+
+    <script>
+    function sec(x) {{
+        document.getElementById("secim").value = x;
+        alert("Seçildi: " + x);
+    }}
+    </script>
+
+    </body>
+    </html>
+    """
 # STOK
 @app.route("/liste")
 def liste():
