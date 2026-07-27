@@ -194,6 +194,22 @@ def liste():
         """
     return html
 
+<h3>Kalınlık Seç (mm)</h3>
+
+<div id="kalinlikGrup" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">
+
+<button type="button" onclick="secK(this,'4')">4</button>
+<button type="button" onclick="secK(this,'6')">6</button>
+<button type="button" onclick="secK(this,'8')">8</button>
+<button type="button" onclick="secK(this,'10')">10</button>
+<button type="button" onclick="secK(this,'12')">12</button>
+<button type="button" onclick="secK(this,'18')">18</button>
+<button type="button" onclick="secK(this,'30')">30</button>
+<button type="button" onclick="secK(this,'35')">35</button>
+
+</div>
+
+<input type="hidden" name="kalinlik" id="kalinlik" required>
 # OKUT
 @app.route("/okut", methods=["GET","POST"])
 def okut():
@@ -231,7 +247,17 @@ def okut():
     <button>ÇIKIŞ</button>
     </form>
     """
+<script>
+function kontrolEt(){
+    let k = document.getElementById("kalinlik").value;
 
+    if(!k){
+        alert("Kalınlık seç!");
+        return false;
+    }
+    return true;
+}
+</script>
 # KAMERA
 @app.route("/kamera")
 def kamera():
