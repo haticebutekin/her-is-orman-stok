@@ -309,6 +309,54 @@ def kamera():
     });
     </script>
     """
+    return """
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body{
+    background:black;
+    color:white;
+    text-align:center;
+    font-family:Arial;
+}
+video{
+    width:90%;
+    border-radius:10px;
+    margin-top:20px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>📷 Barkod Okut</h2>
+<video id="preview"></video>
+
+<script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.min.js"></script>
+
+<script>
+Quagga.init({
+    inputStream: {
+        type: "LiveStream",
+        target: document.querySelector('#preview')
+    },
+    decoder: {
+        readers: ["code_128_reader"]
+    }
+}, function(err) {
+    if (!err) Quagga.start();
+});
+
+Quagga.onDetected(function(data) {
+    let kod = data.codeResult.code;
+    window.location = "/cikis/" + kod;
+});
+</script>
+
+</body>
+</html>
+"""
 
 # ---------------- ÇIKIŞ ----------------
 @app.route("/cikis/<kod>", methods=["GET","POST"])
