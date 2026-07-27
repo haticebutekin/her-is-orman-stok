@@ -253,6 +253,8 @@ def excel():
     return send_file(file, as_attachment=True)
 
 # ---------------- RUN ----------------
+
 if __name__ == "__main__":
+    
     init_db()
 
