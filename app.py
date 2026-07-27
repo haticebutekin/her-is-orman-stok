@@ -208,6 +208,20 @@ def cikis():
         if yeni<0:
             return "Yetersiz stok"
 
+        <style>
+button{
+    font-size:30px;
+    padding:20px;
+    width:100%;
+    margin-top:10px;
+}
+input{
+    font-size:25px;
+    padding:15px;
+    width:100%;
+}
+</style>
+
         c.execute("UPDATE urun SET adet=? WHERE barkod=?",(yeni,barkod))
 
         c.execute("INSERT INTO hareket(urun,adet,depo,kim,saat) VALUES (?,?,?,?,?)",
