@@ -10,7 +10,6 @@ DB = "veri.db"
 app = Flask(__name__)
 STATIC = "static"
 
-init_db()
 
 # ---------------- DB ----------------
 def db():
