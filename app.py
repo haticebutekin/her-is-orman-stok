@@ -4,7 +4,6 @@ import sqlite3, uuid, datetime
 app = Flask(__name__)
 app.secret_key = "123"
 
-# VERİTABANI
 def db():
     return sqlite3.connect("db.sqlite3")
 
@@ -21,8 +20,9 @@ def kur():
     id INTEGER PRIMARY KEY,
     name TEXT,
     type TEXT,
-    size TEXT,
-    class TEXT,
+    ebat TEXT,
+    kalinlik TEXT,
+    yuzey TEXT,
     color TEXT,
     adet INTEGER,
     depo TEXT,
@@ -37,24 +37,18 @@ def kur():
     depo TEXT,
     saat TEXT)""")
 
-    # default kullanıcılar
-    if not c.execute("SELECT * FROM users").fetchone():
-        c.execute("INSERT INTO users VALUES(NULL,'admin','123','yonetici')")
-        c.execute("INSERT INTO users VALUES(NULL,'depocu','123','depocu')")
+    c.execute("DELETE FROM users")
+    c.execute("INSERT INTO users VALUES(NULL,'admin','123','yonetici')")
+    c.execute("INSERT INTO users VALUES(NULL,'depocu','123','depocu')")
 
     conn.commit(); conn.close()
 
 kur()
 
 DEPOLAR = [
-"MDF SATIŞ DEPOSU",
-"LAMİNANT DEPOSU",
-"KAPI DEPOSU",
-"HGLOSS DEPOSU (MORAY YANI)",
-"SÜTÇÜ YANI",
-"HELVACI YANI",
-"RÖTBALANSÇI YANI",
-"KESİMHANE"
+"MDF SATIŞ DEPOSU","LAMİNANT DEPOSU","KAPI DEPOSU",
+"HGLOSS DEPOSU (MORAY YANI)","SÜTÇÜ YANI","HELVACI YANI",
+"RÖTBALANSÇI YANI","KESİMHANE"
 ]
 
 # LOGIN
@@ -65,7 +59,6 @@ def login():
         conn=db(); c=conn.cursor()
         user=c.execute("SELECT * FROM users WHERE username=? AND password=?",(u,p)).fetchone()
         conn.close()
-
         if user:
             session["user"]=u
             session["role"]=user[3]
@@ -85,29 +78,17 @@ def login():
 @app.route("/panel")
 def panel():
     if "user" not in session: return redirect("/")
-
     return """
-    <html>
-    <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-    body{font-family:Arial;text-align:center;background:#111;color:white}
-    a{display:block;margin:15px;padding:20px;background:#0a84ff;color:white;
-    text-decoration:none;font-size:20px;border-radius:10px}
-    </style>
-    </head>
-
-    <body>
+    <body style="font-family:Arial;text-align:center;background:#111;color:white">
     <h2>📦 STOK PANEL</h2>
 
-    <a href='/ekle'>➕ ÜRÜN EKLE</a>
-    <a href='/okut'>📤 BARKOD ÇIKIŞ</a>
-    <a href='/kamera'>📷 KAMERA OKUT</a>
-    <a href='/liste'>📋 STOK LİSTE</a>
-    <a href='/hareket'>📊 HAREKET</a>
-
+    <a href='/ekle' style='display:block;margin:15px;padding:20px;background:#0a84ff;color:white;border-radius:10px'>➕ ÜRÜN EKLE</a>
+    <a href='/okut' style='display:block;margin:15px;padding:20px;background:#34c759;color:white;border-radius:10px'>📤 ÇIKIŞ</a>
+    <a href='/kamera' style='display:block;margin:15px;padding:20px;background:#ff9f0a;color:white;border-radius:10px'>📷 OKUT</a>
+    <a href='/liste' style='display:block;margin:15px;padding:20px;background:#5856d6;color:white;border-radius:10px'>📋 STOK</a>
+    <a href='/hareket' style='display:block;margin:15px;padding:20px;background:#ff375f;color:white;border-radius:10px'>📊 HAREKET</a>
     </body>
-    </html>
     """
 
 # ÜRÜN EKLE
@@ -116,78 +97,79 @@ def ekle():
     if session.get("role")!="yonetici": return "Yetki yok"
 
     if request.method=="POST":
+        if not request.form.get("kalinlik") or not request.form.get("yuzey"):
+            return "❌ Kalınlık ve Yüzey seç!"
+
         data = (
             request.form["name"],
             request.form["type"],
-            request.form["size"],
-            request.form["class"],
+            request.form["ebat"],
+            request.form["kalinlik"],
+            request.form["yuzey"],
             request.form["color"],
             int(request.form["adet"]),
             request.form["depo"],
             str(uuid.uuid4())[:12]
         )
+
         conn=db(); c=conn.cursor()
-        c.execute("INSERT INTO products VALUES(NULL,?,?,?,?,?,?,?,?)",data)
+        c.execute("INSERT INTO products VALUES(NULL,?,?,?,?,?,?,?,?,?)",data)
         conn.commit(); conn.close()
+
         return "✅ EKLENDİ <br><a href='/panel'>Geri</a>"
 
     depo_options = "".join([f"<option>{d}</option>" for d in DEPOLAR])
 
     return f"""
-    <html>
-    <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-    body {{font-family:Arial;text-align:center}}
-    input, select {{padding:10px;margin:5px;width:80%}}
-    .btn {{
-        padding:15px;
-        margin:5px;
-        font-size:20px;
-        border:none;
-        border-radius:10px;
-        width:40%;
-    }}
-    .hg {{background:#0a84ff;color:white}}
-    .mat {{background:#555;color:white}}
-    </style>
-    </head>
+    <body style="font-family:Arial;text-align:center">
 
-    <body>
     <h2>ÜRÜN EKLE</h2>
 
-    <form method="post">
-    <input name="name" placeholder="Malın adı"><br>
-    <input name="type" placeholder="Cinsi"><br>
-    <input name="size" placeholder="Ebat (mm)"><br>
+    <form method=post>
 
-    <h3>Yüzey Seç</h3>
-    <button type="button" class="btn hg" onclick="sec('HG')">HG</button>
-    <button type="button" class="btn mat" onclick="sec('MAT')">MAT</button>
+    <input name=name placeholder="Mal adı"><br>
+    <input name=type placeholder="Cinsi"><br>
+    <input name=ebat placeholder="Ebat (2100x2800)"><br>
 
-    <input type="hidden" name="class" id="secim">
+    <h3>Kalınlık</h3>
+    <button type=button onclick="secK('8')" style='padding:15px'>8 mm</button>
+    <button type=button onclick="secK('18')" style='padding:15px'>18 mm</button>
+    <button type=button onclick="secK('25')" style='padding:15px'>25 mm</button>
 
-    <br>
-    <input name="color" placeholder="Renk"><br>
-    <input name="adet" placeholder="Adet"><br>
+    <input type=hidden name=kalinlik id=kalinlik>
 
-    <select name="depo">
-    {depo_options}
-    </select><br>
+    <h3>Yüzey</h3>
+    <button type=button onclick="secY('HG')" style='padding:15px;background:#0a84ff;color:white'>HG</button>
+    <button type=button onclick="secY('MAT')" style='padding:15px;background:#555;color:white'>MAT</button>
 
-    <button style="padding:15px;font-size:20px">EKLE</button>
+    <input type=hidden name=yuzey id=yuzey>
+
+    <br><br>
+    <input name=color placeholder="Renk"><br>
+    <input name=adet placeholder="Adet"><br>
+
+    <select name=depo>{depo_options}</select><br><br>
+
+    <button style="padding:20px;font-size:20px">EKLE</button>
+
     </form>
 
     <script>
-    function sec(x) {{
-        document.getElementById("secim").value = x;
-        alert("Seçildi: " + x);
+    function secK(x) {{
+        document.getElementById("kalinlik").value = x;
+        alert("Kalınlık: " + x);
+    }}
+
+    function secY(x) {{
+        document.getElementById("yuzey").value = x;
+        alert("Yüzey: " + x);
     }}
     </script>
 
     </body>
-    </html>
     """
+
 # STOK
 @app.route("/liste")
 def liste():
@@ -195,34 +177,29 @@ def liste():
     data=c.execute("SELECT * FROM products").fetchall()
     conn.close()
 
-    html = """
-    <html><head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    </head>
-    <body style="font-family:Arial">
-    <h2>📦 STOK</h2>
-    """
-
+    html="<h2>STOK</h2>"
     for i in data:
-        html += f"""
-        <div style='border:1px solid #ccc;padding:10px;margin:10px;border-radius:10px'>
+        html+=f"""
+        <div style='border:1px solid #ccc;padding:10px;margin:10px'>
         <b>{i[1]}</b><br>
-        {i[2]} | {i[3]} mm<br>
-        {i[4]} | {i[5]}<br>
-        Depo: {i[7]}<br>
-        Stok: {i[6]}<br>
-        Barkod: {i[8]}
+        {i[2]}<br>
+        Ebat: {i[3]}<br>
+        Kalınlık: {i[4]} mm<br>
+        Yüzey: {i[5]}<br>
+        Renk: {i[6]}<br>
+        Stok: {i[7]}<br>
+        Depo: {i[8]}<br>
+        Barkod: {i[9]}
         </div>
         """
-
-    html += "</body></html>"
     return html
-# BARKOD OKUT
+
+# OKUT
 @app.route("/okut", methods=["GET","POST"])
 def okut():
     if session.get("role")!="depocu": return "Yetki yok"
 
-    barkod = request.args.get("barkod")
+    barkod=request.args.get("barkod")
 
     if request.method=="POST" or barkod:
         if not barkod:
@@ -233,30 +210,24 @@ def okut():
         conn=db(); c=conn.cursor()
         u=c.execute("SELECT * FROM products WHERE barcode=?",(barkod,)).fetchone()
 
-        if not u:
-            conn.close()
-            return "❌ Ürün yok"
+        if not u: return "Ürün yok"
+        if u[7]<adet: return "Stok yetersiz"
 
-        if u[6] < adet:
-            conn.close()
-            return "❌ Stok yetersiz"
-
-        yeni = u[6] - adet
-
+        yeni=u[7]-adet
         c.execute("UPDATE products SET adet=? WHERE barcode=?",(yeni,barkod))
 
         c.execute("INSERT INTO hareket VALUES(NULL,?,?,?,?,?,?)",
-        (session["user"],"ÇIKIŞ",u[1],adet,u[7],datetime.datetime.now().strftime("%H:%M:%S")))
+        (session["user"],"ÇIKIŞ",u[1],adet,u[8],datetime.datetime.now().strftime("%H:%M:%S")))
 
         conn.commit(); conn.close()
 
-        return f"✅ {u[1]} çıkış yapıldı | Kalan:{yeni}"
+        return f"OK | {u[1]} | Kalan:{yeni}"
 
     return """
-    <h2>BARKOD ÇIKIŞ</h2>
+    <h2>BARKOD</h2>
     <form method=post>
-    Barkod<input name=barkod><br>
-    Adet<input name=adet value=1><br>
+    <input name=barkod>
+    <input name=adet value=1>
     <button>ÇIKIŞ</button>
     </form>
     """
@@ -265,27 +236,14 @@ def okut():
 @app.route("/kamera")
 def kamera():
     return """
-    <html>
-    <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    </head>
-
-    <body style="text-align:center">
-    <h2>📷 Barkod Oku</h2>
-
     <script src="https://unpkg.com/html5-qrcode"></script>
-
-    <div id="reader" style="width:300px;margin:auto;"></div>
-
+    <div id="reader"></div>
     <script>
     function onScanSuccess(decodedText) {
-        window.location = "/okut?barkod=" + decodedText;
+        window.location="/okut?barkod="+decodedText;
     }
-    new Html5QrcodeScanner("reader", {fps:10}).render(onScanSuccess);
+    new Html5QrcodeScanner("reader").render(onScanSuccess);
     </script>
-
-    </body>
-    </html>
     """
 
 # HAREKET
@@ -300,6 +258,5 @@ def hareket():
         html+=f"{i[1]} | {i[2]} | {i[3]} | {i[4]} | {i[5]} | {i[6]}<br>"
     return html
 
-# RUN
 if __name__ == "__main__":
     app.run(debug=True)
