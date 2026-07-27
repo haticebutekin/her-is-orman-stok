@@ -131,21 +131,73 @@ def ekle():
 
         return redirect("/panel")
 
-    return """
-    <h2>Ürün Ekle</h2>
-    <form method="post" enctype="multipart/form-data">
-    Ad:<br><input name="ad"><br>
-    Cins:<br><input name="cins"><br>
-    Ebat:<br><input name="ebat"><br>
-    Kalınlık:<br><input name="kalinlik"><br>
-    Yüzey:<br><input name="yuzey"><br>
-    Renk:<br><input name="renk"><br>
-    Adet:<br><input name="adet"><br>
-    Depo:<br><input name="depo"><br><br>
-    Foto:<br><input type="file" name="foto"><br><br>
-    <button>Kaydet</button>
-    </form>
-    """
+  return """
+<style>
+body{font-family:sans-serif;padding:20px}
+button{
+    font-size:18px;
+    padding:10px;
+    margin:5px;
+    border:none;
+    color:white;
+}
+.sec{background:#007aff}
+.sec2{background:#34c759}
+.sec3{background:#ff9500}
+input{width:100%;padding:10px;margin:5px}
+</style>
+
+<h2>Ürün Ekle</h2>
+
+<form method="post" enctype="multipart/form-data">
+
+Ad:
+<input name="ad">
+
+Cins:
+<input name="cins">
+
+Ebat:
+<input name="ebat">
+
+<h3>Kalınlık Seç</h3>
+<button type="button" class="sec" onclick="secK('8mm')">8 mm</button>
+<button type="button" class="sec" onclick="secK('18mm')">18 mm</button>
+<button type="button" class="sec" onclick="secK('25mm')">25 mm</button>
+<input id="kalinlik" name="kalinlik">
+
+<h3>Yüzey</h3>
+<button type="button" class="sec2" onclick="secY('HG')">HG</button>
+<button type="button" class="sec2" onclick="secY('Mat')">Mat</button>
+<button type="button" class="sec2" onclick="secY('Parlak')">Parlak</button>
+<input id="yuzey" name="yuzey">
+
+Renk:
+<input name="renk">
+
+Adet:
+<input name="adet">
+
+Depo:
+<input name="depo">
+
+Foto:
+<input type="file" name="foto">
+
+<br><br>
+<button style="background:#ff3b30;width:100%">Kaydet</button>
+
+</form>
+
+<script>
+function secK(v){
+    document.getElementById("kalinlik").value = v;
+}
+function secY(v){
+    document.getElementById("yuzey").value = v;
+}
+</script>
+"""
 
 # ---------------- PDF ----------------
 @app.route("/pdf/<barkod>")
