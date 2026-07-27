@@ -8,7 +8,7 @@ app = Flask(__name__)
 app.secret_key = "12345"
 
 UPLOAD_FOLDER = "static"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ---------------- DB ----------------
 def db():
