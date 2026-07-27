@@ -5,10 +5,12 @@ import barcode
 from barcode.writer import ImageWriter
 from openpyxl import Workbook
 
-app = Flask(__name__)
-init_db()
+DB = "veri.db"
 
+app = Flask(__name__)
 STATIC = "static"
+
+init_db()
 
 # ---------------- DB ----------------
 def db():
@@ -256,6 +258,7 @@ def excel():
 # ---------------- RUN ----------------
 
 if __name__ == "__main__":
-    
     init_db()
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 
