@@ -8,8 +8,8 @@ from openpyxl import Workbook
 DB = "veri.db"
 
 app = Flask(__name__)
-STATIC = "static"
 
+STATIC = "static"
 
 # ---------------- DB ----------------
 def db():
@@ -54,6 +54,9 @@ def init_db():
         cur = con.execute("SELECT * FROM users")
         if not cur.fetchone():
             con.execute("INSERT INTO users VALUES (NULL,'admin','1234')")
+
+# ✅ BURAYA ALINDI (EN KRİTİK DÜZELTME)
+init_db()
 
 # ---------------- BARKOD ----------------
 def barkod_olustur():
@@ -258,6 +261,3 @@ def excel():
 
 if __name__ == "__main__":
     init_db()
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
