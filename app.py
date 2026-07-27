@@ -85,20 +85,54 @@ def login():
         if user:
             return redirect("/satis")
 
-    return """
-    <style>
-    body{background:#0f172a;color:white;text-align:center;font-family:Arial}
-    input,button{padding:12px;margin:8px;border-radius:8px;border:none}
-    button{background:#22c55e;color:white}
-    </style>
+   return render_template_string("""
+<style>
+body{background:#0f172a;color:white;font-family:Arial}
+input,button{padding:10px;width:100%;margin:5px}
+.box{background:#1e293b;padding:10px;margin:5px}
+video{width:100%;border-radius:10px}
+</style>
 
-    <h2>🌲 KASA GİRİŞ</h2>
-    <form method="post">
-    <input name="kullanici" placeholder="Kullanıcı"><br>
-    <input name="sifre" type="password" placeholder="Şifre"><br>
-    <button>GİRİŞ</button>
-    </form>
-    """
+<h2>🛒 KASA</h2>
+
+<video id="camera" autoplay></video>
+
+<form method="post" id="form">
+<input name="barkod" id="barkod" placeholder="Barkod okut">
+<button>Ekle</button>
+</form>
+
+<h3>Sepet</h3>
+
+{% for v in sepet.values() %}
+<div class="box">
+{{v.isim}} - {{v.adet}} x {{v.fiyat}} ₺
+</div>
+{% endfor %}
+
+<h2>💰 Toplam: {{toplam}} ₺</h2>
+
+<a href="/fis"><button>🧾 Fiş</button></a>
+<a href="/tamamla"><button>💳 Tamamla</button></a>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<script>
+const scanner = new Html5Qrcode("camera");
+
+scanner.start(
+    { facingMode: "environment" },
+    {
+        fps: 10,
+        qrbox: 250
+    },
+    (decodedText) => {
+        document.getElementById("barkod").value = decodedText;
+        document.getElementById("form").submit();
+    }
+);
+</script>
+""", sepet=sepet, toplam=toplam)
 
 # ---------------- ÜRÜN PANEL ----------------
 @app.route("/panel", methods=["GET","POST"])
