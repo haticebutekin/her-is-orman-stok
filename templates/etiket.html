@@ -1,5 +1,39 @@
-<h2>Ürün Kodu: {{ kod }}</h2>
+<style>
+body { font-family:Arial; }
+.etiket {
+    width:350px;
+    border:2px solid black;
+    padding:10px;
+    border-radius:10px;
+}
+.row { display:flex; justify-content:space-between; align-items:center; }
+</style>
 
-<p>Barkod: {{ kod }}</p>
+<div class="etiket">
 
-<img src="{{ url_for('static', filename=kod + '.png') }}" width="300">
+    <h3>{{ urun[1] }}</h3>
+
+    <small>
+    {{ urun[2] }} | {{ urun[3]} | {{ urun[4] }}<br>
+    {{ urun[6] }} | {{ urun[7] }}<br>
+    Yüzey: {{ urun[5] }}<br>
+    Depo: {{ urun[9] }}
+    </small>
+
+    <hr>
+
+    <div class="row">
+        <div>
+            <img src="{{ url_for('static', filename=kod + '.png') }}" width="200"><br>
+            <center>{{ kod }}</center>
+        </div>
+
+        <div>
+            <img src="{{ url_for('static', filename=kod + '_qr.png') }}" width="100">
+        </div>
+    </div>
+
+</div>
+
+<br>
+<button onclick="window.print()">🖨 Yazdır</button>
