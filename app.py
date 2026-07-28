@@ -275,71 +275,76 @@ video{width:90%;border-radius:15px}
 <video id="video" autoplay muted playsinline></video>
 
 <div id="sonuc">Kamera açılıyor...</div>
+<div id="reader" style="width:90%;margin:auto"></div>
 
-<script src="https://unpkg.com/@zxing/library@0.20.0"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
 
 <script>
 
-const video = document.getElementById("video");
 const sonuc = document.getElementById("sonuc");
 
 let aktif = true;
 
-navigator.mediaDevices.getUserMedia({
-    video:{ facingMode:{ ideal:"environment" } }
-})
-.then(stream=>{
+function onScanSuccess(decodedText) {
 
-    video.srcObject = stream;
-    video.play();
+    if(!aktif) return;
 
-    const reader = new ZXing.BrowserMultiFormatReader();
+    aktif = false;
 
-    reader.decodeFromVideoDevice(null, video, (result, err) => {
+    navigator.vibrate(200);
 
-        if(result && aktif){
+    sonuc.innerHTML = "Okundu: " + decodedText;
 
-            aktif = false;
+    fetch("/hizli_islem",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            barkod: decodedText,
+            tip: "TIP_BURAYA"
+        })
+    })
+    .then(r=>r.json())
+    .then(data=>{
 
-            navigator.vibrate(200);
-
-            sonuc.innerHTML = "Okundu: " + result.text;
-
-            fetch("/hizli_islem",{
-                method:"POST",
-                headers:{"Content-Type":"application/json"},
-                body:JSON.stringify({
-                    barkod: result.text,
-                    tip: "TIP_BURAYA"
-                })
-            })
-            .then(r=>r.json())
-            .then(data=>{
-
-                if(data.ok){
-                    sonuc.innerHTML =
-                    "✅ " + data.ad +
-                    "<br>Stok: " + data.adet;
-                }else{
-                    sonuc.innerHTML = "❌ Ürün yok";
-                }
-
-                setTimeout(()=>{
-                    aktif = true;
-                },1000);
-
-            });
-
+        if(data.ok){
+            sonuc.innerHTML =
+            "✅ " + data.ad +
+            "<br>Stok: " + data.adet;
+        }else{
+            sonuc.innerHTML = "❌ Ürün yok";
         }
+
+        setTimeout(()=>{
+            aktif = true;
+        },1000);
 
     });
 
-})
-.catch(err=>{
+}
+
+const html5QrCode = new Html5Qrcode("reader");
+
+Html5Qrcode.getCameras().then(devices => {
+
+    if (devices && devices.length) {
+
+        html5QrCode.start(
+            { facingMode: "environment" },
+            {
+                fps: 10,
+                qrbox: { width: 250, height: 150 }
+            },
+            onScanSuccess
+        );
+
+    }
+
+}).catch(err=>{
     sonuc.innerHTML = "Kamera hatası: " + err;
 });
 
 </script>
+
 </body>
 </html>
 """
