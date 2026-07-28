@@ -51,29 +51,23 @@ def barkod_uret():
 # BARKOD RESİM
 def barkod_resim_olustur(kod):
     try:
-        if not kod:
-            print("BARKOD BOŞ")
-            return None
-
-        kod = str(kod).strip().replace(" ", "_")
+        print("Gelen kod:", kod)
 
         if not os.path.exists("static"):
             os.makedirs("static")
 
         path = f"static/{kod}.png"
 
-        # varsa tekrar üretme
-        if os.path.exists(path):
-            return path
-
         Code128 = barcode.get_barcode_class('code128')
         b = Code128(kod, writer=ImageWriter())
         b.save(f"static/{kod}")
 
+        print("Barkod oluşturuldu:", path)
+
         return path
 
     except Exception as e:
-        print("BARKOD HATA >>>", e)
+        print("HATA:", str(e))
         return None
 # ANA SAYFA
 @app.route("/")
