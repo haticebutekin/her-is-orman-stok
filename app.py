@@ -2,6 +2,8 @@ from flask import Flask, request, redirect, render_template_string, jsonify
 import sqlite3, os
 import barcode
 from barcode.writer import ImageWriter
+import barcode
+
 
 app = Flask(__name__)
 
@@ -47,28 +49,20 @@ def barkod_uret():
     cur.execute("SELECT COUNT(*) FROM urun")
     sayi = cur.fetchone()[0] + 1
     return f"URUN-{str(sayi).zfill(5)}"
-
-# BARKOD RESİM
 def barkod_resim_olustur(kod):
-    try:
-        print("Gelen kod:", kod)
+    klasor = "static"
+    if not os.path.exists(klasor):
+        os.makedirs(klasor)
 
-        if not os.path.exists("static"):
-            os.makedirs("static")
+    dosya_yolu = os.path.join(klasor, kod)
 
-        path = f"static/{kod}.png"
+    CODE128 = barcode.get_barcode_class('code128')
+    barkod = CODE128(kod, writer=ImageWriter())
+    barkod.save(dosya_yolu)
 
-        Code128 = barcode.get_barcode_class('code128')
-        b = Code128(kod, writer=ImageWriter())
-        b.save(f"static/{kod}")
+    return f"{kod}.png"
 
-        print("Barkod oluşturuldu:", path)
 
-        return path
-
-    except Exception as e:
-        print("HATA:", str(e))
-        return None
 # ANA SAYFA
 @app.route("/")
 def index():
@@ -194,38 +188,9 @@ def liste():
 # TEK ETİKET
 @app.route("/etiket/<kod>")
 def etiket(kod):
-    barkod_path = barkod_resim_olustur(kod)
-
-    return render_template("etiket.html", barkod_path=barkod_path, kod=kod)
-
-    try:
-        cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
-        u = cur.fetchone()
-
-        if not u:
-            return "Ürün bulunamadı"
-
-        path = barkod_resim_olustur(kod)
-
-        return f"""
-        <html>
-        <body style="text-align:center;font-family:Arial">
-        <img src="/{{ barkod_path }}" width="250">
-
-        <h2>{u[1]}</h2>
-
-        {"<img src='/" + path + "' width='300'>" if path else "<b>Barkod üretilemedi</b>"}
-
-        <br><br>
-        <button onclick="window.print()">🖨 Yazdır</button>
-
-        </body>
-        </html>
-        """
-
-    except Exception as e:
-        return f"HATA: {str(e)}"
-
+    barkod_resim_olustur(kod)
+    return render_template("etiket.html", kod=kod)
+    
 # ÇOKLU ETİKET (A4)
 @app.route("/coklu/<kod>")
 def coklu(kod):
