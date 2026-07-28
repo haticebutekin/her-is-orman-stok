@@ -660,7 +660,19 @@ navigator.mediaDevices.getUserMedia({
     video.play();
 
 
-    const reader = new ZXing.BrowserMultiFormatReader();
+    const hints = new Map();
+
+hints.set(
+    ZXing.DecodeHintType.POSSIBLE_FORMATS,
+    [
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.QR_CODE
+    ]
+);
+
+
+const reader = new ZXing.BrowserMultiFormatReader(hints);
 
 
     reader.decodeFromVideoElement(
