@@ -255,17 +255,17 @@ def hizli():
 # KAMERA (QR + BARKOD)
 @app.route("/kamera/<tip>")
 def kamera(tip):
-    return render_template_string(f"""
+
+    html = """
 <!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body{{background:#000;color:white;text-align:center;font-family:Arial}}
-video{{width:90%;border-radius:15px}}
+body{background:#000;color:white;text-align:center;font-family:Arial}
+video{width:90%;border-radius:15px}
 </style>
-
 </head>
 
 <body>
@@ -275,8 +275,6 @@ video{{width:90%;border-radius:15px}}
 <video id="video" autoplay muted playsinline></video>
 
 <div id="sonuc">Kamera açılıyor...</div>
-
-<script src="https://unpkg.com/@zxing/library@0.20.0"></script>
 
 <script src="https://unpkg.com/@zxing/library@0.20.0"></script>
 
@@ -294,11 +292,9 @@ navigator.mediaDevices.getUserMedia({
         height:{ ideal:1080 }
     }
 })
-
 .then(stream=>{
 
     video.srcObject = stream;
-    video.setAttribute("playsinline", true);
     video.play();
 
     const hints = new Map();
@@ -327,7 +323,7 @@ navigator.mediaDevices.getUserMedia({
                 headers:{"Content-Type":"application/json"},
                 body:JSON.stringify({
                     barkod:result.text,
-                    tip:"""" + tip + """"
+                    tip:"TIP_BURAYA"
                 })
             })
             .then(r=>r.json())
@@ -341,7 +337,6 @@ navigator.mediaDevices.getUserMedia({
                     sonuc.innerHTML = "❌ Ürün yok";
                 }
 
-                // 1 saniye sonra tekrar okut
                 setTimeout(()=>{
                     aktif = true;
                     tara();
@@ -351,8 +346,7 @@ navigator.mediaDevices.getUserMedia({
 
         })
         .catch(err=>{
-            // sürekli tekrar dene
-            setTimeout(tara, 300);
+            setTimeout(tara,300);
         });
 
     }
@@ -360,7 +354,6 @@ navigator.mediaDevices.getUserMedia({
     tara();
 
 })
-
 .catch(err=>{
     sonuc.innerHTML = "Kamera hatası: " + err;
 });
@@ -369,7 +362,9 @@ navigator.mediaDevices.getUserMedia({
 
 </body>
 </html>
-""")
+"""
 
+    return html.replace("TIP_BURAYA", tip)
+    
 if __name__=="__main__":
     app.run(host="0.0.0.0", port=5000)
