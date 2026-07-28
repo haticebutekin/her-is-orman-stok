@@ -112,8 +112,9 @@ def ekle():
             VALUES (?,?,?,?,?,?,?,?,?,?)
             """, data)
             db.commit()
-        except:
-            return "Barkod zaten var!"
+            
+  except Exception as e:
+        return str(e)
 
         return redirect("/liste")
 
