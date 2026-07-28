@@ -46,6 +46,18 @@ with db() as con:
     )
     """)
 
+with db() as con:
+
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS hareket(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barkod TEXT,
+        islem TEXT,
+        adet INTEGER,
+        tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
 
 
 # OTOMATİK BARKOD
@@ -607,7 +619,7 @@ Kamera açılıyor...
 
 
 
-<script src="https://unpkg.com/@zxing/library@latest"></script>
+<script src="https://unpkg.com/@zxing/library@0.20.0"></script>
 
 
 <script>
@@ -634,17 +646,75 @@ facingMode:"environment"
 video.srcObject=stream;
 
 
-const reader =
-new ZXing.BrowserMultiFormatReader();
+const reader = new ZXing.BrowserMultiFormatReader();
+
+reader.listVideoInputDevices()
+.then((devices)=>{
+
+    if(devices.length==0){
+        sonuc.innerHTML="Kamera bulunamadı";
+        return;
+    }
 
 
+    let kamera = devices[devices.length-1].deviceId;
 
-reader.decodeFromVideoDevice(
-null,
-"video",
 
-function(result,error){
+    reader.decodeFromVideoDevice(
+        kamera,
+        video,
+        function(result,error){
 
+            if(result){
+
+                fetch("/hizli_islem",{
+
+                method:"POST",
+
+                headers:{
+                "Content-Type":"application/json"
+                },
+
+                body:JSON.stringify({
+
+                barkod:result.text,
+
+                tip:""" + tip + """
+
+                })
+
+                })
+
+
+                .then(r=>r.json())
+
+                .then(data=>{
+
+
+                if(data.ok){
+
+                sonuc.innerHTML =
+                "✅ "+data.ad+
+                "<br>Stok: "+data.adet;
+
+
+                }else{
+
+                sonuc.innerHTML =
+                "❌ Barkod bulunamadı";
+
+                }
+
+
+                })
+
+            }
+
+        }
+    );
+
+
+});
 
 if(result){
 
