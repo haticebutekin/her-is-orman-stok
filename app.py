@@ -34,6 +34,14 @@ def init():
     )
     """)
 
+    CREATE TABLE log (
+id INTEGER PRIMARY KEY,
+kullanici TEXT,
+barkod TEXT,
+islem TEXT,
+tarih TEXT
+);
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS hareket(
         id INTEGER PRIMARY KEY,
@@ -48,6 +56,11 @@ def init():
     con.close()
 
 init()
+
+    cur.execute("""
+INSERT INTO log (kullanici,barkod,islem,tarih)
+VALUES (?,?,?,datetime('now'))
+""", (session["user"], barkod, tip))
 
 # BARKOD
 def barkod():
@@ -67,7 +80,11 @@ def login():
         if request.form["u"] == "admin" and request.form["p"] == "123":
             session["ok"] = True
             return redirect("/panel")
-
+    users = {
+        "admin": {"pass":"1234","role":"admin"},
+        "depo": {"pass":"1234","role":"depo"}
+}
+    
     return """
     <h2>STOK SİSTEMİ</h2>
     <form method=post>
@@ -76,6 +93,17 @@ def login():
     <button>Giriş</button>
     </form>
     """
+@app.route("/log")
+def log():
+    cur.execute("SELECT * FROM log ORDER BY id DESC")
+    data = cur.fetchall()
+
+    return render_template_string("""
+    <h2>İşlem Geçmişi</h2>
+    {% for l in data %}
+    <p>{{l[1]}} → {{l[3]}} → {{l[2]}} ({{l[4]}})</p>
+    {% endfor %}
+    """, data=data)
 
 # PANEL
 @app.route("/panel", methods=["GET","POST"])
@@ -103,6 +131,15 @@ def panel():
         cur.execute("INSERT INTO urun VALUES(NULL,?,?,?,?,?,?,?,?,?)", data)
         cur.execute("INSERT INTO hareket VALUES(NULL,?,?,?,?)",
                     (kod,"GİRİŞ",data[7],str(datetime.datetime.now())))
+
+        yuzey = request.form["yuzey"]
+
+        cur.execute("""
+                     INSERT INTO urun 
+                     (barkod,isim,cins,ebat,kalinlik,sinif,renk,yuzey,adet,kritik)
+                     VALUES (?,?,?,?,?,?,?,?,?,?)
+                    """, (barkod,isim,cins,ebat,kalinlik,sinif,renk,yuzey,adet,kritik))
+
         con.commit()
         con.close()
 
@@ -209,6 +246,11 @@ button {
 <button>➕ EKLE</button>
 </form>
 
+<select name="yuzey">
+  <option value="HG">HG</option>
+  <option value="MAT">MAT</option>
+</select>
+
 <hr>
 
 <div id="urunler">
@@ -257,6 +299,63 @@ function ara(){
 </body>
 </html>
 """, urunler=urunler)
+
+@app.route("/", methods=["GET","POST"])
+def login():
+    if request.method == "POST":
+        u = request.form["u"]
+        p = request.form["p"]
+
+        if u in users and users[u]["pass"] == p:
+            session["user"] = u
+            session["role"] = users[u]["role"]
+            return redirect("/panel")
+
+    return '''
+    <form method=post>
+    Kullanıcı: <input name=u><br>
+    Şifre: <input name=p type=password><br>
+    <button>Giriş</button>
+    </form>
+    '''
+
+@app.route("/islem/<barkod>/<tip>")
+def islem(barkod, tip):
+
+    if session.get("role") == "depo" and tip != "cikis":
+        return "❌ Yetkin yok!"
+
+@app.route("/etiket/<barkod>")
+def etiket(barkod):
+    return render_template_string("""
+    <h3>{{barkod}}</h3>
+    <img src="/static/{{barkod}}.png" width=200>
+    <script>
+        window.print()
+    </script>
+    """, barkod=barkod)
+    @app.route("/scan/<islem>", methods=["POST"])
+def scan(islem):
+    barkod = request.form["barkod"]
+
+    cur.execute("SELECT * FROM urun WHERE barkod=?", (barkod,))
+    urun = cur.fetchone()
+
+    if not urun:
+        return "❌ Bu ürün sistemde yok!"
+
+    if islem == "cikis" and urun[9] <= 0:
+        return "❌ Stok yok!"
+
+    if islem == "giris":
+        cur.execute("UPDATE urun SET adet = adet + 1 WHERE barkod=?", (barkod,))
+    else:
+        cur.execute("UPDATE urun SET adet = adet - 1 WHERE barkod=?", (barkod,))
+
+    db.commit()
+
+    return redirect("/panel")
+
 # İŞLEM
 @app.route("/islem/<kod>/<tip>")
 def islem(kod, tip):
