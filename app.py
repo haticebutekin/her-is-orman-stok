@@ -1,6 +1,8 @@
 from flask import Flask, render_template_string, request, redirect, session
 import sqlite3, os, uuid
 import barcode
+import os
+print("APP STARTED")
 from barcode.writer import ImageWriter
 
 app = Flask(__name__)
@@ -148,9 +150,15 @@ def kamera(tip):
 def yeni_barkod():
       con = db() 
       cur = con.cursor() 
-      cur.execute("SELECT COUNT(*) FROM urunler") 
-     sayi = cur.fetchone()[0] + 1 
+      cur.execute("SELECT COUNT(*) FROM urun")
+      sayi = cur.fetchone()[0] + 1 
      return f"HER-{str(sayi).zfill(6)}" 
+
+@app.route("/sayac")
+def sayac():
+    cur.execute("SELECT COUNT(*) FROM urun")
+    sayi = cur.fetchone()[0] + 1
+    return str(sayi)
 
 def barkod_olustur(kod): 
       path = f"{STATIC}/{kod}.png" 
