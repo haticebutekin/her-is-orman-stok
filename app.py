@@ -91,7 +91,17 @@ def kamera(tip):
     })
     </script>
     """, tip=tip)
-    
+
+@app.route("/kontrol/<barkod>")
+def kontrol(barkod):
+    cur.execute("SELECT barkod FROM urun WHERE barkod=?", (barkod,))
+    urun = cur.fetchone()
+
+    if urun:
+        return {"ok": True}
+    else:
+        return {"ok": False}
+        
 # PANEL
 @app.route("/panel", methods=["GET","POST"])
 def panel():
