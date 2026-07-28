@@ -50,6 +50,11 @@ def barkod_uret():
 
 # BARKOD RESİM
 def barkod_resim_olustur(kod):
+    if not kod:
+        return None
+
+    kod = kod.replace(" ", "_")
+
     if not os.path.exists("static"):
         os.makedirs("static")
 
