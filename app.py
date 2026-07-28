@@ -303,54 +303,47 @@ navigator.mediaDevices.getUserMedia({
         ZXing.BarcodeFormat.CODE_128
     ]);
 
-    const reader = new ZXing.BrowserMultiFormatReader(hints);
+  
+const reader = new ZXing.BrowserMultiFormatReader();
 
-    function tara(){
+reader.decodeFromVideoDevice(null, video, (result, err) => {
 
-        if(!aktif) return;
+    if(result && aktif){
 
-        reader.decodeOnceFromVideoElement(video)
-        .then(result=>{
+        aktif = false;
 
-            aktif = false;
+        navigator.vibrate(200);
 
-            navigator.vibrate(200);
+        sonuc.innerHTML = "Okundu: " + result.text;
 
-            sonuc.innerHTML = "Okundu: " + result.text;
-
-            fetch("/hizli_islem",{
-                method:"POST",
-                headers:{"Content-Type":"application/json"},
-                body:JSON.stringify({
-                    barkod:result.text,
-                    tip:"TIP_BURAYA"
-                })
+        fetch("/hizli_islem",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({
+                barkod: result.text,
+                tip: "TIP_BURAYA"
             })
-            .then(r=>r.json())
-            .then(data=>{
-
-                if(data.ok){
-                    sonuc.innerHTML =
-                    "✅ " + data.ad +
-                    "<br>Stok: " + data.adet;
-                }else{
-                    sonuc.innerHTML = "❌ Ürün yok";
-                }
-
-                setTimeout(()=>{
-                    aktif = true;
-                    tara();
-                },1000);
-
-            });
-
         })
-        .catch(err=>{
-            setTimeout(tara,300);
+        .then(r=>r.json())
+        .then(data=>{
+
+            if(data.ok){
+                sonuc.innerHTML =
+                "✅ " + data.ad +
+                "<br>Stok: " + data.adet;
+            }else{
+                sonuc.innerHTML = "❌ Ürün yok";
+            }
+
+            setTimeout(()=>{
+                aktif = true;
+            },1000);
+
         });
 
     }
 
+});
     tara();
 
 })
