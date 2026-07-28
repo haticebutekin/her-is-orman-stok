@@ -395,39 +395,39 @@ Etiket
     return html
 
 
-
-
-
 @app.route("/etiket/<kod>")
 def etiket(kod):
-
 
     barkod_resim(kod)
     qr_uret(kod)
 
-
     return f"""
 
-<h2>
-{k od}
-</h2>
+    <html>
+    <body style="text-align:center;font-family:Arial">
 
-<img src="/static/{kod}.png">
+    <h2>
+    {kod}
+    </h2>
 
-<br>
+    <img src="/static/{kod}.png"
+    width="300">
 
-<img src="/static/{kod}_qr.png">
+    <br><br>
 
-
-<script>
-window.print()
-</script>
-
-"""
+    <img src="/static/{kod}_qr.png"
+    width="150">
 
 
+    <script>
+    window.print()
+    </script>
 
 
+    </body>
+    </html>
+
+    """
 
 @app.route("/hizli_islem",methods=["POST"])
 def hizli():
