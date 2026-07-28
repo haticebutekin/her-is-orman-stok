@@ -70,6 +70,28 @@ def login():
     </form>
     """
 
+@app.route("/kamera/<tip>")
+def kamera(tip):
+    return render_template_string("""
+    <h2>Kamera ile Barkod Oku</h2>
+
+    <video id="video" width="300" height="200" autoplay></video>
+    <canvas id="canvas" hidden></canvas>
+
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+
+    <script>
+    const codeReader = new ZXing.BrowserBarcodeReader()
+
+    codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+        if (result) {
+            let barkod = result.text
+            window.location.href = "/islem/" + barkod + "/{{tip}}"
+        }
+    })
+    </script>
+    """, tip=tip)
+    
 # PANEL
 @app.route("/panel", methods=["GET","POST"])
 def panel():
@@ -115,6 +137,9 @@ def panel():
     <input name=kalinlik placeholder="Kalınlık">
     <input name=sinif placeholder="Sınıf">
     <input name=renk placeholder="Renk">
+
+    <a href="/kamera/cikis">📷 Kamera ile Çıkış</a>
+    <a href="/kamera/giris">📷 Kamera ile Giriş</a>
 
     <select name=yuzey>
         <option value="HG">HG</option>
@@ -173,6 +198,9 @@ def islem(barkod, tip):
         cur.execute("UPDATE urun SET adet = adet - 1 WHERE barkod=?", (barkod,))
     else:
         cur.execute("UPDATE urun SET adet = adet + 1 WHERE barkod=?", (barkod,))
+
+    navigator.vibrate(200);
+    new Audio("https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg").play();
 
     cur.execute("""
     INSERT INTO log (kullanici,barkod,islem,tarih)
