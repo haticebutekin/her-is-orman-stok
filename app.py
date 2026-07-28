@@ -508,115 +508,165 @@ def kamera(tip):
 
     return render_template_string("""
     
-    <html>
+<!DOCTYPE html>
+<html>
 
-    <body style="text-align:center;font-family:Arial">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <h2>Barkod Okutma</h2>
+<style>
 
-    <video id="video"
-    width="350"
-    autoplay>
-    </video>
+body{
+font-family:Arial;
+text-align:center;
+}
 
+video{
 
-    <h3 id="sonuc">
-    Hazır
-    </h3>
+width:90%;
+max-width:400px;
+border-radius:15px;
 
+}
 
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
+#sonuc{
 
+font-size:22px;
+margin-top:20px;
 
-    <script>
+}
 
+</style>
 
-    const reader = new ZXing.BrowserBarcodeReader();
-
-    let kilit=false;
-
-
-    reader.decodeFromVideoDevice(
-        null,
-        "video",
-        function(result, err){
-
-            if(result && !kilit){
-
-                kilit=true;
+</head>
 
 
-                fetch("/hizli_islem",
-                {
-                    method:"POST",
-
-                    headers:{
-                        "Content-Type":"application/json"
-                    },
-
-                    body:JSON.stringify({
-
-                        barkod:result.text,
-
-                        tip:"""" + tip + """"
-
-                    })
-
-                })
+<body>
 
 
-                .then(response=>response.json())
+<h2>📷 Barkod Okutma</h2>
 
 
-                .then(data=>{
+<video id="video" autoplay playsinline></video>
 
 
-                    if(data.ok){
-
-                        document.getElementById("sonuc").innerHTML =
-                        data.ad + 
-                        "<br>Kalan Stok: " + 
-                        data.adet;
-
-                    }
-
-                    else{
-
-                        document.getElementById("sonuc").innerHTML =
-                        "Barkod Bulunamadı";
-
-                    }
-
-
-                });
-
-
-                setTimeout(function(){
-
-                    kilit=false;
-
-                },1000);
-
-
-            }
-
-
-        }
-
-    );
-
-
-    </script>
-
-
-    </body>
-
-    </html>
-
-    """)
+<div id="sonuc">
+Kamera açılıyor...
+</div>
 
 
 
+<script src="https://unpkg.com/@zxing/library@latest"></script>
+
+
+<script>
+
+
+const video = document.getElementById("video");
+
+
+const sonuc=document.getElementById("sonuc");
+
+
+
+navigator.mediaDevices.getUserMedia({
+
+video:{
+facingMode:"environment"
+}
+
+})
+
+
+.then(function(stream){
+
+video.srcObject=stream;
+
+
+const reader =
+new ZXing.BrowserMultiFormatReader();
+
+
+
+reader.decodeFromVideoDevice(
+null,
+"video",
+
+function(result,error){
+
+
+if(result){
+
+
+fetch("/hizli_islem",{
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json"
+},
+
+body:JSON.stringify({
+
+barkod:result.text,
+
+tip:""" + tip + """
+
+})
+
+})
+
+
+.then(r=>r.json())
+
+.then(data=>{
+
+
+if(data.ok){
+
+sonuc.innerHTML =
+"✅ "+data.ad+
+"<br>Stok: "+data.adet;
+
+
+}else{
+
+sonuc.innerHTML =
+"❌ Barkod bulunamadı";
+
+}
+
+
+})
+
+
+}
+
+
+}
+
+);
+
+
+})
+
+
+.catch(function(err){
+
+sonuc.innerHTML =
+"❌ Kamera açılamadı: "+err;
+
+});
+
+
+</script>
+
+
+</body>
+
+</html>
+
+""")
 if __name__=="__main__":
 
     app.run(
