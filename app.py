@@ -1,18 +1,20 @@
 from flask import Flask, request, redirect, session, render_template_string, send_file
-import sqlite3, os, datetime, io
-import qrcode
+import sqlite3, os, datetime
 from barcode import Code128
 from barcode.writer import ImageWriter
+from openpyxl import Workbook
 
 app = Flask(__name__)
-app.secret_key = "herisorman"
+app.secret_key = "12345"
 
 DB = "stok.db"
 STATIC = "static"
+
+# STATIC klasör fix
 if not os.path.exists(STATIC):
     os.makedirs(STATIC)
 
-# ---------------- DEPOLAR ----------------
+# DEPOLAR
 DEPOLAR = [
 "MDF SATIŞ DEPOSU",
 "LAMİNANT DEPOSU",
@@ -24,17 +26,16 @@ DEPOLAR = [
 "KESİMHANE"
 ]
 
-# ---------------- DB ----------------
+# DB
 def db():
     return sqlite3.connect(DB)
 
 def init_db():
-    conn = db()
-    c = conn.cursor()
-
-    c.execute("""
+    con = db()
+    cur = con.cursor()
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS urunler (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY,
         barkod TEXT,
         isim TEXT,
         cins TEXT,
@@ -48,99 +49,60 @@ def init_db():
         tarih TEXT
     )
     """)
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS hareket (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS hareketler (
+        id INTEGER PRIMARY KEY,
         barkod TEXT,
         islem TEXT,
         adet INTEGER,
-        depo TEXT,
-        kullanici TEXT,
         tarih TEXT
     )
     """)
-
-    conn.commit()
-    conn.close()
+    con.commit()
+    con.close()
 
 init_db()
 
-# ---------------- BARKOD ----------------
+# BARKOD
 def yeni_barkod():
-    conn = db()
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM urunler")
-    say = c.fetchone()[0] + 1
-    conn.close()
-    return f"HER-{str(say).zfill(6)}"
+    con = db()
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM urunler")
+    sayi = cur.fetchone()[0] + 1
+    return f"HER-{str(sayi).zfill(6)}"
 
 def barkod_olustur(kod):
-    path = f"{STATIC}/{kod}"
-    Code128(kod, writer=ImageWriter()).write(open(path + ".png", "wb"))
-    return path + ".png"
-
-def qr_olustur(kod):
-    path = f"{STATIC}/{kod}_qr.png"
-    img = qrcode.make(kod)
-    img.save(path)
+    path = f"{STATIC}/{kod}.png"
+    Code128(kod, writer=ImageWriter()).write(open(path, "wb"))
     return path
 
-# ---------------- LOGIN ----------------
+# LOGIN
 @app.route("/", methods=["GET","POST"])
 def login():
     if request.method == "POST":
-        user = request.form["user"]
-        if user == "admin":
-            session["user"] = "admin"
-        else:
-            session["user"] = "depocu"
-        return redirect("/panel")
-
+        if request.form["user"] == "admin" and request.form["pass"] == "123":
+            session["login"] = True
+            return redirect("/panel")
     return """
-    <h2>Giriş</h2>
-    <form method="post">
-    Kullanıcı: <input name="user"><br><br>
-    <button>GİR</button>
+    <h2>HER İŞ ORMAN STOK PRO</h2>
+    <form method=post>
+    Kullanıcı: <input name=user><br>
+    Şifre: <input name=pass type=password><br>
+    <button>Giriş</button>
     </form>
     """
 
-# ---------------- PANEL ----------------
-@app.route("/panel")
+# PANEL
+@app.route("/panel", methods=["GET","POST"])
 def panel():
-    if "user" not in session:
+    if not session.get("login"):
         return redirect("/")
-
-    return f"""
-    <h1>📦 STOK PANEL</h1>
-
-    <a href='/ekle'>➕ ÜRÜN EKLE</a><br><br>
-    <a href='/kamera'>📷 OKUT</a><br><br>
-    <a href='/stok'>📊 STOK</a><br><br>
-    <a href='/hareket'>📋 HAREKET</a><br><br>
-    <a href='/logout'>ÇIKIŞ</a>
-    """
-
-# ---------------- ÜRÜN EKLE ----------------
-@app.route("/ekle", methods=["GET","POST"])
-def ekle():
-    if session.get("user") != "admin":
-        return "Yetki yok"
 
     if request.method == "POST":
         barkod = yeni_barkod()
-
         barkod_olustur(barkod)
-        qr_olustur(barkod)
 
-        conn = db()
-        c = conn.cursor()
-
-        c.execute("""
-        INSERT INTO urunler
-        (barkod,isim,cins,ebat,kalinlik,sinif,yuzey,renk,adet,depo,tarih)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)
-        """, (
+        data = (
             barkod,
             request.form["isim"],
             request.form["cins"],
@@ -151,147 +113,126 @@ def ekle():
             request.form["renk"],
             request.form["adet"],
             request.form["depo"],
-            datetime.datetime.now()
-        ))
+            str(datetime.datetime.now())
+        )
 
-        conn.commit()
-        conn.close()
+        con = db()
+        cur = con.cursor()
+        cur.execute("INSERT INTO urunler VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?)", data)
+        con.commit()
+        con.close()
 
-        return f"""
-        <h2>✅ Ürün eklendi</h2>
-        Barkod: {barkod}<br><br>
-        <img src='/static/{barkod}.png'><br>
-        <img src='/static/{barkod}_qr.png'><br><br>
-        <a href='/panel'>GERİ</a>
-        """
+    con = db()
+    cur = con.cursor()
+    urunler = cur.execute("SELECT * FROM urunler").fetchall()
+    con.close()
 
-    depo_ops = "".join([f"<option>{d}</option>" for d in DEPOLAR])
+    return render_template_string("""
+    <h2>STOK PANEL</h2>
 
-    return f"""
-    <h2>ÜRÜN EKLE</h2>
-    <form method="post">
-
-    Adı: <input name="isim"><br>
-    Cinsi: <input name="cins"><br>
-    Ebat: <input name="ebat"><br>
-    Kalınlık: <input name="kalinlik"><br>
-    Sınıf: <input name="sinif"><br>
+    <form method=post>
+    İsim <input name=isim><br>
+    Cins <input name=cins><br>
+    Ebat <input name=ebat><br>
+    Kalınlık <input name=kalinlik><br>
+    Sınıf <input name=sinif><br>
 
     Yüzey:
-    <select name="yuzey">
+    <select name=yuzey>
         <option>HG</option>
         <option>MAT</option>
     </select><br>
 
-    Renk: <input name="renk"><br>
-    Adet: <input name="adet"><br>
+    Renk <input name=renk><br>
+    Adet <input name=adet type=number><br>
 
     Depo:
-    <select name="depo">
-    {depo_ops}
-    </select><br><br>
+    <select name=depo>
+    {% for d in depolar %}
+        <option>{{d}}</option>
+    {% endfor %}
+    </select><br>
 
-    <button>KAYDET</button>
+    <button>EKLE</button>
     </form>
-    """
 
-# ---------------- KAMERA ----------------
+    <hr>
+
+    <a href="/kamera">📷 Kamera</a> |
+    <a href="/excel">📊 Excel</a>
+
+    <table border=1>
+    <tr><th>Barkod</th><th>İsim</th><th>Adet</th><th>Depo</th></tr>
+    {% for u in urunler %}
+    <tr>
+        <td>{{u[1]}}</td>
+        <td>{{u[2]}}</td>
+        <td>{{u[9]}}</td>
+        <td>{{u[10]}}</td>
+    </tr>
+    {% endfor %}
+    </table>
+    """, urunler=urunler, depolar=DEPOLAR)
+
+# KAMERA
 @app.route("/kamera")
 def kamera():
     return """
     <script src="https://unpkg.com/@zxing/library@latest"></script>
-    <video id="v" width="300"></video>
+    <video id="video" width="300"></video>
 
     <script>
     const codeReader = new ZXing.BrowserBarcodeReader()
-    codeReader.decodeFromVideoDevice(null, 'v', (result) => {
-        if(result){
-            window.location = "/cikis/" + result.text
+    codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+        if (result) {
+            window.location = "/stok/" + result.text
         }
     })
     </script>
     """
 
-# ---------------- ÇIKIŞ ----------------
-@app.route("/cikis/<kod>", methods=["GET","POST"])
-def cikis(kod):
-    conn = db()
-    c = conn.cursor()
-    c.execute("SELECT * FROM urunler WHERE barkod=?", (kod,))
-    urun = c.fetchone()
+# STOK DÜŞ
+@app.route("/stok/<kod>")
+def stok(kod):
+    con = db()
+    cur = con.cursor()
 
-    if not urun:
-        return "❌ Ürün yok"
+    cur.execute("SELECT adet FROM urunler WHERE barkod=?", (kod,))
+    veri = cur.fetchone()
 
-    if request.method == "POST":
-        adet = int(request.form["adet"])
+    if veri:
+        yeni = veri[0] - 1
+        if yeni < 0: yeni = 0
 
-        c.execute("UPDATE urunler SET adet = adet - ? WHERE barkod=?", (adet,kod))
+        cur.execute("UPDATE urunler SET adet=? WHERE barkod=?", (yeni, kod))
 
-        c.execute("""
-        INSERT INTO hareket (barkod,islem,adet,depo,kullanici,tarih)
-        VALUES (?,?,?,?,?,?)
-        """, (
-            kod,
-            "ÇIKIŞ",
-            adet,
-            urun[10],
-            session["user"],
-            datetime.datetime.now()
-        ))
+        cur.execute("INSERT INTO hareketler VALUES(NULL,?,?,?,?)",
+                    (kod, "ÇIKIŞ", 1, str(datetime.datetime.now())))
 
-        conn.commit()
-        conn.close()
+        con.commit()
 
-        return "✅ Stok düştü <br><a href='/panel'>GERİ</a>"
+    con.close()
+    return redirect("/panel")
 
-    return f"""
-    <h2>ÜRÜN BULUNDU</h2>
-    {urun[2]} - {urun[3]} - {urun[4]} mm<br>
-    {urun[7]} - {urun[8]}<br><br>
+# EXCEL
+@app.route("/excel")
+def excel():
+    con = db()
+    cur = con.cursor()
+    data = cur.execute("SELECT * FROM urunler").fetchall()
+    con.close()
 
-    <form method="post">
-    Adet: <input name="adet"><br><br>
-    <button>ÇIKIŞ YAP</button>
-    </form>
-    """
+    wb = Workbook()
+    ws = wb.active
 
-# ---------------- STOK ----------------
-@app.route("/stok")
-def stok():
-    conn = db()
-    c = conn.cursor()
-    c.execute("SELECT * FROM urunler")
-    data = c.fetchall()
+    for row in data:
+        ws.append(row)
 
-    html = "<h2>STOK</h2>"
+    file = "stok.xlsx"
+    wb.save(file)
+    return send_file(file, as_attachment=True)
 
-    for d in data:
-        html += f"{d[1]} | {d[2]} | {d[9]} adet | {d[10]}<br>"
-
-    return html + "<br><a href='/panel'>GERİ</a>"
-
-# ---------------- HAREKET ----------------
-@app.route("/hareket")
-def hareket():
-    conn = db()
-    c = conn.cursor()
-    c.execute("SELECT * FROM hareket ORDER BY id DESC")
-    data = c.fetchall()
-
-    html = "<h2>HAREKET</h2>"
-
-    for h in data:
-        html += f"{h[1]} | {h[2]} | {h[3]} adet | {h[4]} | {h[5]} | {h[6]}<br>"
-
-    return html + "<br><a href='/panel'>GERİ</a>"
-
-# ---------------- LOGOUT ----------------
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect("/")
-
-# ---------------- RUN ----------------
+# RUN (RENDER FIX)
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
