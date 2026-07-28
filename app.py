@@ -1,13 +1,14 @@
-from flask import Flask, request, redirect, render_template_string, url_for,jsonify
-import sqlite3, os
+from flask import Flask, request, redirect, render_template_string, jsonify
+import sqlite3
+import os
 import barcode
+import qrcode
 from barcode.writer import ImageWriter
-import barcode, qrcode
 
 
 app = Flask(__name__)
 
-# SABİT DEPOLAR (DEĞİŞMEZ)
+
 DEPOLAR = [
     "MDF SATIŞ DEPOSU",
     "LAMİNANT DEPOSU",
@@ -19,296 +20,562 @@ DEPOLAR = [
     "KESİMHANE"
 ]
 
-# DB
-def get_db():
-    return sqlite3.connect("db.sqlite", check_same_thread=False)
 
-db = get_db()
-cur = db.cursor()
+DB = "db.sqlite"
 
-# TABLO
-cur.execute("""
-CREATE TABLE IF NOT EXISTS urun(
-id INTEGER PRIMARY KEY,
-ad TEXT,
-cins TEXT,
-ebat TEXT,
-kalinlik TEXT,
-yuzey TEXT,
-sinif TEXT,
-renk TEXT,
-adet INTEGER,
-depo TEXT,
-barkod TEXT UNIQUE
-)
-""")
-db.commit()
 
-# BARKOD ÜRET
+def db():
+    return sqlite3.connect(DB)
+
+
+# TABLO OLUŞTUR
+with db() as con:
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS urun(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ad TEXT,
+        cins TEXT,
+        ebat TEXT,
+        kalinlik TEXT,
+        yuzey TEXT,
+        sinif TEXT,
+        renk TEXT,
+        adet INTEGER,
+        depo TEXT,
+        barkod TEXT UNIQUE
+    )
+    """)
+
+
+
+# OTOMATİK BARKOD
 def barkod_uret():
-    cur.execute("SELECT COUNT(*) FROM urun")
-    sayi = cur.fetchone()[0] + 1
-    return f"URUN-{str(sayi).zfill(5)}"
-def barkod_resim_olustur(kod):
-    klasor = "static"
-    if not os.path.exists(klasor):
-        os.makedirs(klasor)
 
-    dosya_yolu = os.path.join(klasor, kod)
+    with db() as con:
+        sayi = con.execute(
+            "SELECT COUNT(*) FROM urun"
+        ).fetchone()[0] + 1
 
-    CODE128 = barcode.get_barcode_class('code128')
-    barkod = CODE128(kod, writer=ImageWriter())
-    barkod.save(dosya_yolu)
-
-    return f"{kod}.png"
+    return "URUN-" + str(sayi).zfill(5)
 
 
-# ANA SAYFA
+
+# BARKOD RESİM
+def barkod_resim(kod):
+
+    os.makedirs("static",exist_ok=True)
+
+    yol="static/"+kod
+
+    CODE128 = barcode.get_barcode_class("code128")
+
+    img = CODE128(
+        kod,
+        writer=ImageWriter()
+    )
+
+    img.save(yol)
+
+    return kod+".png"
+
+
+
+# QR
+def qr_uret(kod):
+
+    os.makedirs("static",exist_ok=True)
+
+    img=qrcode.make(kod)
+
+    img.save(
+        "static/"+kod+"_qr.png"
+    )
+
+
+
 @app.route("/")
 def index():
+
     return """
+
     <style>
-    body { font-family:Arial; background:#f5f6fa; text-align:center; }
-    .box { background:white; padding:20px; margin:20px auto; width:300px; border-radius:15px;}
-    a { display:block; margin:10px; padding:12px; background:#4CAF50; color:white; text-decoration:none; border-radius:8px;}
+
+    body{
+    font-family:Arial;
+    background:#f1f2f6;
+    text-align:center;
+    }
+
+    .box{
+    background:white;
+    padding:25px;
+    width:320px;
+    margin:50px auto;
+    border-radius:20px;
+    }
+
+    a{
+    display:block;
+    padding:15px;
+    margin:10px;
+    background:#16a085;
+    color:white;
+    text-decoration:none;
+    border-radius:10px;
+    }
+
     </style>
+
+
     <div class="box">
+
     <h2>📦 HER İŞ ORMAN STOK</h2>
+
     <a href="/ekle">➕ Ürün Ekle</a>
-    <a href="/kamera/giris">📥 Giriş</a>
-    <a href="/kamera/cikis">📤 Çıkış</a>
+
     <a href="/liste">📋 Liste</a>
+
+    <a href="/kamera/giris">
+    📥 Mal Giriş
+    </a>
+
+    <a href="/kamera/cikis">
+    📤 Mal Çıkış
+    </a>
+
+
     </div>
+
     """
 
-# ÜRÜN EKLE
-@app.route("/ekle", methods=["GET","POST"])
+
+
+
+@app.route("/ekle",methods=["GET","POST"])
 def ekle():
-    if request.method == "POST":
 
-        barkod = request.form.get("barkod")
+    if request.method=="POST":
+
+
+        barkod=request.form.get("barkod")
+
+
         if not barkod:
-            barkod = barkod_uret()
+            barkod=barkod_uret()
 
-        barkod_resim_olustur(barkod)
 
-        data = (
-            request.form["ad"],
-            request.form["cins"],
-            request.form["ebat"],
-            request.form["kalinlik"],
-            request.form["yuzey"],
-            request.form["sinif"],
-            request.form["renk"],
-            int(request.form["adet"]),
-            request.form["depo"],
-            barkod
-        )
 
-     try:
-    cur.execute("""
-        INSERT INTO urun
-        (ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
-        VALUES (?,?,?,?,?,?,?,?,?,?)
-    """, data)
-    db.commit()
+        try:
 
-    return redirect("/liste")
+            with db() as con:
 
-except Exception as e:
-    return f"HATA: {e}"
+                con.execute("""
+                INSERT INTO urun
+                (
+                ad,
+                cins,
+                ebat,
+                kalinlik,
+                yuzey,
+                sinif,
+                renk,
+                adet,
+                depo,
+                barkod
+                )
+
+                VALUES(?,?,?,?,?,?,?,?,?,?)
+
+                """,
+
+                (
+                request.form["ad"],
+                request.form["cins"],
+                request.form["ebat"],
+                request.form["kalinlik"],
+                request.form["yuzey"],
+                request.form["sinif"],
+                request.form["renk"],
+                int(request.form["adet"]),
+                request.form["depo"],
+                barkod
+                ))
+
+            barkod_resim(barkod)
+            qr_uret(barkod)
+
+
+        except Exception as e:
+
+            return "HATA : "+str(e)
+
 
         return redirect("/liste")
 
+
+
     return render_template_string("""
-    <style>
-    body { font-family:Arial; background:#f5f6fa; }
-    form { background:white; padding:20px; width:320px; margin:30px auto; border-radius:15px;}
-    input, select { width:100%; padding:10px; margin:5px 0;}
-    button { width:100%; padding:12px; background:#4CAF50; color:white; border:none; border-radius:8px;}
-    </style>
 
-    <form method="post">
-    <h3>Ürün Ekle</h3>
+<style>
 
-    <input name="ad" placeholder="Malın Adı">
-    <input name="cins" placeholder="Malın Cinsi">
-    <input name="ebat" placeholder="Ebat (mm)">
-    <input name="kalinlik" placeholder="Kalınlık">
+body{
+font-family:Arial;
+background:#eee;
+}
 
-    <select name="yuzey">
-        <option>HG</option>
-        <option>Mat</option>
-    </select>
 
-    <input name="sinif" placeholder="Sınıf">
-    <input name="renk" placeholder="Renk">
-    <input name="adet" type="number" placeholder="Adet">
+form{
 
-    <select name="depo">
-        {% for d in depolar %}
-        <option>{{d}}</option>
-        {% endfor %}
-    </select>
+background:white;
+padding:20px;
+width:350px;
+margin:auto;
+border-radius:15px;
 
-    <input name="barkod" placeholder="Barkod (boş bırak = otomatik)">
-    <button>Ekle</button>
-    </form>
-    """, depolar=DEPOLAR)
+}
 
-# LİSTE
+
+input,select,button{
+
+width:100%;
+padding:12px;
+margin:5px;
+
+}
+
+
+button{
+
+background:#16a085;
+color:white;
+border:0;
+border-radius:8px;
+
+}
+
+
+</style>
+
+
+<form method="post">
+
+
+<h2>
+Ürün Kartı
+</h2>
+
+
+<input name="ad" placeholder="Malın Adı">
+
+<input name="cins" placeholder="Malın Cinsi">
+
+
+<input name="ebat" placeholder="Ebat mm">
+
+
+<input name="kalinlik" placeholder="Kalınlık">
+
+
+<select name="yuzey">
+
+<option>HG</option>
+
+<option>MAT</option>
+
+<option>PARLAK</option>
+
+</select>
+
+
+
+<input name="sinif" placeholder="Sınıf">
+
+<input name="renk" placeholder="Renk">
+
+
+<input name="adet"
+type="number"
+placeholder="Adet">
+
+
+<select name="depo">
+
+{% for d in depolar %}
+
+<option>{{d}}</option>
+
+{% endfor %}
+
+</select>
+
+
+<input name="barkod"
+placeholder="Barkod boş = otomatik">
+
+
+<button>
+KAYDET
+</button>
+
+
+</form>
+
+
+""",depolar=DEPOLAR)
+
+
+
+
 @app.route("/liste")
 def liste():
-    cur.execute("SELECT * FROM urun")
-    data = cur.fetchall()
 
-    html = """
-    <style>
-    body { font-family:Arial; background:#f5f6fa; }
-    .card { background:white; margin:10px; padding:15px; border-radius:10px;}
-    a { display:inline-block; margin-top:10px; background:#4CAF50; color:white; padding:6px 10px; border-radius:6px; text-decoration:none;}
-    </style>
-    <h2 style='text-align:center'>Ürünler</h2>
-    """
+    with db() as con:
 
-    for u in data:
-        html += f"""
-        <div class="card">
-        <b>{u[1]}</b><br>
-        Depo: {u[9]}<br>
-        {u[2]} | {u[3]} | {u[4]}<br>
-        {u[5]} | {u[6]} | {u[7]}<br>
-        Adet: {u[8]}<br>
-        Barkod: {u[10]}<br>
+        urunler=con.execute(
+        "SELECT * FROM urun"
+        ).fetchall()
 
-        <a href="/etiket/{u[10]}" target="_blank">🖨 Etiket</a>
-        <a href="/coklu/{u[10]}" target="_blank">📄 Çoklu Etiket</a>
-        </div>
-        """
+
+
+    html="""
+
+<h2 style="text-align:center">
+STOK LİSTESİ
+</h2>
+
+"""
+
+
+    for u in urunler:
+
+
+        html+=f"""
+
+<div style="
+background:white;
+margin:15px;
+padding:15px;
+border-radius:15px">
+
+
+<b>{u[1]}</b><br>
+
+Cins: {u[2]}<br>
+
+Ebat: {u[3]}<br>
+
+Kalınlık: {u[4]}<br>
+
+Yüzey: {u[5]}<br>
+
+Sınıf: {u[6]}<br>
+
+Renk: {u[7]}<br>
+
+Adet: {u[8]}<br>
+
+Depo: {u[9]}<br>
+
+Barkod:
+{u[10]}
+
+<br><br>
+
+
+<a href="/etiket/{u[10]}">
+Etiket
+</a>
+
+
+</div>
+
+"""
+
 
     return html
 
-def qr_olustur(kod):
-    klasor = "static"
-    if not os.path.exists(klasor):
-        os.makedirs(klasor)
 
-    img = qrcode.make(kod)
-    yol = os.path.join(klasor, f"{kod}_qr.png")
-    img.save(yol)
 
-    return f"{kod}_qr.png"
-    
-# TEK ETİKET
+
+
 @app.route("/etiket/<kod>")
 def etiket(kod):
-    barkod_resim_olustur(kod)
-    qr_olustur(kod)
 
-    cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
-    u = cur.fetchone()
 
-    return render_template("etiket.html", kod=kod, urun=u)
-# ÇOKLU ETİKET (A4)
-@app.route("/coklu/<kod>")
-def coklu(kod):
-    cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
-    u = cur.fetchone()
+    barkod_resim(kod)
+    qr_uret(kod)
 
-    if not u:
-        return "Ürün yok"
 
-    barkod_resim_olustur(kod)
-    qr_olustur(kod)
+    return f"""
 
-    html = "<body style='font-family:Arial'>"
+<h2>
+{k od}
+</h2>
 
-    for i in range(10):
-        html += f"""
-        <div style="width:45%;float:left;border:1px solid #ccc;margin:5px;padding:10px;border-radius:8px">
-        
-        <b>{u[1]}</b><br>
+<img src="/static/{kod}.png">
 
-        {u[2]} | {u[3]} | {u[4]}<br>
-        {u[6]} | {u[7]}<br>
+<br>
 
-        Yüzey: {u[5]}<br>
-        Depo: {u[9]}<br>
+<img src="/static/{kod}_qr.png">
 
-        <img src="/static/{kod}.png" width="180"><br>
-        <img src="/static/{kod}_qr.png" width="90">
 
-        </div>
-        """
+<script>
+window.print()
+</script>
 
-    html += "<div style='clear:both'></div><br>"
-    html += "<button onclick='window.print()'>🖨 YAZDIR</button></body>"
+"""
 
-    return html
-# HIZLI İŞLEM
-@app.route("/hizli_islem", methods=["POST"])
-def hizli_islem():
-    data = request.get_json()
-    barkod = data.get("barkod")
-    tip = data.get("tip")
 
-    cur.execute("SELECT ad, adet FROM urun WHERE barkod=?", (barkod,))
-    veri = cur.fetchone()
 
-    if not veri:
-        return jsonify({"ok": False})
 
-    ad, adet = veri
 
-    if tip == "cikis":
-        if adet <= 0:
-            return jsonify({"ok": False})
-        adet -= 1
-    else:
-        adet += 1
+@app.route("/hizli_islem",methods=["POST"])
+def hizli():
 
-    cur.execute("UPDATE urun SET adet=? WHERE barkod=?", (adet, barkod))
-    db.commit()
+    data=request.json
 
-    return jsonify({"ok": True, "ad": ad, "adet": adet})
 
-# KAMERA
+    barkod=data["barkod"]
+    tip=data["tip"]
+
+
+
+    with db() as con:
+
+        u=con.execute(
+        "SELECT ad,adet FROM urun WHERE barkod=?",
+        (barkod,)
+        ).fetchone()
+
+
+
+        if not u:
+
+            return jsonify(
+            {"ok":False}
+            )
+
+
+        adet=u[1]
+
+
+        if tip=="cikis":
+
+            adet-=1
+
+        else:
+
+            adet+=1
+
+
+
+        con.execute(
+        "UPDATE urun SET adet=? WHERE barkod=?",
+        (adet,barkod)
+        )
+
+
+    return jsonify(
+    {
+    "ok":True,
+    "ad":u[0],
+    "adet":adet
+    }
+    )
+
+
+
+
+
 @app.route("/kamera/<tip>")
 def kamera(tip):
-    return render_template_string("""
-    <video id="video" width="300" autoplay></video>
-    <h2 id="isim">Hazır</h2>
-    <div id="stok"></div>
 
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
-    <script>
-    const codeReader = new ZXing.BrowserBarcodeReader()
-    let lock=false
 
-    codeReader.decodeFromVideoDevice(null, 'video', async (result, err) => {
-        if (result && !lock) {
-            lock=true
+    return f"""
 
-            let res = await fetch("/hizli_islem", {
-                method:"POST",
-                headers:{"Content-Type":"application/json"},
-                body: JSON.stringify({barkod: result.text, tip: "{{tip}}"})
-            })
+<video id="video"
+width="350"
+autoplay>
+</video>
 
-            let data = await res.json()
 
-            if (data.ok){
-                isim.innerText = data.ad
-                stok.innerText = "Kalan: " + data.adet
-            } else {
-                isim.innerText = "HATALI"
-            }
+<h2 id="sonuc">
+Hazır
+</h2>
 
-            setTimeout(()=>lock=false,500)
-        }
-    })
-    </script>
-    """, tip=tip)
 
-if __name__ == "__main__":
-    app.run(debug=True)
+<script src="
+https://unpkg.com/@zxing/library@latest">
+</script>
+
+
+<script>
+
+
+let reader =
+new ZXing.BrowserBarcodeReader();
+
+
+
+reader.decodeFromVideoDevice(
+null,
+"video",
+
+(result,error)=>{{
+
+
+if(result){{
+
+
+fetch("/hizli_islem",
+{{
+
+method:"POST",
+
+headers:
+{{
+"Content-Type":"application/json"
+}},
+
+body:JSON.stringify(
+{{
+barkod:result.text,
+tip:"{tip}"
+}}
+)
+
+}}
+
+)
+
+.then(x=>x.json())
+
+.then(data=>{{
+
+sonuc.innerHTML=
+data.ad+" Kalan:"+data.adet;
+
+
+}})
+
+
+}}
+
+
+})
+
+
+</script>
+
+
+"""
+
+
+
+
+if __name__=="__main__":
+
+    app.run(
+    host="0.0.0.0",
+    port=5000
+    )
