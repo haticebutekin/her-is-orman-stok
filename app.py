@@ -63,9 +63,17 @@ def barkod_uret():
 # BARKOD RESİM
 def barkod_resim(kod):
 
-    os.makedirs("static",exist_ok=True)
+    klasor = "static"
 
-    yol="static/"+kod
+    if os.path.exists(klasor) and not os.path.isdir(klasor):
+        os.remove(klasor)
+
+    if not os.path.exists(klasor):
+        os.mkdir(klasor)
+
+
+    yol = os.path.join(klasor, kod)
+
 
     CODE128 = barcode.get_barcode_class("code128")
 
@@ -76,22 +84,30 @@ def barkod_resim(kod):
 
     img.save(yol)
 
-    return kod+".png"
+    return kod + ".png"
 
 
 
 # QR
 def qr_uret(kod):
 
-    os.makedirs("static",exist_ok=True)
+    klasor="static"
+
+    if os.path.exists(klasor) and not os.path.isdir(klasor):
+        os.remove(klasor)
+
+    if not os.path.exists(klasor):
+        os.mkdir(klasor)
+
 
     img=qrcode.make(kod)
 
     img.save(
-        "static/"+kod+"_qr.png"
+        os.path.join(
+            klasor,
+            kod+"_qr.png"
+        )
     )
-
-
 
 @app.route("/")
 def index():
