@@ -1,39 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
 <style>
-body { font-family:Arial; }
-.etiket {
-    width:350px;
-    border:2px solid black;
-    padding:10px;
+body { font-family:Arial; text-align:center; }
+.kutu {
+    width:300px;
+    border:1px solid #ccc;
+    padding:15px;
     border-radius:10px;
+    margin:auto;
 }
-.row { display:flex; justify-content:space-between; align-items:center; }
+img { margin-top:10px; }
 </style>
+</head>
+<body>
 
-<div class="etiket">
+<div class="kutu">
 
-    <h3>{{ urun[1] }}</h3>
+<h3>{{ urun[1] }}</h3>
 
-    <small>
-    {{ urun[2] }} | {{ urun[3]} | {{ urun[4] }}<br>
-    {{ urun[6] }} | {{ urun[7] }}<br>
-    Yüzey: {{ urun[5] }}<br>
-    Depo: {{ urun[9] }}
-    </small>
+<p>
+{{ urun[2] }} | {{ urun[3] }} | {{ urun[4] }}<br>
+{{ urun[6] }} | {{ urun[7] }}<br>
+Yüzey: {{ urun[5] }}<br>
+Depo: {{ urun[9] }}
+</p>
 
-    <hr>
+<!-- ✅ BARKOD -->
+<img src="{{ url_for('static', filename=kod + '.png') }}" width="220">
 
-    <div class="row">
-        <div>
-            <img src="{{ url_for('static', filename=kod + '.png') }}" width="200"><br>
-            <center>{{ kod }}</center>
-        </div>
+<!-- ✅ QR -->
+<img src="{{ url_for('static', filename=kod + '_qr.png') }}" width="120">
 
-        <div>
-            <img src="{{ url_for('static', filename=kod + '_qr.png') }}" width="100">
-        </div>
-    </div>
+<p><b>{{ kod }}</b></p>
+
+<button onclick="window.print()">🖨 Yazdır</button>
 
 </div>
 
-<br>
-<button onclick="window.print()">🖨 Yazdır</button>
+</body>
+</html>
