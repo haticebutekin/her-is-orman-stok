@@ -150,9 +150,7 @@ def kamera(tip):
 def yeni_barkod():
       con = db() 
       cur = con.cursor() 
-      cur.execute("SELECT COUNT(*) FROM urun")
-      sayi = cur.fetchone()[0] + 1 
-     return f"HER-{str(sayi).zfill(6)}" 
+      
 
 @app.route("/sayac")
 def sayac():
