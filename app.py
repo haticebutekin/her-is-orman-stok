@@ -8,6 +8,10 @@ from barcode.writer import ImageWriter
 app = Flask(__name__)
 app.secret_key = "secret123"
 
+# DEPOLAR DEPOLAR = [ "MDF SATIŞ DEPOSU", "LAMİNANT DEPOSU", "KAPI DEPOSU", "HGLOSS DEPOSU (MORAY YANI)", "SÜTÇÜ YANI", "HELVACI YANI", "RÖTBALANSÇI YANI", "KESİMHANE" ]
+
+
+
 # ---------------- DB ----------------
 def get_db():
     return sqlite3.connect("db.sqlite", check_same_thread=False)
