@@ -51,14 +51,22 @@ def barkod_uret():
 # BARKOD RESİM
 def barkod_resim_olustur(kod):
     if not os.path.exists("static"):
-        os.mkdir("static")
+        os.makedirs("static")
 
-    Code128 = barcode.get_barcode_class('code128')
-    b = Code128(kod, writer=ImageWriter())
-    path = f"static/{kod}"
-    b.save(path)
+    path = f"static/{kod}.png"
 
-    return f"/{path}.png"
+    # varsa tekrar üretme
+    if os.path.exists(path):
+        return path
+
+    try:
+        Code128 = barcode.get_barcode_class('code128')
+        b = Code128(kod, writer=ImageWriter())
+        b.save(f"static/{kod}")
+        return path
+    except Exception as e:
+        print("BARKOD HATA:", e)
+        return None
 
 # ANA SAYFA
 @app.route("/")
@@ -185,22 +193,95 @@ def liste():
 # TEK ETİKET
 @app.route("/etiket/<kod>")
 def etiket(kod):
-    path = f"static/{kod}.png"
 
-    if not os.path.exists(path):
-        return "Barkod bulunamadı"
+    # ÜRÜNÜ BUL
+    cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
+    u = cur.fetchone()
+
+    if not u:
+        return "Ürün bulunamadı"
+
+    # barkod yoksa üret
+    path = barkod_resim_olustur(kod)
 
     return f"""
     <html>
-    <body style="text-align:center">
-    <h3>{kod}</h3>
-    <img src="/{path}" width="300">
-    <br><br>
-    <button onclick="window.print()">Yazdır</button>
+    <head>
+    <style>
+    body {{ font-family:Arial; background:#f5f6fa; text-align:center; }}
+
+    .etiket {{
+        width:350px;
+        background:white;
+        padding:15px;
+        margin:20px auto;
+        border-radius:10px;
+        border:2px solid black;
+    }}
+
+    .logo {{
+        font-weight:bold;
+        font-size:20px;
+        margin-bottom:5px;
+    }}
+
+    .ad {{
+        font-size:18px;
+        font-weight:bold;
+        margin-bottom:10px;
+    }}
+
+    .row {{
+        text-align:left;
+        font-size:14px;
+    }}
+
+    .badge {{
+        padding:3px 8px;
+        border-radius:6px;
+        color:white;
+        font-weight:bold;
+    }}
+
+    .hg {{ background:green; }}
+    .mat {{ background:gray; }}
+    </style>
+    </head>
+
+    <body>
+
+    <div class="etiket">
+
+        <div class="logo">HER İŞ ORMAN</div>
+
+        <div class="ad">{u[1]}</div>
+
+        <div class="row">Cinsi: {u[2]}</div>
+        <div class="row">Ebat: {u[3]}</div>
+        <div class="row">Kalınlık: {u[4]}</div>
+
+        <div class="row">Sınıf: {u[6]}</div>
+        <div class="row">Renk: {u[7]}</div>
+
+        <div class="row">
+        Yüzey:
+        <span class="badge {'hg' if u[5]=='HG' else 'mat'}">
+        {u[5]}
+        </span>
+        </div>
+
+        <div class="row">Depo: {u[9]}</div>
+
+        {"<img src='/" + path + "' width='300'>" if path else "<br><b>Barkod yok</b>"}
+
+        <br><br>
+        <button onclick="window.print()">🖨 Yazdır</button>
+
+    </div>
+
     </body>
     </html>
     """
-   
 
 # ÇOKLU ETİKET (A4)
 @app.route("/coklu/<kod>")
@@ -208,18 +289,34 @@ def coklu(kod):
     cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
     u = cur.fetchone()
 
-    html = "<body>"
+    if not u:
+        return "Ürün yok"
+
+    path = barkod_resim_olustur(kod)
+
+    html = "<body style='font-family:Arial'>"
+
     for i in range(10):
         html += f"""
-        <div style="width:45%;float:left;text-align:center;border:1px solid #ccc;margin:5px;padding:10px">
+        <div style="width:45%;float:left;border:1px solid #ccc;margin:5px;padding:10px;border-radius:8px">
+        
         <b>{u[1]}</b><br>
-        <img src="/static/{kod}.png" width="200"><br>
-        <small>{u[3]} | {u[4]} | {u[5]}</small>
+
+        {u[2]} | {u[3]} | {u[4]}<br>
+        {u[6]} | {u[7]}<br>
+
+        Yüzey: {u[5]}<br>
+        Depo: {u[9]}<br>
+
+        {"<img src='/" + path + "' width='200'>" if path else ""}
+
         </div>
         """
-    html += "<button onclick='window.print()'>YAZDIR</button></body>"
-    return html
 
+    html += "<div style='clear:both'></div><br>"
+    html += "<button onclick='window.print()'>🖨 YAZDIR</button></body>"
+
+    return html
 # HIZLI İŞLEM
 @app.route("/hizli_islem", methods=["POST"])
 def hizli_islem():
