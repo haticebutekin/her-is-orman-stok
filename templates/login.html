@@ -1,5 +1,5 @@
-<form method="post">
-<input name="user" placeholder="kullanıcı">
-<input name="pass" type="password" placeholder="şifre">
-<button>GİRİŞ</button>
-</form>
+<h2>Ürün Kodu: {{ kod }}</h2>
+
+<p>Barkod: {{ kod }}</p>
+
+<img src="{{ url_for('static', filename=kod + '.png') }}" width="300">
