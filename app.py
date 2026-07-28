@@ -446,62 +446,113 @@ def etiket(kod):
     """
 
 @app.route("/hizli_islem",methods=["POST"])
+@app.route("/hizli_islem",methods=["POST"])
 def hizli():
 
     data=request.json
-
 
     barkod=data["barkod"]
     tip=data["tip"]
 
 
-
     with db() as con:
 
-        u=con.execute(
-        "SELECT ad,adet FROM urun WHERE barkod=?",
+
+        urun=con.execute(
+        """
+        SELECT 
+        ad,
+        cins,
+        ebat,
+        kalinlik,
+        yuzey,
+        depo,
+        adet
+        FROM urun 
+        WHERE barkod=?
+        """,
         (barkod,)
         ).fetchone()
 
 
 
-        if not u:
+        if not urun:
 
-            return jsonify(
-            {"ok":False}
-            )
+            return jsonify({
+            "ok":False
+            })
 
 
-        adet=u[1]
+
+        adet=urun[6]
 
 
         if tip=="cikis":
 
+            if adet<=0:
+
+                return jsonify({
+                "ok":False
+                })
+
             adet-=1
+
+            islem="ÇIKIŞ"
+
 
         else:
 
             adet+=1
 
+            islem="GİRİŞ"
+
 
 
         con.execute(
-        "UPDATE urun SET adet=? WHERE barkod=?",
+        """
+        UPDATE urun 
+        SET adet=?
+        WHERE barkod=?
+        """,
         (adet,barkod)
         )
 
 
-    return jsonify(
-    {
+
+        con.execute(
+        """
+        INSERT INTO hareket
+        (barkod,islem,adet)
+        VALUES(?,?,?)
+        """,
+        (
+        barkod,
+        islem,
+        adet
+        )
+        )
+
+
+
+    return jsonify({
+
     "ok":True,
-    "ad":u[0],
+
+    "ad":urun[0],
+
+    "cins":urun[1],
+
+    "ebat":urun[2],
+
+    "kalinlik":urun[3],
+
+    "yuzey":urun[4],
+
+    "depo":urun[5],
+
     "adet":adet
-    }
-    )
 
-
-
-
+    })
 
 @app.route("/kamera/<tip>")
 def kamera(tip):
