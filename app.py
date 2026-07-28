@@ -48,19 +48,33 @@ def barkod_uret():
 
 # BARKOD RESİM
 def barkod_resim(kod):
-    if not os.path.exists("static"):
-        os.mkdir("static")
+
+    klasor = "static"
+
+    # Eğer static dosya ise sil
+    if os.path.exists(klasor) and not os.path.isdir(klasor):
+        os.remove(klasor)
+
+    # klasör yoksa oluştur
+    if not os.path.exists(klasor):
+        os.makedirs(klasor)
+
+
+    yol = os.path.join(klasor, kod)
 
     CODE128 = barcode.get_barcode_class("code128")
 
     img = CODE128(kod, writer=ImageWriter())
 
-    img.save("static/"+kod, options={
-        "module_width":0.6,
-        "module_height":40,
-        "font_size":20,
-        "quiet_zone":10
-    })
+    img.save(
+        yol,
+        options={
+            "module_width":0.6,
+            "module_height":40,
+            "font_size":20,
+            "quiet_zone":10
+        }
+    )
 
 # QR
 def qr_uret(kod):
