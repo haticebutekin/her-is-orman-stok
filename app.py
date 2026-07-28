@@ -105,16 +105,18 @@ def ekle():
             barkod
         )
 
-        try:
-            cur.execute("""
-            INSERT INTO urun
-            (ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
-            """, data)
-            db.commit()
-            
-  except Exception as e:
-        return str(e)
+     try:
+    cur.execute("""
+        INSERT INTO urun
+        (ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+    """, data)
+    db.commit()
+
+    return redirect("/liste")
+
+except Exception as e:
+    return f"HATA: {e}"
 
         return redirect("/liste")
 
