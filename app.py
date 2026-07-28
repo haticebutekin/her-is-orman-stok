@@ -1,7 +1,21 @@
-from flask import Flask, request, redirect, render_template_string
-import sqlite3
+from flask import Flask, request, redirect, render_template_string, jsonify
+import sqlite3, os
+import barcode
+from barcode.writer import ImageWriter
 
 app = Flask(__name__)
+
+# SABİT DEPOLAR (DEĞİŞMEZ)
+DEPOLAR = [
+    "MDF SATIŞ DEPOSU",
+    "LAMİNANT DEPOSU",
+    "KAPI DEPOSU",
+    "HGLOSS DEPOSU (MORAY YANI)",
+    "SÜTÇÜ YANI",
+    "HELVACI YANI",
+    "RÖTBALANSÇI YANI",
+    "KESİMHANE"
+]
 
 # DB
 def get_db():
@@ -22,32 +36,41 @@ yuzey TEXT,
 sinif TEXT,
 renk TEXT,
 adet INTEGER,
+depo TEXT,
 barkod TEXT UNIQUE
 )
 """)
 db.commit()
 
-# ANA SAYFA (MODERN)
+# BARKOD ÜRET
+def barkod_uret():
+    cur.execute("SELECT COUNT(*) FROM urun")
+    sayi = cur.fetchone()[0] + 1
+    return f"URUN-{str(sayi).zfill(5)}"
+
+# BARKOD RESİM
+def barkod_resim_olustur(kod):
+    if not os.path.exists("static"):
+        os.mkdir("static")
+
+    Code128 = barcode.get_barcode_class('code128')
+    b = Code128(kod, writer=ImageWriter())
+    path = f"static/{kod}"
+    b.save(path)
+
+    return f"/{path}.png"
+
+# ANA SAYFA
 @app.route("/")
 def index():
     return """
     <style>
     body { font-family:Arial; background:#f5f6fa; text-align:center; }
-    .box {
-        background:white; padding:20px; margin:20px auto;
-        width:300px; border-radius:15px;
-        box-shadow:0 5px 20px rgba(0,0,0,0.1);
-    }
-    a {
-        display:block; margin:10px;
-        padding:12px; background:#4CAF50;
-        color:white; text-decoration:none;
-        border-radius:8px;
-    }
+    .box { background:white; padding:20px; margin:20px auto; width:300px; border-radius:15px;}
+    a { display:block; margin:10px; padding:12px; background:#4CAF50; color:white; text-decoration:none; border-radius:8px;}
     </style>
-
     <div class="box">
-    <h2>📦 Depo Sistem</h2>
+    <h2>📦 HER İŞ ORMAN STOK</h2>
     <a href="/ekle">➕ Ürün Ekle</a>
     <a href="/kamera/giris">📥 Giriş</a>
     <a href="/kamera/cikis">📤 Çıkış</a>
@@ -55,11 +78,17 @@ def index():
     </div>
     """
 
-# ÜRÜN EKLE (DETAYLI)
+# ÜRÜN EKLE
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
     if request.method == "POST":
-        
+
+        barkod = request.form.get("barkod")
+        if not barkod:
+            barkod = barkod_uret()
+
+        barkod_resim_olustur(barkod)
+
         data = (
             request.form["ad"],
             request.form["cins"],
@@ -69,48 +98,36 @@ def ekle():
             request.form["sinif"],
             request.form["renk"],
             int(request.form["adet"]),
-            barkod = request.form.get("barkod")
-
-            if not barkod:
-               barkod = barkod_uret()
+            request.form["depo"],
+            barkod
         )
 
         try:
             cur.execute("""
             INSERT INTO urun
-            (ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,barkod)
-            VALUES (?,?,?,?,?,?,?,?,?)
+            (ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
             """, data)
             db.commit()
         except:
             return "Barkod zaten var!"
 
-        return redirect("/")
+        return redirect("/liste")
 
-    return """
+    return render_template_string("""
     <style>
     body { font-family:Arial; background:#f5f6fa; }
-    form {
-        background:white; padding:20px;
-        width:320px; margin:30px auto;
-        border-radius:15px;
-    }
-    input, select {
-        width:100%; padding:10px; margin:5px 0;
-    }
-    button {
-        width:100%; padding:12px;
-        background:#4CAF50; color:white;
-        border:none; border-radius:8px;
-    }
+    form { background:white; padding:20px; width:320px; margin:30px auto; border-radius:15px;}
+    input, select { width:100%; padding:10px; margin:5px 0;}
+    button { width:100%; padding:12px; background:#4CAF50; color:white; border:none; border-radius:8px;}
     </style>
 
     <form method="post">
     <h3>Ürün Ekle</h3>
 
-    <input name="ad" placeholder="Ad">
-    <input name="cins" placeholder="Cins">
-    <input name="ebat" placeholder="Ebat">
+    <input name="ad" placeholder="Malın Adı">
+    <input name="cins" placeholder="Malın Cinsi">
+    <input name="ebat" placeholder="Ebat (mm)">
     <input name="kalinlik" placeholder="Kalınlık">
 
     <select name="yuzey">
@@ -121,11 +138,17 @@ def ekle():
     <input name="sinif" placeholder="Sınıf">
     <input name="renk" placeholder="Renk">
     <input name="adet" type="number" placeholder="Adet">
-    <input name="barkod" placeholder="Barkod">
 
+    <select name="depo">
+        {% for d in depolar %}
+        <option>{{d}}</option>
+        {% endfor %}
+    </select>
+
+    <input name="barkod" placeholder="Barkod (boş bırak = otomatik)">
     <button>Ekle</button>
     </form>
-    """
+    """, depolar=DEPOLAR)
 
 # LİSTE
 @app.route("/liste")
@@ -136,10 +159,8 @@ def liste():
     html = """
     <style>
     body { font-family:Arial; background:#f5f6fa; }
-    .card {
-        background:white; margin:10px; padding:15px;
-        border-radius:10px;
-    }
+    .card { background:white; margin:10px; padding:15px; border-radius:10px;}
+    a { display:inline-block; margin-top:10px; background:#4CAF50; color:white; padding:6px 10px; border-radius:6px; text-decoration:none;}
     </style>
     <h2 style='text-align:center'>Ürünler</h2>
     """
@@ -148,36 +169,70 @@ def liste():
         html += f"""
         <div class="card">
         <b>{u[1]}</b><br>
+        Depo: {u[9]}<br>
         {u[2]} | {u[3]} | {u[4]}<br>
         {u[5]} | {u[6]} | {u[7]}<br>
-        Adet: {u[8]}
+        Adet: {u[8]}<br>
+        Barkod: {u[10]}<br>
+
+        <a href="/etiket/{u[10]}" target="_blank">🖨 Etiket</a>
+        <a href="/coklu/{u[10]}" target="_blank">📄 Çoklu Etiket</a>
         </div>
         """
 
     return html
 
+# TEK ETİKET
+@app.route("/etiket/<kod>")
+def etiket(kod):
+    cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
+    u = cur.fetchone()
+
+    return f"""
+    <body style="text-align:center;font-family:Arial">
+    <h3>{u[1]}</h3>
+    <img src="/static/{kod}.png" width="300"><br>
+    <small>{u[2]} | {u[3]} | {u[4]} | {u[5]}</small><br><br>
+    <button onclick="window.print()">🖨 Yazdır</button>
+    </body>
+    """
+
+# ÇOKLU ETİKET (A4)
+@app.route("/coklu/<kod>")
+def coklu(kod):
+    cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
+    u = cur.fetchone()
+
+    html = "<body>"
+    for i in range(10):
+        html += f"""
+        <div style="width:45%;float:left;text-align:center;border:1px solid #ccc;margin:5px;padding:10px">
+        <b>{u[1]}</b><br>
+        <img src="/static/{kod}.png" width="200"><br>
+        <small>{u[3]} | {u[4]} | {u[5]}</small>
+        </div>
+        """
+    html += "<button onclick='window.print()'>YAZDIR</button></body>"
+    return html
+
 # HIZLI İŞLEM
 @app.route("/hizli_islem", methods=["POST"])
 def hizli_islem():
-    barkod = request.json.get("barkod")
-    tip = request.json.get("tip")
+    data = request.get_json()
+    barkod = data.get("barkod")
+    tip = data.get("tip")
 
-def barkod_uret():
-    cur.execute("SELECT COUNT(*) FROM urun")
-    sayi = cur.fetchone()[0] + 1
-    return f"URUN-{str(sayi).zfill(5)}"
-    
     cur.execute("SELECT ad, adet FROM urun WHERE barkod=?", (barkod,))
     veri = cur.fetchone()
 
     if not veri:
-        return {"ok": False}
+        return jsonify({"ok": False})
 
     ad, adet = veri
 
     if tip == "cikis":
         if adet <= 0:
-            return {"ok": False}
+            return jsonify({"ok": False})
         adet -= 1
     else:
         adet += 1
@@ -185,52 +240,38 @@ def barkod_uret():
     cur.execute("UPDATE urun SET adet=? WHERE barkod=?", (adet, barkod))
     db.commit()
 
-    return {"ok": True, "ad": ad, "adet": adet}
+    return jsonify({"ok": True, "ad": ad, "adet": adet})
 
 # KAMERA
 @app.route("/kamera/<tip>")
 def kamera(tip):
     return render_template_string("""
-    <style>
-    body { font-family:Arial; text-align:center; }
-    #isim { font-size:28px; margin:10px; }
-    </style>
-
-    <h2>📷 Okut</h2>
     <video id="video" width="300" autoplay></video>
-    <div id="isim">Hazır</div>
+    <h2 id="isim">Hazır</h2>
     <div id="stok"></div>
 
     <script src="https://unpkg.com/@zxing/library@latest"></script>
-
     <script>
     const codeReader = new ZXing.BrowserBarcodeReader()
     let lock=false
 
     codeReader.decodeFromVideoDevice(null, 'video', async (result, err) => {
         if (result && !lock) {
-
             lock=true
 
             let res = await fetch("/hizli_islem", {
                 method:"POST",
                 headers:{"Content-Type":"application/json"},
-                body: JSON.stringify({
-                    barkod: result.text,
-                    tip: "{{tip}}"
-                })
+                body: JSON.stringify({barkod: result.text, tip: "{{tip}}"})
             })
 
             let data = await res.json()
 
-            if (data.ok) {
-                document.body.style.background="white"
+            if (data.ok){
                 isim.innerText = data.ad
                 stok.innerText = "Kalan: " + data.adet
             } else {
-                document.body.style.background="red"
-                isim.innerText = "HATALI ÜRÜN"
-                stok.innerText = ""
+                isim.innerText = "HATALI"
             }
 
             setTimeout(()=>lock=false,500)
@@ -240,4 +281,4 @@ def kamera(tip):
     """, tip=tip)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=10000)
