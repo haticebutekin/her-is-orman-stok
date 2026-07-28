@@ -55,19 +55,15 @@ def barkod_resim_olustur(kod):
 
     path = f"static/{kod}.png"
 
-    # varsa tekrar üretme
     if os.path.exists(path):
         return path
 
-    try:
-        Code128 = barcode.get_barcode_class('code128')
-        b = Code128(kod, writer=ImageWriter())
-        b.save(f"static/{kod}")
-        return path
-    except Exception as e:
-        print("BARKOD HATA:", e)
-        return None
+    Code128 = barcode.get_barcode_class('code128')
+    b = Code128(kod, writer=ImageWriter())
+    b.save(f"static/{kod}")
 
+    return path
+    
 # ANA SAYFA
 @app.route("/")
 def index():
