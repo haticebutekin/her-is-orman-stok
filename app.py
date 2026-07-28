@@ -59,6 +59,7 @@ def index():
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
     if request.method == "POST":
+        
         data = (
             request.form["ad"],
             request.form["cins"],
@@ -68,7 +69,10 @@ def ekle():
             request.form["sinif"],
             request.form["renk"],
             int(request.form["adet"]),
-            request.form["barkod"]
+            barkod = request.form.get("barkod")
+
+            if not barkod:
+               barkod = barkod_uret()
         )
 
         try:
@@ -158,6 +162,11 @@ def hizli_islem():
     barkod = request.json.get("barkod")
     tip = request.json.get("tip")
 
+def barkod_uret():
+    cur.execute("SELECT COUNT(*) FROM urun")
+    sayi = cur.fetchone()[0] + 1
+    return f"URUN-{str(sayi).zfill(5)}"
+    
     cur.execute("SELECT ad, adet FROM urun WHERE barkod=?", (barkod,))
     veri = cur.fetchone()
 
