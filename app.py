@@ -185,17 +185,22 @@ def liste():
 # TEK ETİKET
 @app.route("/etiket/<kod>")
 def etiket(kod):
-    cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
-    u = cur.fetchone()
+    path = f"static/{kod}.png"
+
+    if not os.path.exists(path):
+        return "Barkod bulunamadı"
 
     return f"""
-    <body style="text-align:center;font-family:Arial">
-    <h3>{u[1]}</h3>
-    <img src="/static/{kod}.png" width="300"><br>
-    <small>{u[2]} | {u[3]} | {u[4]} | {u[5]}</small><br><br>
-    <button onclick="window.print()">🖨 Yazdır</button>
+    <html>
+    <body style="text-align:center">
+    <h3>{kod}</h3>
+    <img src="/{path}" width="300">
+    <br><br>
+    <button onclick="window.print()">Yazdır</button>
     </body>
+    </html>
     """
+   
 
 # ÇOKLU ETİKET (A4)
 @app.route("/coklu/<kod>")
@@ -281,4 +286,4 @@ def kamera(tip):
     """, tip=tip)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(debug=True)
