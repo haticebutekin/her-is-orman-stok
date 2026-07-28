@@ -490,86 +490,114 @@ def hizli():
 @app.route("/kamera/<tip>")
 def kamera(tip):
 
+    return render_template_string("""
+    
+    <html>
 
-    return f"""
+    <body style="text-align:center;font-family:Arial">
 
-<video id="video"
-width="350"
-autoplay>
-</video>
+    <h2>Barkod Okutma</h2>
 
-
-<h2 id="sonuc">
-Hazır
-</h2>
-
-
-<script src="
-https://unpkg.com/@zxing/library@latest">
-</script>
+    <video id="video"
+    width="350"
+    autoplay>
+    </video>
 
 
-<script>
+    <h3 id="sonuc">
+    Hazır
+    </h3>
 
 
-let reader =
-new ZXing.BrowserBarcodeReader();
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
 
 
-
-reader.decodeFromVideoDevice(
-null,
-"video",
-
-(result,error)=>{{
+    <script>
 
 
-if(result){{
+    const reader = new ZXing.BrowserBarcodeReader();
+
+    let kilit=false;
 
 
-fetch("/hizli_islem",
-{{
+    reader.decodeFromVideoDevice(
+        null,
+        "video",
+        function(result, err){
 
-method:"POST",
+            if(result && !kilit){
 
-headers:
-{{
-"Content-Type":"application/json"
-}},
-
-body:JSON.stringify(
-{{
-barkod:result.text,
-tip:"{tip}"
-}}
-)
-
-}}
-
-)
-
-.then(x=>x.json())
-
-.then(data=>{{
-
-sonuc.innerHTML=
-data.ad+" Kalan:"+data.adet;
+                kilit=true;
 
 
-}})
+                fetch("/hizli_islem",
+                {
+                    method:"POST",
+
+                    headers:{
+                        "Content-Type":"application/json"
+                    },
+
+                    body:JSON.stringify({
+
+                        barkod:result.text,
+
+                        tip:"""" + tip + """"
+
+                    })
+
+                })
 
 
-}}
+                .then(response=>response.json())
 
 
-})
+                .then(data=>{
 
 
-</script>
+                    if(data.ok){
+
+                        document.getElementById("sonuc").innerHTML =
+                        data.ad + 
+                        "<br>Kalan Stok: " + 
+                        data.adet;
+
+                    }
+
+                    else{
+
+                        document.getElementById("sonuc").innerHTML =
+                        "Barkod Bulunamadı";
+
+                    }
 
 
-"""
+                });
 
+
+                setTimeout(function(){
+
+                    kilit=false;
+
+                },1000);
+
+
+            }
+
+
+        }
+
+    );
+
+
+    </script>
+
+
+    </body>
+
+    </html>
+
+    """)
 
 
 
