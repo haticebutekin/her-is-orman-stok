@@ -1,21 +1,11 @@
 from flask import Flask, request, redirect, session, render_template_string, send_file
 import sqlite3, os, datetime, shutil
-from barcode import Code128
-from barcode.writer import ImageWriter
-from openpyxl import Workbook
 
 app = Flask(__name__)
-app.secret_key = "pro123"
+app.secret_key = "lvl4"
 
-DB = "stok.db"
-STATIC = "static"
+DB = "data.db"
 
-if not os.path.exists(STATIC):
-    os.makedirs(STATIC)
-
-DEPOLAR = ["MDF","LAMİNANT","KAPI","HGLOSS","SÜTÇÜ","HELVACI","KESİM"]
-
-# DB
 def db():
     return sqlite3.connect(DB)
 
@@ -23,15 +13,31 @@ def init():
     con = db()
     cur = con.cursor()
 
+    # kullanıcılar
+    cur.execute("""CREATE TABLE IF NOT EXISTS users(
+    id INTEGER PRIMARY KEY,
+    username TEXT,
+    password TEXT,
+    role TEXT
+    )""")
+
+    # firmalar
+    cur.execute("""CREATE TABLE IF NOT EXISTS firmalar(
+    id INTEGER PRIMARY KEY,
+    isim TEXT
+    )""")
+
+    # ürün
     cur.execute("""CREATE TABLE IF NOT EXISTS urun(
     id INTEGER PRIMARY KEY,
+    firma_id INTEGER,
     barkod TEXT,
     isim TEXT,
     adet INTEGER,
-    depo TEXT,
     kritik INTEGER
     )""")
 
+    # hareket
     cur.execute("""CREATE TABLE IF NOT EXISTS hareket(
     id INTEGER PRIMARY KEY,
     barkod TEXT,
@@ -40,32 +46,44 @@ def init():
     tarih TEXT
     )""")
 
+    # cari
+    cur.execute("""CREATE TABLE IF NOT EXISTS cari(
+    id INTEGER PRIMARY KEY,
+    isim TEXT,
+    borc INTEGER,
+    alacak INTEGER
+    )""")
+
+    # admin
+    cur.execute("SELECT * FROM users WHERE username='admin'")
+    if not cur.fetchone():
+        cur.execute("INSERT INTO users VALUES(NULL,'admin','123','admin')")
+
     con.commit()
     con.close()
 
 init()
 
-# BARKOD
-def barkod():
-    con = db()
-    cur = con.cursor()
-    cur.execute("SELECT COUNT(*) FROM urun")
-    n = cur.fetchone()[0] + 1
-    kod = f"HER-{str(n).zfill(6)}"
-    path = f"{STATIC}/{kod}.png"
-    Code128(kod, writer=ImageWriter()).write(open(path, "wb"))
-    return kod
-
 # LOGIN
 @app.route("/", methods=["GET","POST"])
 def login():
-    if request.method == "POST":
-        if request.form["u"]=="admin" and request.form["p"]=="123":
-            session["ok"]=1
+    if request.method=="POST":
+        u=request.form["u"]
+        p=request.form["p"]
+
+        con=db()
+        cur=con.cursor()
+        cur.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p))
+        user=cur.fetchone()
+        con.close()
+
+        if user:
+            session["user"]=u
+            session["role"]=user[3]
             return redirect("/panel")
 
     return """
-    <h2>STOK PRO</h2>
+    <h2>LEVEL 4 ERP</h2>
     <form method=post>
     <input name=u placeholder=Kullanıcı>
     <input name=p type=password placeholder=Şifre>
@@ -76,157 +94,113 @@ def login():
 # PANEL
 @app.route("/panel", methods=["GET","POST"])
 def panel():
-    if not session.get("ok"):
+    if not session.get("user"):
         return redirect("/")
 
-    if request.method == "POST":
-        kod = barkod()
-        data = (
-            kod,
-            request.form["isim"],
-            int(request.form["adet"]),
-            request.form["depo"],
-            int(request.form["kritik"])
-        )
+    con=db()
+    cur=con.cursor()
 
-        con = db()
-        cur = con.cursor()
-        cur.execute("INSERT INTO urun VALUES(NULL,?,?,?,?,?)", data)
-        cur.execute("INSERT INTO hareket VALUES(NULL,?,?,?,?)",
-                    (kod,"GİRİŞ",data[2],str(datetime.datetime.now())))
+    if request.method=="POST":
+        isim=request.form["isim"]
+        adet=int(request.form["adet"])
+        kritik=int(request.form["kritik"])
+
+        barkod="HER-"+str(datetime.datetime.now().timestamp())
+
+        cur.execute("INSERT INTO urun VALUES(NULL,1,?,?,?,?)",
+                    (barkod,isim,adet,kritik))
         con.commit()
-        con.close()
 
-    con = db()
-    cur = con.cursor()
-    urunler = cur.execute("SELECT * FROM urun").fetchall()
-    con.close()
+    urunler=cur.execute("SELECT * FROM urun").fetchall()
 
-    return render_template_string("""
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <h2>📦 STOK PRO LEVEL 3</h2>
+    html="""
+    <h2>STOK ERP</h2>
 
     <form method=post>
-    <input name=isim placeholder="Ürün">
-    <input name=adet type=number placeholder="Adet">
-    <input name=kritik type=number value=5>
-    <select name=depo>
-    {% for d in depolar %}
-    <option>{{d}}</option>
-    {% endfor %}
-    </select>
-    <button>EKLE</button>
+    Ürün <input name=isim>
+    Adet <input name=adet>
+    Kritik <input name=kritik>
+    <button>Ekle</button>
     </form>
 
     <hr>
-
-    <a href="/kamera">📷 Kamera</a>
-    <a href="/rapor">📊 Rapor</a>
-    <a href="/yedek">💾 Yedek</a>
-    <a href="/etiket">🏷 Etiket</a>
+    <a href="/cari">Cari</a> |
+    <a href="/rapor">Rapor</a> |
+    <a href="/yedek">Yedek</a>
 
     <hr>
+    """
 
-    {% for u in urunler %}
-    <div style="border:1px solid #ccc;padding:10px;margin:5px;
-    background:{% if u[3]<=u[5] %}#ffdddd{% else %}#ddffdd{% endif %}">
-    
-    <b>{{u[2]}}</b><br>
-    Barkod: {{u[1]}}<br>
-    Adet: {{u[3]}}<br>
-    Depo: {{u[4]}}<br>
+    for u in urunler:
+        renk="red" if u[4]<=u[5] else "green"
 
-    <img src="/static/{{u[1]}}.png" width=150><br>
+        html+=f"""
+        <div style='border:1px solid #ccc;margin:5px;padding:5px;background:{renk}'>
+        {u[3]} | {u[2]} | Adet: {u[4]}
+        <a href='/islem/{u[2]}/giris'>➕</a>
+        <a href='/islem/{u[2]}/cikis'>➖</a>
+        </div>
+        """
 
-    <a href="/islem/{{u[1]}}/giris">➕</a>
-    <a href="/islem/{{u[1]}}/cikis">➖</a>
-    <a href="/fis/{{u[1]}}">🖨 Fiş</a>
-
-    </div>
-    {% endfor %}
-    """, urunler=urunler, depolar=DEPOLAR)
+    return html
 
 # İŞLEM
 @app.route("/islem/<kod>/<tip>")
-def islem(kod, tip):
-    con = db()
-    cur = con.cursor()
+def islem(kod,tip):
+    con=db()
+    cur=con.cursor()
 
     cur.execute("SELECT adet FROM urun WHERE barkod=?", (kod,))
-    a = cur.fetchone()[0]
+    a=cur.fetchone()[0]
 
-    yeni = a+1 if tip=="giris" else max(a-1,0)
+    yeni=a+1 if tip=="giris" else max(a-1,0)
 
     cur.execute("UPDATE urun SET adet=? WHERE barkod=?", (yeni,kod))
     cur.execute("INSERT INTO hareket VALUES(NULL,?,?,?,?)",
-                (kod,tip.upper(),1,str(datetime.datetime.now())))
+                (kod,tip,1,str(datetime.datetime.now())))
     con.commit()
     con.close()
 
     return redirect("/panel")
 
-# KAMERA
-@app.route("/kamera")
-def kamera():
-    return """
-    <button onclick="tip='giris'">GİRİŞ</button>
-    <button onclick="tip='cikis'">ÇIKIŞ</button>
-    <video id="v" width=300></video>
+# CARİ
+@app.route("/cari", methods=["GET","POST"])
+def cari():
+    con=db()
+    cur=con.cursor()
 
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
-    <script>
-    let tip="cikis"
-    const r = new ZXing.BrowserBarcodeReader()
-    r.decodeFromVideoDevice(null,'v',(res,err)=>{
-        if(res){
-            window.location="/islem/"+res.text+"/"+tip
-        }
-    })
-    </script>
-    """
+    if request.method=="POST":
+        cur.execute("INSERT INTO cari VALUES(NULL,?,?,?)",
+                    (request.form["isim"],0,0))
+        con.commit()
 
-# FİŞ
-@app.route("/fis/<kod>")
-def fis(kod):
-    return f"""
-    <h3>FİŞ</h3>
-    {kod}<br>
-    <script>window.print()</script>
-    """
+    data=cur.execute("SELECT * FROM cari").fetchall()
+
+    html="<h2>Cari</h2><form method=post><input name=isim><button>Ekle</button></form><hr>"
+
+    for c in data:
+        html+=f"{c[1]} | Borç:{c[2]} | Alacak:{c[3]}<br>"
+
+    return html
 
 # RAPOR
 @app.route("/rapor")
 def rapor():
-    con = db()
-    cur = con.cursor()
-    toplam = cur.execute("SELECT SUM(adet) FROM urun").fetchone()[0]
-    con.close()
+    con=db()
+    cur=con.cursor()
 
-    return f"<h2>Toplam Stok: {toplam}</h2>"
+    toplam=cur.execute("SELECT SUM(adet) FROM urun").fetchone()[0]
+    hareket=cur.execute("SELECT COUNT(*) FROM hareket").fetchone()[0]
+
+    return f"<h2>Toplam Stok: {toplam}<br>Hareket: {hareket}</h2>"
 
 # YEDEK
 @app.route("/yedek")
 def yedek():
-    shutil.copy(DB, "yedek.db")
-    return send_file("yedek.db", as_attachment=True)
-
-# ETİKET
-@app.route("/etiket")
-def etiket():
-    con = db()
-    cur = con.cursor()
-    data = cur.execute("SELECT barkod FROM urun").fetchall()
-    con.close()
-
-    html = "<h3>Etiketler</h3>"
-
-    for d in data:
-        html += f"<img src='/static/{d[0]}.png' width=200>"
-
-    return html
+    shutil.copy(DB,"backup.db")
+    return send_file("backup.db",as_attachment=True)
 
 # RUN
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT",10000))
-    app.run(host="0.0.0.0", port=port)
+if __name__=="__main__":
+    port=int(os.environ.get("PORT",10000))
+    app.run(host="0.0.0.0",port=port)
