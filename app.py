@@ -286,65 +286,53 @@ const sonuc = document.getElementById("sonuc");
 let aktif = true;
 
 navigator.mediaDevices.getUserMedia({
-    video:{
-        facingMode:{ ideal:"environment" },
-        width:{ ideal:1920 },
-        height:{ ideal:1080 }
-    }
+    video:{ facingMode:{ ideal:"environment" } }
 })
 .then(stream=>{
 
     video.srcObject = stream;
     video.play();
 
-    const hints = new Map();
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-        ZXing.BarcodeFormat.QR_CODE,
-        ZXing.BarcodeFormat.CODE_128
-    ]);
+    const reader = new ZXing.BrowserMultiFormatReader();
 
-  
-const reader = new ZXing.BrowserMultiFormatReader();
+    reader.decodeFromVideoDevice(null, video, (result, err) => {
 
-reader.decodeFromVideoDevice(null, video, (result, err) => {
+        if(result && aktif){
 
-    if(result && aktif){
+            aktif = false;
 
-        aktif = false;
+            navigator.vibrate(200);
 
-        navigator.vibrate(200);
+            sonuc.innerHTML = "Okundu: " + result.text;
 
-        sonuc.innerHTML = "Okundu: " + result.text;
-
-        fetch("/hizli_islem",{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({
-                barkod: result.text,
-                tip: "TIP_BURAYA"
+            fetch("/hizli_islem",{
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({
+                    barkod: result.text,
+                    tip: "TIP_BURAYA"
+                })
             })
-        })
-        .then(r=>r.json())
-        .then(data=>{
+            .then(r=>r.json())
+            .then(data=>{
 
-            if(data.ok){
-                sonuc.innerHTML =
-                "✅ " + data.ad +
-                "<br>Stok: " + data.adet;
-            }else{
-                sonuc.innerHTML = "❌ Ürün yok";
-            }
+                if(data.ok){
+                    sonuc.innerHTML =
+                    "✅ " + data.ad +
+                    "<br>Stok: " + data.adet;
+                }else{
+                    sonuc.innerHTML = "❌ Ürün yok";
+                }
 
-            setTimeout(()=>{
-                aktif = true;
-            },1000);
+                setTimeout(()=>{
+                    aktif = true;
+                },1000);
 
-        });
+            });
 
-    }
+        }
 
-});
-    tara();
+    });
 
 })
 .catch(err=>{
@@ -352,7 +340,6 @@ reader.decodeFromVideoDevice(null, video, (result, err) => {
 });
 
 </script>
-
 </body>
 </html>
 """
