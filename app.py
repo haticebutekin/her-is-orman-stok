@@ -94,7 +94,16 @@ def barkod_resim(kod):
         writer=ImageWriter()
     )
 
-    img.save(yol)
+    img.save(
+    yol,
+    options={
+        "module_width":0.6,
+        "module_height":40,
+        "font_size":22,
+        "text_distance":10,
+        "quiet_zone":15
+    }
+)
 
     return kod + ".png"
 
@@ -643,11 +652,12 @@ navigator.mediaDevices.getUserMedia({
             ideal:"environment"
         },
         width:{
-            ideal:1280
+            ideal:1920
         },
         height:{
-            ideal:720
-        }
+            ideal:1080
+        },
+focusMode:"continuous"
     }
 
 })
