@@ -1,1 +1,5 @@
-<img src="/{{ barkod_path }}" width="250">
+<h2>Ürün Kodu: {{ kod }}</h2>
+
+<p>Barkod: {{ kod }}</p>
+
+<img src="{{ url_for('static', filename=kod + '.png') }}" width="300">
