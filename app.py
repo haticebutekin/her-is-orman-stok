@@ -278,60 +278,92 @@ video{{width:90%;border-radius:15px}}
 
 <script src="https://unpkg.com/@zxing/library@0.20.0"></script>
 
+<script src="https://unpkg.com/@zxing/library@0.20.0"></script>
+
 <script>
 
-const video=document.getElementById("video");
-const sonuc=document.getElementById("sonuc");
+const video = document.getElementById("video");
+const sonuc = document.getElementById("sonuc");
 
-navigator.mediaDevices.getUserMedia({{
-video:{{facingMode:"environment"}}
-}})
+let aktif = true;
 
-.then(stream=>{{
-video.srcObject=stream;
-video.play();
+navigator.mediaDevices.getUserMedia({
+    video:{
+        facingMode:{ ideal:"environment" },
+        width:{ ideal:1920 },
+        height:{ ideal:1080 }
+    }
+})
 
-const hints=new Map();
-hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[
-ZXing.BarcodeFormat.QR_CODE,
-ZXing.BarcodeFormat.CODE_128
-]);
+.then(stream=>{
 
-const reader=new ZXing.BrowserMultiFormatReader(hints);
+    video.srcObject = stream;
+    video.setAttribute("playsinline", true);
+    video.play();
 
-reader.decodeFromVideoElement(video,(result,err)=>{{
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+        ZXing.BarcodeFormat.QR_CODE,
+        ZXing.BarcodeFormat.CODE_128
+    ]);
 
-if(result){{
-navigator.vibrate(200);
+    const reader = new ZXing.BrowserMultiFormatReader(hints);
 
-fetch("/hizli_islem",{{
-method:"POST",
-headers:{{"Content-Type":"application/json"}},
-body:JSON.stringify({{
-barkod:result.text,
-tip:"{tip}"
-}})
-}})
-.then(r=>r.json())
-.then(data=>{{
+    function tara(){
 
-if(data.ok){{
-sonuc.innerHTML="✅ "+data.ad+"<br>Stok:"+data.adet;
-}}else{{
-sonuc.innerHTML="❌ Ürün yok";
-}}
+        if(!aktif) return;
 
-}});
+        reader.decodeOnceFromVideoElement(video)
+        .then(result=>{
 
-}}
+            aktif = false;
 
-}});
+            navigator.vibrate(200);
 
-}})
+            sonuc.innerHTML = "Okundu: " + result.text;
 
-.catch(err=>{{
-sonuc.innerHTML="Kamera hatası:"+err;
-}});
+            fetch("/hizli_islem",{
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({
+                    barkod:result.text,
+                    tip:"""" + tip + """"
+                })
+            })
+            .then(r=>r.json())
+            .then(data=>{
+
+                if(data.ok){
+                    sonuc.innerHTML =
+                    "✅ " + data.ad +
+                    "<br>Stok: " + data.adet;
+                }else{
+                    sonuc.innerHTML = "❌ Ürün yok";
+                }
+
+                // 1 saniye sonra tekrar okut
+                setTimeout(()=>{
+                    aktif = true;
+                    tara();
+                },1000);
+
+            });
+
+        })
+        .catch(err=>{
+            // sürekli tekrar dene
+            setTimeout(tara, 300);
+        });
+
+    }
+
+    tara();
+
+})
+
+.catch(err=>{
+    sonuc.innerHTML = "Kamera hatası: " + err;
+});
 
 </script>
 
