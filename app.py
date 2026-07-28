@@ -610,7 +610,16 @@ margin-top:20px;
 <h2>📷 Barkod Okutma</h2>
 
 
-<video id="video" autoplay playsinline></video>
+<video 
+id="video"
+autoplay
+muted
+playsinline
+style="
+width:90%;
+max-width:400px;
+border-radius:15px;">
+</video>
 
 
 <div id="sonuc">
@@ -621,164 +630,108 @@ Kamera açılıyor...
 
 <script src="https://unpkg.com/@zxing/library@0.20.0"></script>
 
-
 <script>
 
-
 const video = document.getElementById("video");
-
-
-const sonuc=document.getElementById("sonuc");
-
+const sonuc = document.getElementById("sonuc");
 
 
 navigator.mediaDevices.getUserMedia({
 
-video:{
-facingMode:"environment"
-}
+    video:{
+        facingMode:{
+            ideal:"environment"
+        },
+        width:{
+            ideal:1280
+        },
+        height:{
+            ideal:720
+        }
+    }
 
 })
 
-
-.then(function(stream){
-
-video.srcObject=stream;
+.then(stream=>{
 
 
-const reader = new ZXing.BrowserMultiFormatReader();
+    video.srcObject = stream;
 
-reader.listVideoInputDevices()
-.then((devices)=>{
-
-    if(devices.length==0){
-        sonuc.innerHTML="Kamera bulunamadı";
-        return;
-    }
+    video.play();
 
 
-    let kamera = devices[devices.length-1].deviceId;
+    const reader = new ZXing.BrowserMultiFormatReader();
 
 
-    reader.decodeFromVideoDevice(
-        kamera,
+    reader.decodeFromVideoElement(
         video,
-        function(result,error){
+        (result,error)=>{
+
 
             if(result){
 
+
+                sonuc.innerHTML="Okundu: "+result.text;
+
+
                 fetch("/hizli_islem",{
 
-                method:"POST",
+                    method:"POST",
 
-                headers:{
-                "Content-Type":"application/json"
-                },
+                    headers:{
+                    "Content-Type":"application/json"
+                    },
 
-                body:JSON.stringify({
 
-                barkod:result.text,
+                    body:JSON.stringify({
 
-                tip:""" + tip + """
+                    barkod:result.text,
+
+                    tip:""" + tip + """
+
+                    })
 
                 })
-
-                })
-
 
                 .then(r=>r.json())
 
                 .then(data=>{
 
 
-                if(data.ok){
+                    if(data.ok){
 
-                sonuc.innerHTML =
-                "✅ "+data.ad+
-                "<br>Stok: "+data.adet;
-
-
-                }else{
-
-                sonuc.innerHTML =
-                "❌ Barkod bulunamadı";
-
-                }
+                    sonuc.innerHTML =
+                    "✅ "+data.ad+
+                    "<br>Stok: "+data.adet;
 
 
-                })
+                    }
+                    else{
+
+                    sonuc.innerHTML=
+                    "❌ Ürün bulunamadı";
+
+                    }
+
+
+                });
+
 
             }
+
 
         }
     );
 
 
-});
-
-if(result){
-
-
-fetch("/hizli_islem",{
-
-method:"POST",
-
-headers:{
-"Content-Type":"application/json"
-},
-
-body:JSON.stringify({
-
-barkod:result.text,
-
-tip:""" + tip + """
-
 })
 
-})
+.catch(err=>{
 
-
-.then(r=>r.json())
-
-.then(data=>{
-
-
-if(data.ok){
-
-sonuc.innerHTML =
-"✅ "+data.ad+
-"<br>Stok: "+data.adet;
-
-
-}else{
-
-sonuc.innerHTML =
-"❌ Barkod bulunamadı";
-
-}
-
-
-})
-
-
-}
-
-
-}
-
-);
-
-
-})
-
-
-.catch(function(err){
-
-sonuc.innerHTML =
-"❌ Kamera açılamadı: "+err;
+    sonuc.innerHTML=
+    "Kamera hatası: "+err;
 
 });
-
 
 </script>
 
