@@ -194,6 +194,9 @@ def liste():
 # TEK ETİKET
 @app.route("/etiket/<kod>")
 def etiket(kod):
+    barkod_path = barkod_resim_olustur(kod)
+
+    return render_template("etiket.html", barkod_path=barkod_path, kod=kod)
 
     try:
         cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
@@ -207,6 +210,7 @@ def etiket(kod):
         return f"""
         <html>
         <body style="text-align:center;font-family:Arial">
+        <img src="/{{ barkod_path }}" width="250">
 
         <h2>{u[1]}</h2>
 
