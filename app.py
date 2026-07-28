@@ -194,90 +194,25 @@ def liste():
 @app.route("/etiket/<kod>")
 def etiket(kod):
 
-    # ÜRÜNÜ BUL
     cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
     u = cur.fetchone()
 
     if not u:
-        return "Ürün bulunamadı"
+        return "Ürün yok"
 
-    # barkod yoksa üret
+    # 🔥 BURASI KRİTİK
     path = barkod_resim_olustur(kod)
 
     return f"""
     <html>
-    <head>
-    <style>
-    body {{ font-family:Arial; background:#f5f6fa; text-align:center; }}
+    <body style="text-align:center">
 
-    .etiket {{
-        width:350px;
-        background:white;
-        padding:15px;
-        margin:20px auto;
-        border-radius:10px;
-        border:2px solid black;
-    }}
+    <h3>{u[1]}</h3>
 
-    .logo {{
-        font-weight:bold;
-        font-size:20px;
-        margin-bottom:5px;
-    }}
+    {"<img src='/" + path + "' width='300'>" if path else "Barkod üretilemedi"}
 
-    .ad {{
-        font-size:18px;
-        font-weight:bold;
-        margin-bottom:10px;
-    }}
-
-    .row {{
-        text-align:left;
-        font-size:14px;
-    }}
-
-    .badge {{
-        padding:3px 8px;
-        border-radius:6px;
-        color:white;
-        font-weight:bold;
-    }}
-
-    .hg {{ background:green; }}
-    .mat {{ background:gray; }}
-    </style>
-    </head>
-
-    <body>
-
-    <div class="etiket">
-
-        <div class="logo">HER İŞ ORMAN</div>
-
-        <div class="ad">{u[1]}</div>
-
-        <div class="row">Cinsi: {u[2]}</div>
-        <div class="row">Ebat: {u[3]}</div>
-        <div class="row">Kalınlık: {u[4]}</div>
-
-        <div class="row">Sınıf: {u[6]}</div>
-        <div class="row">Renk: {u[7]}</div>
-
-        <div class="row">
-        Yüzey:
-        <span class="badge {'hg' if u[5]=='HG' else 'mat'}">
-        {u[5]}
-        </span>
-        </div>
-
-        <div class="row">Depo: {u[9]}</div>
-
-        {"<img src='/" + path + "' width='300'>" if path else "<br><b>Barkod yok</b>"}
-
-        <br><br>
-        <button onclick="window.print()">🖨 Yazdır</button>
-
-    </div>
+    <br><br>
+    <button onclick="window.print()">Yazdır</button>
 
     </body>
     </html>
