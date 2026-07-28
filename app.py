@@ -5,7 +5,7 @@ from barcode.writer import ImageWriter
 from openpyxl import Workbook
 
 app = Flask(__name__)
-app.secret_key = "12345"
+app.secret_key = "secret123"
 
 DB = "stok.db"
 STATIC = "static"
@@ -14,82 +14,93 @@ if not os.path.exists(STATIC):
     os.makedirs(STATIC)
 
 DEPOLAR = [
-"MDF SATIŞ DEPOSU",
-"LAMİNANT DEPOSU",
-"KAPI DEPOSU",
-"HGLOSS DEPOSU (MORAY YANI)",
-"SÜTÇÜ YANI",
-"HELVACI YANI",
-"RÖTBALANSÇI YANI",
-"KESİMHANE"
+"MDF SATIŞ DEPOSU","LAMİNANT","KAPI","HGLOSS",
+"SÜTÇÜ","HELVACI","RÖTBALANSÇI","KESİMHANE"
 ]
 
+# DB
 def db():
     return sqlite3.connect(DB)
 
-def init_db():
+def init():
     con = db()
     cur = con.cursor()
 
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS urunler (
+    CREATE TABLE IF NOT EXISTS users(
+        id INTEGER PRIMARY KEY,
+        username TEXT,
+        password TEXT,
+        role TEXT
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS urunler(
         id INTEGER PRIMARY KEY,
         barkod TEXT,
         isim TEXT,
-        cins TEXT,
-        ebat TEXT,
-        kalinlik TEXT,
-        sinif TEXT,
-        yuzey TEXT,
-        renk TEXT,
         adet INTEGER,
         depo TEXT,
+        kritik INTEGER,
         tarih TEXT
     )
     """)
 
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS hareketler (
+    CREATE TABLE IF NOT EXISTS hareket(
         id INTEGER PRIMARY KEY,
         barkod TEXT,
-        islem TEXT,
+        tip TEXT,
         adet INTEGER,
         tarih TEXT
     )
     """)
+
+    # admin yoksa oluştur
+    cur.execute("SELECT * FROM users WHERE username='admin'")
+    if not cur.fetchone():
+        cur.execute("INSERT INTO users VALUES(NULL,'admin','123','admin')")
 
     con.commit()
     con.close()
 
-init_db()
+init()
 
 # BARKOD
-def yeni_barkod():
+def barkod_uret():
     con = db()
     cur = con.cursor()
     cur.execute("SELECT COUNT(*) FROM urunler")
-    s = cur.fetchone()[0] + 1
-    return f"HER-{str(s).zfill(6)}"
-
-def barkod_olustur(kod):
+    n = cur.fetchone()[0] + 1
+    kod = f"HER-{str(n).zfill(6)}"
     path = f"{STATIC}/{kod}.png"
-    if not os.path.exists(path):
-        Code128(kod, writer=ImageWriter()).write(open(path, "wb"))
-    return path
+    Code128(kod, writer=ImageWriter()).write(open(path, "wb"))
+    return kod
 
 # LOGIN
 @app.route("/", methods=["GET","POST"])
 def login():
     if request.method == "POST":
-        if request.form["user"] == "admin" and request.form["pass"] == "123":
-            session["login"] = True
+        u = request.form["user"]
+        p = request.form["pass"]
+
+        con = db()
+        cur = con.cursor()
+        cur.execute("SELECT * FROM users WHERE username=? AND password=?", (u,p))
+        user = cur.fetchone()
+        con.close()
+
+        if user:
+            session["user"] = u
+            session["role"] = user[3]
             return redirect("/panel")
 
     return """
-    <h2>HER İŞ ORMAN STOK PRO</h2>
+    <h2>GİRİŞ</h2>
     <form method=post>
-    Kullanıcı: <input name=user><br>
-    Şifre: <input name=pass type=password><br>
+    Kullanıcı <input name=user><br>
+    Şifre <input name=pass type=password><br>
     <button>Giriş</button>
     </form>
     """
@@ -97,154 +108,163 @@ def login():
 # PANEL
 @app.route("/panel", methods=["GET","POST"])
 def panel():
-    if not session.get("login"):
+    if not session.get("user"):
         return redirect("/")
 
     if request.method == "POST":
-        barkod = yeni_barkod()
-        barkod_olustur(barkod)
-
+        barkod = barkod_uret()
         data = (
             barkod,
             request.form["isim"],
-            request.form["cins"],
-            request.form["ebat"],
-            request.form["kalinlik"],
-            request.form["sinif"],
-            request.form["yuzey"],
-            request.form["renk"],
             int(request.form["adet"]),
             request.form["depo"],
+            int(request.form["kritik"]),
             str(datetime.datetime.now())
         )
 
         con = db()
         cur = con.cursor()
-        cur.execute("INSERT INTO urunler VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?)", data)
-        cur.execute("INSERT INTO hareketler VALUES(NULL,?,?,?,?)",
-                    (barkod,"GİRİŞ",data[8],data[10]))
+        cur.execute("INSERT INTO urunler VALUES(NULL,?,?,?,?,?,?)", data)
+        cur.execute("INSERT INTO hareket VALUES(NULL,?,?,?,?)",
+                    (barkod,"GİRİŞ",data[2],data[5]))
         con.commit()
         con.close()
 
+    depo_filtre = request.args.get("depo")
+
     con = db()
     cur = con.cursor()
-    urunler = cur.execute("SELECT * FROM urunler ORDER BY id DESC").fetchall()
+
+    if depo_filtre:
+        urunler = cur.execute("SELECT * FROM urunler WHERE depo=?", (depo_filtre,)).fetchall()
+    else:
+        urunler = cur.execute("SELECT * FROM urunler").fetchall()
+
     con.close()
 
     return render_template_string("""
-    <h2>HER İŞ ORMAN STOK PRO</h2>
+    <h2>STOK PANEL</h2>
 
-    <form method=post style="border:1px solid #ccc;padding:10px">
-    <b>ÜRÜN EKLE</b><br><br>
-
-    İsim <input name=isim required><br>
-    Cins <input name=cins><br>
-    Ebat <input name=ebat><br>
-    Kalınlık <input name=kalinlik><br>
-    Sınıf <input name=sinif><br>
-
-    Yüzey:
-    <select name=yuzey>
-        <option>HG</option>
-        <option>MAT</option>
-    </select><br>
-
-    Renk <input name=renk><br>
-    Adet <input name=adet type=number required><br>
-
-    Depo:
-    <select name=depo>
+    <form method=post>
+    İsim <input name=isim required>
+    Adet <input name=adet type=number required>
+    Kritik <input name=kritik type=number value=5>
+    Depo <select name=depo>
     {% for d in depolar %}
         <option>{{d}}</option>
     {% endfor %}
-    </select><br><br>
-
+    </select>
     <button>EKLE</button>
     </form>
 
     <hr>
 
     <a href="/kamera">📷 Kamera</a> |
-    <a href="/excel">📊 Excel</a>
+    <a href="/hareket">📊 Hareket</a> |
+    <a href="/excel">Excel</a>
 
     <hr>
 
-    <table border=1 cellpadding=5>
-    <tr>
-    <th>Barkod</th>
-    <th>İsim</th>
-    <th>Adet</th>
-    <th>Depo</th>
-    <th>İşlem</th>
-    </tr>
+    Filtre:
+    {% for d in depolar %}
+        <a href="/panel?depo={{d}}">{{d}}</a> |
+    {% endfor %}
+    <a href="/panel">Hepsi</a>
+
+    <hr>
+
+    <table border=1>
+    <tr><th>Barkod</th><th>İsim</th><th>Adet</th><th>Durum</th><th>İşlem</th></tr>
 
     {% for u in urunler %}
     <tr>
-        <td>
-        {{u[1]}}<br>
-        <img src="/static/{{u[1]}}.png" width=120>
-        </td>
+        <td>{{u[1]}}<br><img src="/static/{{u[1]}}.png" width=100></td>
         <td>{{u[2]}}</td>
-        <td>{{u[9]}}</td>
-        <td>{{u[10]}}</td>
+        <td>{{u[3]}}</td>
+
         <td>
-            <a href="/arttir/{{u[1]}}">➕</a>
-            <a href="/azalt/{{u[1]}}">➖</a>
+        {% if u[3] <= u[5] %}
+            ⚠ KRİTİK
+        {% else %}
+            OK
+        {% endif %}
+        </td>
+
+        <td>
+        <a href="/islem/{{u[1]}}/giris">➕</a>
+        <a href="/islem/{{u[1]}}/cikis">➖</a>
         </td>
     </tr>
     {% endfor %}
     </table>
     """, urunler=urunler, depolar=DEPOLAR)
 
-# ARTIR
-@app.route("/arttir/<kod>")
-def arttir(kod):
-    con = db()
-    cur = con.cursor()
-
-    cur.execute("UPDATE urunler SET adet = adet + 1 WHERE barkod=?", (kod,))
-    cur.execute("INSERT INTO hareketler VALUES(NULL,?,?,?,?)",
-                (kod,"GİRİŞ",1,str(datetime.datetime.now())))
-    con.commit()
-    con.close()
-
-    return redirect("/panel")
-
-# AZALT
-@app.route("/azalt/<kod>")
-def azalt(kod):
+# İŞLEM
+@app.route("/islem/<kod>/<tip>")
+def islem(kod, tip):
     con = db()
     cur = con.cursor()
 
     cur.execute("SELECT adet FROM urunler WHERE barkod=?", (kod,))
-    veri = cur.fetchone()
+    a = cur.fetchone()[0]
 
-    if veri:
-        yeni = max(veri[0]-1,0)
-        cur.execute("UPDATE urunler SET adet=? WHERE barkod=?", (yeni,kod))
-        cur.execute("INSERT INTO hareketler VALUES(NULL,?,?,?,?)",
-                    (kod,"ÇIKIŞ",1,str(datetime.datetime.now())))
-        con.commit()
+    if tip == "giris":
+        yeni = a + 1
+    else:
+        yeni = max(a-1, 0)
 
+    cur.execute("UPDATE urunler SET adet=? WHERE barkod=?", (yeni,kod))
+    cur.execute("INSERT INTO hareket VALUES(NULL,?,?,?,?)",
+                (kod,tip.upper(),1,str(datetime.datetime.now())))
+    con.commit()
     con.close()
+
     return redirect("/panel")
 
 # KAMERA
 @app.route("/kamera")
 def kamera():
     return """
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <h3>Kamera</h3>
+    <button onclick="tip='giris'">GİRİŞ</button>
+    <button onclick="tip='cikis'">ÇIKIŞ</button>
     <video id="video" width="300"></video>
 
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
     <script>
+    let tip = "cikis";
     const codeReader = new ZXing.BrowserBarcodeReader()
     codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
         if (result) {
-            window.location = "/azalt/" + result.text
+            window.location = "/islem/" + result.text + "/" + tip
         }
     })
     </script>
     """
+
+# HAREKET
+@app.route("/hareket")
+def hareket():
+    con = db()
+    cur = con.cursor()
+    data = cur.execute("SELECT * FROM hareket ORDER BY id DESC").fetchall()
+    con.close()
+
+    return render_template_string("""
+    <h2>HAREKETLER</h2>
+    <a href="/excel_hareket">Excel indir</a>
+    <table border=1>
+    <tr><th>Barkod</th><th>Tip</th><th>Adet</th><th>Tarih</th></tr>
+    {% for h in data %}
+    <tr>
+        <td>{{h[1]}}</td>
+        <td>{{h[2]}}</td>
+        <td>{{h[3]}}</td>
+        <td>{{h[4]}}</td>
+    </tr>
+    {% endfor %}
+    </table>
+    """, data=data)
 
 # EXCEL
 @app.route("/excel")
@@ -261,6 +281,23 @@ def excel():
         ws.append(r)
 
     file = "stok.xlsx"
+    wb.save(file)
+    return send_file(file, as_attachment=True)
+
+@app.route("/excel_hareket")
+def excel_hareket():
+    con = db()
+    cur = con.cursor()
+    data = cur.execute("SELECT * FROM hareket").fetchall()
+    con.close()
+
+    wb = Workbook()
+    ws = wb.active
+
+    for r in data:
+        ws.append(r)
+
+    file = "hareket.xlsx"
     wb.save(file)
     return send_file(file, as_attachment=True)
 
