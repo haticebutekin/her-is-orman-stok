@@ -20,8 +20,9 @@ def init():
     cur = con.cursor()
 
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS urun(
+    CREATE TABLE IF NOT EXISTS log(
         id INTEGER PRIMARY KEY,
+        urun TEXT,
         barkod TEXT,
         isim TEXT,
         cins TEXT,
@@ -30,14 +31,15 @@ def init():
         sinif TEXT,
         renk TEXT,
         adet INTEGER,
-        kritik INTEGER
+        kritik INTEGER,
+        tarih TEXT
     )
     """)
 
     CREATE TABLE log (
-id INTEGER PRIMARY KEY,
-kullanici TEXT,
-barkod TEXT,
+        id INTEGER PRIMARY KEY,
+        kullanici TEXT,
+        barkod TEXT,
 islem TEXT,
 tarih TEXT
 );
