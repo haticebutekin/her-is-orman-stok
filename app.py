@@ -9,7 +9,8 @@ app.secret_key = "herisorman"
 
 DB = "stok.db"
 STATIC = "static"
-os.makedirs(STATIC, exist_ok=True)
+if not os.path.exists(STATIC):
+    os.makedirs(STATIC)
 
 # ---------------- DEPOLAR ----------------
 DEPOLAR = [
