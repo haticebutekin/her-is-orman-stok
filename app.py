@@ -2,7 +2,12 @@ from flask import Flask, request, redirect, render_template_string, jsonify
 import sqlite3, os
 import barcode, qrcode
 from barcode.writer import ImageWriter
+if os.path.exists("static") and not os.path.isdir("static"):
+    os.remove("static")
 
+if not os.path.exists("static"):
+    os.makedirs("static")
+    
 app = Flask(__name__)
 
 DB = "stok.db"
@@ -78,11 +83,21 @@ def barkod_resim(kod):
 
 # QR
 def qr_uret(kod):
-    if not os.path.exists("static"):
-        os.mkdir("static")
+
+    klasor = "static"
+
+    if os.path.exists(klasor) and not os.path.isdir(klasor):
+        os.remove(klasor)
+
+    if not os.path.exists(klasor):
+        os.makedirs(klasor)
+
 
     img = qrcode.make(kod)
-    img.save("static/"+kod+"_qr.png")
+
+    img.save(
+        os.path.join(klasor, kod+"_qr.png")
+    )
 
 # ANA SAYFA
 @app.route("/")
