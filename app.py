@@ -112,50 +112,151 @@ def panel():
     con.close()
 
     return render_template_string("""
-    <h2>📦 STOK PANEL</h2>
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <form method=post>
-    İsim <input name=isim required><br>
-    Cins <input name=cins><br>
-    Ebat <input name=ebat><br>
-    Kalınlık <input name=kalinlik><br>
-    Sınıf <input name=sinif><br>
-    Renk <input name=renk><br>
-    Adet <input name=adet type=number required><br>
-    Kritik <input name=kritik type=number value=5><br>
-    <button>EKLE</button>
-    </form>
+<style>
+body {
+    font-family: Arial;
+    margin:0;
+    background:#f5f6fa;
+}
 
-    <hr>
+.topbar {
+    background:#2f3640;
+    color:white;
+    padding:15px;
+    position:sticky;
+    top:0;
+}
 
-    <a href="/kamera">📷 Kamera</a>
+.container {
+    padding:10px;
+}
 
-    <hr>
+.card {
+    background:white;
+    padding:15px;
+    margin-bottom:10px;
+    border-radius:10px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.1);
+}
 
-    {% for u in urunler %}
-    <div style="border:1px solid #ccc;padding:10px;margin:5px;
-    background:{% if u[9]<=u[10] %}#ffdddd{% else %}#ddffdd{% endif %}">
+.kritik {
+    border-left:6px solid red;
+    background:#ffe6e6;
+}
 
-    <b>{{u[2]}}</b><br>
-    Barkod: {{u[1]}}<br>
+.ok {
+    border-left:6px solid green;
+}
 
-    Cins: {{u[3]}}<br>
-    Ebat: {{u[4]}}<br>
-    Kalınlık: {{u[5]}}<br>
-    Sınıf: {{u[6]}}<br>
-    Renk: {{u[7]}}<br>
+.btn {
+    padding:8px 12px;
+    text-decoration:none;
+    border-radius:6px;
+    color:white;
+    font-size:14px;
+}
 
-    Adet: {{u[8]}}<br>
+.giris { background:green; }
+.cikis { background:red; }
 
-    <img src="/static/{{u[1]}}.png" width=150><br>
+input, select {
+    width:100%;
+    padding:8px;
+    margin:5px 0;
+}
 
-    <a href="/islem/{{u[1]}}/giris">➕ Giriş</a>
-    <a href="/islem/{{u[1]}}/cikis">➖ Çıkış</a>
+button {
+    width:100%;
+    padding:10px;
+    background:#273c75;
+    color:white;
+    border:none;
+    border-radius:6px;
+}
 
-    </div>
-    {% endfor %}
-    """, urunler=urunler)
+.search {
+    padding:10px;
+    margin-bottom:10px;
+}
+</style>
+</head>
 
+<body>
+
+<div class="topbar">
+    📦 STOK PRO
+</div>
+
+<div class="container">
+
+<input class="search" id="search" placeholder="🔍 Ürün ara..." onkeyup="ara()">
+
+<form method=post>
+<b>Yeni Ürün</b>
+<input name=isim placeholder="İsim" required>
+<input name=cins placeholder="Cins">
+<input name=ebat placeholder="Ebat">
+<input name=kalinlik placeholder="Kalınlık">
+<input name=sinif placeholder="Sınıf">
+<input name=renk placeholder="Renk">
+<input name=adet type=number placeholder="Adet" required>
+<input name=kritik type=number value=5 placeholder="Kritik">
+<button>➕ EKLE</button>
+</form>
+
+<hr>
+
+<div id="urunler">
+
+{% for u in urunler %}
+<div class="card {% if u[8] <= u[9] %}kritik{% else %}ok{% endif %}">
+
+<b class="isim">{{u[2]}}</b><br>
+
+<small>
+Cins: {{u[3]}} |
+Ebat: {{u[4]}} |
+Kalınlık: {{u[5]}}<br>
+Sınıf: {{u[6]}} |
+Renk: {{u[7]}}
+</small>
+
+<br><br>
+
+<b>Adet: {{u[8]}}</b><br>
+
+<img src="/static/{{u[1]}}.png" width=120><br><br>
+
+<a class="btn giris" href="/islem/{{u[1]}}/giris">➕ Giriş</a>
+<a class="btn cikis" href="/islem/{{u[1]}}/cikis">➖ Çıkış</a>
+
+</div>
+{% endfor %}
+
+</div>
+
+</div>
+
+<script>
+function ara(){
+    let input = document.getElementById("search").value.toLowerCase();
+    let cards = document.getElementsByClassName("card");
+
+    for (let i = 0; i < cards.length; i++) {
+        let name = cards[i].innerText.toLowerCase();
+        cards[i].style.display = name.includes(input) ? "" : "none";
+    }
+}
+</script>
+
+</body>
+</html>
+""", urunler=urunler)
 # İŞLEM
 @app.route("/islem/<kod>/<tip>")
 def islem(kod, tip):
