@@ -1,6 +1,6 @@
 flask
-gunicorn
-qrcode
-pillow
-python-barcode
+pandas
 openpyxl
+python-barcode
+pillow
+gunicorn
