@@ -1,8 +1,8 @@
-from flask import Flask, request, redirect, render_template_string, jsonify
+from flask import Flask, request, redirect, render_template_string, url_for,jsonify
 import sqlite3, os
 import barcode
 from barcode.writer import ImageWriter
-import barcode
+import barcode, qrcode
 
 
 app = Flask(__name__)
@@ -185,12 +185,27 @@ def liste():
 
     return html
 
+def qr_olustur(kod):
+    klasor = "static"
+    if not os.path.exists(klasor):
+        os.makedirs(klasor)
+
+    img = qrcode.make(kod)
+    yol = os.path.join(klasor, f"{kod}_qr.png")
+    img.save(yol)
+
+    return f"{kod}_qr.png"
+    
 # TEK ETİKET
 @app.route("/etiket/<kod>")
 def etiket(kod):
     barkod_resim_olustur(kod)
-    return render_template("etiket.html", kod=kod)
-    
+    qr_olustur(kod)
+
+    cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
+    u = cur.fetchone()
+
+    return render_template("etiket.html", kod=kod, urun=u)
 # ÇOKLU ETİKET (A4)
 @app.route("/coklu/<kod>")
 def coklu(kod):
@@ -200,7 +215,8 @@ def coklu(kod):
     if not u:
         return "Ürün yok"
 
-    path = barkod_resim_olustur(kod)
+    barkod_resim_olustur(kod)
+    qr_olustur(kod)
 
     html = "<body style='font-family:Arial'>"
 
@@ -216,7 +232,8 @@ def coklu(kod):
         Yüzey: {u[5]}<br>
         Depo: {u[9]}<br>
 
-        {from flask import url_for" if path else ""}
+        <img src="/static/{kod}.png" width="180"><br>
+        <img src="/static/{kod}_qr.png" width="90">
 
         </div>
         """
