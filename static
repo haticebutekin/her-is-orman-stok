@@ -1,2 +1,1 @@
-if not os.path.exists("static"):
-    os.makedirs("static")
+URUN-00001.png 
