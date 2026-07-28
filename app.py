@@ -201,29 +201,32 @@ def liste():
 @app.route("/etiket/<kod>")
 def etiket(kod):
 
-    cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
-    u = cur.fetchone()
+    try:
+        cur.execute("SELECT * FROM urun WHERE barkod=?", (kod,))
+        u = cur.fetchone()
 
-    if not u:
-        return "Ürün yok"
+        if not u:
+            return "Ürün bulunamadı"
 
-    # 🔥 BURASI KRİTİK
-    path = barkod_resim_olustur(kod)
+        path = barkod_resim_olustur(kod)
 
-    return f"""
-    <html>
-    <body style="text-align:center">
+        return f"""
+        <html>
+        <body style="text-align:center;font-family:Arial">
 
-    <h3>{u[1]}</h3>
+        <h2>{u[1]}</h2>
 
-    {"<img src='/" + path + "' width='300'>" if path else "Barkod üretilemedi"}
+        {"<img src='/" + path + "' width='300'>" if path else "<b>Barkod üretilemedi</b>"}
 
-    <br><br>
-    <button onclick="window.print()">Yazdır</button>
+        <br><br>
+        <button onclick="window.print()">🖨 Yazdır</button>
 
-    </body>
-    </html>
-    """
+        </body>
+        </html>
+        """
+
+    except Exception as e:
+        return f"HATA: {str(e)}"
 
 # ÇOKLU ETİKET (A4)
 @app.route("/coklu/<kod>")
