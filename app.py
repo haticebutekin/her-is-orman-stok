@@ -216,7 +216,7 @@ def coklu(kod):
         Yüzey: {u[5]}<br>
         Depo: {u[9]}<br>
 
-        {"<img src='/" + path + "' width='200'>" if path else ""}
+        {from flask import url_for" if path else ""}
 
         </div>
         """
