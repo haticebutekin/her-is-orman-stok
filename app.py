@@ -177,6 +177,13 @@ def hizli_islem():
     data = request.get_json()
     barkod = str(data.get("barkod")).strip()
 
+    tip = data.get("tip")
+
+if tip == "giris":
+    urun["adet"] += 1
+else:
+    urun["adet"] -= 1
+
     urun = urunler.get(barkod)
 
     if not urun:
@@ -266,10 +273,10 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
         fetch("/hizli_islem", {{
             method: "POST",
             headers: {{ "Content-Type": "application/json" }},
-            body: JSON.stringify({{
+            body: JSON.stringify({
                 barkod: barkod,
-                tip: "{tip}"
-            }})
+                tip: "giris"
+            })
         }})
         .then(res => res.json())
         .then(data => {{
