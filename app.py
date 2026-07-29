@@ -204,80 +204,66 @@ def hizli_islem():
 def kamera(tip):
 
     return f"""
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<script src="https://unpkg.com/@zxing/library@latest"></script>
-</head>
-
-<body style="background:#111;color:white;text-align:center">
-
-<h2>Kamera ({tip.upper()})</h2>
-
 <button onclick="sesAc()">🔊 Sesi Aç</button>
 
-<video id="video" width="300" height="200" style="border:1px solid white"></video>
-<p id="sonuc">Okunan: -</p>
+<video id="video" width="300" height="200"></video>
+
+<script src="https://unpkg.com/@zxing/library@latest"></script>
 
 <script>
 const codeReader = new ZXing.BrowserMultiFormatReader();
+
+// 🔊 SES
+let sesHazir = false;
 const bip = new Audio("/static/bip.mp3");
 
+// 🔥 SESİ AKTİF ET (ŞART!)
+function sesAc(){
+    bip.play()
+    .then(() => {
+        bip.pause();
+        bip.currentTime = 0;
+        sesHazir = true;
+        console.log("Ses aktif");
+    })
+    .catch(err => {
+        alert("Tarayıcı sesi engelledi! Butona tekrar bas.");
+    });
+}
+
 let sonOkuma = 0;
-let sonBarkod = "";
-let sesHazir = false;
 
-// 🔊 SES AKTİF ET
-function sesAc(){{
-    bip.play();
-    sesHazir = true;
-}}
+codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+    if (result) {
 
-codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
-    if (result) {{
-
-        const barkod = result.text.trim();
         const simdi = Date.now();
 
-        // 🔥 GENEL BEKLEME (HER OKUTMA ARASI 3 SN)
+        // 🔥 3 saniye bekleme
         if (simdi - sonOkuma < 3000) return;
-
         sonOkuma = simdi;
 
-        // 🔊 SES
-        if(sesHazir){{
+        console.log("OKUNAN:", result.text);
+
+        // 🔊 SES ÇAL
+        if (sesHazir) {
             bip.currentTime = 0;
-            bip.play();
-        }}
+            bip.play().catch(e => console.log(e));
+        }
 
         // 📳 TİTREŞİM
-        if (navigator.vibrate) {{
+        if (navigator.vibrate) {
             navigator.vibrate(150);
-        }}
+        }
 
-        document.getElementById("sonuc").innerText = "Okunan: " + barkod;
-
-        fetch("/hizli_islem", {{
+        // 🔥 BACKEND
+        fetch("/hizli_islem", {
             method: "POST",
-            headers: {{ "Content-Type": "application/json" }},
-            body: JSON.stringify({{
-                barkod: barkod,
-                tip: "{tip}"
-            }})
-        }})
-        .then(res => res.json())
-        .then(data => {{
-            if(data.ok){{
-                document.getElementById("sonuc").innerText =
-                    data.ad + " | Stok: " + data.adet;
-            }} else {{
-                document.getElementById("sonuc").innerText = "❌ Ürün bulunamadı";
-            }}
-        }})
-        .catch(err => console.log(err));
-    }}
-}});
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ barkod: result.text })
+        });
+
+    }
+});
 </script>
 
 </body>
