@@ -208,61 +208,43 @@ def kamera(tip):
 <html>
 <head>
 <script src="https://unpkg.com/@zxing/library@latest"></script>
-</head>
-
-<body style="background:black;color:white;text-align:center">
-
-<h2>Kamera ({tip})</h2>
-<p id="durum">Başlatılıyor...</p>
-
-<video id="video" width="100%"></video>
 
 <script>
+const codeReader = new ZXing.BrowserMultiFormatReader();
+const bip = new Audio("/static/bip.mp3"); // 🔊 bip sesi
 
 let sonOkuma = 0;
+let sonBarkod = "";
 
-const codeReader = new ZXing.BrowserMultiFormatReader();
+codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+    if (result) {
 
-codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
-
-    if (result) {{
-
+        const barkod = result.text.trim();
         const simdi = Date.now();
-        if (simdi - sonOkuma < 2000) return;
 
+        // Aynı barkod spam engelle
+        if (barkod === sonBarkod && (simdi - sonOkuma < 2000)) return;
+
+        sonBarkod = barkod;
         sonOkuma = simdi;
 
-        let barkod = result.text.trim();
+        bip.play(); // 🔊 SES BURADA ÇALIYOR
 
-        document.getElementById("durum").innerText =
-            "OKUNDU: " + barkod;
+        document.getElementById("sonuc").innerText = "Okunan: " + barkod;
 
-        fetch("/hizli_islem", {{
+        fetch("/barkod_ekle", {
             method: "POST",
-            headers: {{
-                "Content-Type": "application/json"
-            }},
-            body: JSON.stringify({{
-                barkod: barkod,
-                tip: "{tip}"
-            }})
-        }})
-        .then(r => r.json())
-        .then(data => {{
-
-            if (data.ok) {{
-                document.getElementById("durum").innerText =
-                    data.ad + " | Stok: " + data.adet;
-            }} else {{
-                document.getElementById("durum").innerText =
-                    "Ürün yok";
-            }}
-
-        }});
-
-    }}
-
-}});
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ barkod: barkod })
+        })
+        .then(res => res.json())
+        .then(data => {
+            console.log(data);
+        })
+        .catch(err => console.log(err));
+    }
+});
+            
 
 </script>
 
