@@ -175,7 +175,7 @@ def etiket(kod):
 @app.route("/hizli_islem", methods=["POST"])
 def hizli_islem():
     data = request.get_json()
-    barkod = data.get("barkod")
+    barkod = str(data.get("barkod")).strip()
     tip = data.get("tip")
 
     with db() as con:
@@ -250,8 +250,43 @@ let scanner = new Html5QrcodeScanner("reader", {
     qrbox: { width: 250, height: 150 }
 });
 
-scanner.render(onScanSuccess);
+let aktif = true;
 
+function onScanSuccess(decodedText) {
+
+    if(!aktif) return;
+    aktif = false;
+
+    scanner.clear(); // 👈 kamerayı durdur
+
+    document.getElementById("sonuc").innerHTML = "Okundu: " + decodedText;
+
+    fetch("/hizli_islem", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            barkod: decodedText,
+            tip: "TIP_BURAYA"
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+
+        if(data.ok){
+            document.getElementById("sonuc").innerHTML =
+            "✅ " + data.ad + "<br>Stok: " + data.adet;
+        } else {
+            document.getElementById("sonuc").innerHTML = "❌ Ürün yok";
+        }
+
+        // 👇 tekrar başlat (1 saniye sonra)
+        setTimeout(() => {
+            aktif = true;
+            scanner.render(onScanSuccess);
+        }, 1500);
+
+    });
+}
 </script>
 
 </body>
