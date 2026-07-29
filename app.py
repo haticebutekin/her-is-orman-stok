@@ -177,20 +177,17 @@ def hizli_islem():
     data = request.get_json()
     barkod = str(data.get("barkod")).strip()
 
-    tip = data.get("tip")
-
-if tip == "giris":
-    urun["adet"] += 1
-else:
-    urun["adet"] -= 1
-
     urun = urunler.get(barkod)
 
     if not urun:
         return jsonify({"ok": False})
 
-    # ÖRNEK: stok azalt
-    urun["adet"] -= 1
+    tip = data.get("tip")
+
+    if tip == "giris":
+        urun["adet"] += 1
+    else:
+        urun["adet"] -= 1
 
     return jsonify({
         "ok": True,
