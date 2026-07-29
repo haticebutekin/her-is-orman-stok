@@ -118,7 +118,15 @@ def ekle():
     input,select{width:100%;padding:10px;margin:5px}
     button{background:#00b894;color:white;padding:10px;border:0}
     </style>
-
+    <a href="/" style="
+    display:inline-block;
+    margin:10px;
+    padding:10px;
+    background:#00b894;
+    color:white;
+    border-radius:10px;
+    text-decoration:none;
+    ">🏠 Ana Sayfa</a>
     <form method="post">
     <h2>Ürün Kartı</h2>
 
@@ -153,7 +161,12 @@ def liste():
     with db() as con:
         urunler = con.execute("SELECT * FROM urun").fetchall()
 
-    html = "<h2 style='text-align:center'>STOK</h2>"
+    html = """
+<div style='text-align:center'>
+<a href="/" style="padding:10px;background:#00b894;color:white;border-radius:10px;text-decoration:none">🏠 Ana Sayfa</a>
+<h2>STOK</h2>
+</div>
+"""
 
     for u in urunler:
         html += f"""
@@ -186,20 +199,31 @@ def etiket(kod):
 @app.route("/hareketler")
 def hareketler():
     with db() as con:
-        rows = con.execute("SELECT * FROM hareket ORDER BY id DESC LIMIT 50").fetchall()
+        rows = con.execute("SELECT barkod, ad, tip, adet, tarih FROM hareket ORDER BY id DESC LIMIT 50").fetchall()
 
-    html = "<h2>📊 Son Hareketler</h2>"
+    html = """
+    <div style="text-align:center">
+    <a href="/" style="padding:10px;background:#00b894;color:white;border-radius:10px;text-decoration:none">🏠 Ana Sayfa</a>
+    <h2>📊 Son Hareketler</h2>
+    </div>
+    """
 
     for r in rows:
-        renk = "green" if r[3]=="giris" else "red"
+        try:
+            barkod, ad, tip, adet, tarih = r
+        except:
+            continue
+
+        renk = "green" if tip == "giris" else "red"
 
         html += f"""
         <div style="background:#222;color:white;margin:5px;padding:10px;border-left:5px solid {renk}">
-        {r[5]} | {r[2]} | {r[3].upper()} | Stok: {r[4]}
+        {tarih} | {ad} | {tip.upper()} | Stok: {adet}
         </div>
         """
 
     return html
+    
 # HIZLI İŞLEM (FIX)
 @app.route("/hizli_islem", methods=["POST"])
 def hizli_islem():
