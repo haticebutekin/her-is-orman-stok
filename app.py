@@ -205,88 +205,106 @@ def kamera(tip):
 
     html = """
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<script src="https://unpkg.com/html5-qrcode"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Okut</title>
+<script src="https://unpkg.com/@zxing/library@latest"></script>
+
+<style>
+body {
+    margin:0;
+    background:black;
+    color:white;
+    text-align:center;
+    font-family:Arial;
+}
+h1 {
+    margin-top:20px;
+}
+video {
+    width:100%;
+    height:auto;
+}
+</style>
 </head>
 
-<body style="background:black;color:white;text-align:center">
+<body>
 
-<h2>Kamera</h2>
-<div id="reader" style="width:90%;margin:auto"></div>
-<div id="sonuc">Kamera başlatılıyor...</div>
+<h1>📷 Okut</h1>
+<p id="durum">Kamera başlatılıyor...</p>
+
+<video id="video" autoplay playsinline></video>
 
 <script>
+let reader = new ZXing.BrowserMultiFormatReader();
+let kilit = false;
 
-function onScanSuccess(decodedText) {
+async function baslat() {
 
-    document.getElementById("sonuc").innerHTML = "Okundu: " + decodedText;
+    try {
+        const video = document.getElementById("video");
 
-    fetch("/hizli_islem", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-            barkod: decodedText,
-            tip: "TIP_BURAYA"
-        })
-    })
-    .then(r => r.json())
-    .then(data => {
+        const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
 
-        if(data.ok){
-            document.getElementById("sonuc").innerHTML =
-            "✅ " + data.ad + "<br>Stok: " + data.adet;
-        } else {
-            document.getElementById("sonuc").innerHTML = "❌ Ürün yok";
+        if (devices.length === 0) {
+            document.getElementById("durum").innerText = "Kamera bulunamadı";
+            return;
         }
 
-    });
+        const deviceId = devices[0].deviceId;
 
+        document.getElementById("durum").innerText = "Kamera hazır";
+
+        reader.decodeFromVideoDevice(deviceId, video, (result, err) => {
+
+            if (result && !kilit) {
+
+                kilit = true;
+
+                let barkod = result.text.trim();
+
+                console.log("OKUNAN:", barkod);
+
+                fetch("/hizli_islem", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        barkod: barkod,
+                        tip: "giris"
+                    })
+                })
+                .then(r => r.json())
+                .then(d => {
+
+                    if (d.ok) {
+                        document.getElementById("durum").innerText =
+                            d.ad + " | Adet: " + d.adet;
+                    } else {
+                        document.getElementById("durum").innerText =
+                            "Ürün bulunamadı";
+                    }
+
+                    setTimeout(() => {
+                        kilit = false;
+                    }, 1500);
+                })
+                .catch(() => {
+                    kilit = false;
+                });
+            }
+        });
+
+    } catch (e) {
+        document.getElementById("durum").innerText =
+            "Kamera hatası: " + e;
+    }
 }
 
-let scanner = new Html5QrcodeScanner("reader", {
-    fps: 10,
-    qrbox: { width: 250, height: 150 }
-});
-
-let aktif = true;
-
-function onScanSuccess(decodedText) {
-
-    if(!aktif) return;
-    aktif = false;
-
-    scanner.clear(); // 👈 kamerayı durdur
-
-    document.getElementById("sonuc").innerHTML = "Okundu: " + decodedText;
-
-    fetch("/hizli_islem", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-            barkod: decodedText,
-            tip: "TIP_BURAYA"
-        })
-    })
-    .then(r => r.json())
-    .then(data => {
-
-        if(data.ok){
-            document.getElementById("sonuc").innerHTML =
-            "✅ " + data.ad + "<br>Stok: " + data.adet;
-        } else {
-            document.getElementById("sonuc").innerHTML = "❌ Ürün yok";
-        }
-
-        // 👇 tekrar başlat (1 saniye sonra)
-        setTimeout(() => {
-            aktif = true;
-            scanner.render(onScanSuccess);
-        }, 1500);
-
-    });
-}
+baslat();
 </script>
 
 </body>
