@@ -207,11 +207,20 @@ def kamera(tip):
 <!DOCTYPE html>
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://unpkg.com/@zxing/library@latest"></script>
+</head>
+
+<body style="background:#111;color:white;text-align:center">
+
+<h2>Kamera ({tip.upper()})</h2>
+
+<video id="video" width="300" height="200" style="border:1px solid white"></video>
+<p id="sonuc">Okunan: -</p>
 
 <script>
 const codeReader = new ZXing.BrowserMultiFormatReader();
-const bip = new Audio("/static/bip.mp3"); // 🔊 bip sesi
+const bip = new Audio("/static/bip.mp3");
 
 let sonOkuma = 0;
 let sonBarkod = "";
@@ -222,35 +231,40 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
         const barkod = result.text.trim();
         const simdi = Date.now();
 
-        // Aynı barkod spam engelle
+        // spam engelle
         if (barkod === sonBarkod && (simdi - sonOkuma < 2000)) return;
 
         sonBarkod = barkod;
         sonOkuma = simdi;
 
-        bip.play(); // 🔊 SES BURADA ÇALIYOR
+        bip.play();
 
         document.getElementById("sonuc").innerText = "Okunan: " + barkod;
 
-        fetch("/barkod_ekle", {
+        fetch("/hizli_islem", {{
             method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ barkod: barkod })
-        })
+            headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{
+                barkod: barkod,
+                tip: "{tip}"
+            }})
+        }})
         .then(res => res.json())
-        .then(data => {
-            console.log(data);
-        })
+        .then(data => {{
+            if(data.ok){{
+                document.getElementById("sonuc").innerText =
+                    data.ad + " | Stok: " + data.adet;
+            }} else {{
+                document.getElementById("sonuc").innerText = "Ürün bulunamadı";
+            }}
+        }})
         .catch(err => console.log(err));
     }
 });
-            
-
 </script>
 
 </body>
 </html>
 """
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
