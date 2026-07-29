@@ -176,23 +176,37 @@ def etiket(kod):
 def hizli_islem():
     data = request.get_json()
     barkod = str(data.get("barkod")).strip()
-
-    urun = urunler.get(barkod)
-
-    if not urun:
-        return jsonify({"ok": False})
-
     tip = data.get("tip")
 
-    if tip == "giris":
-        urun["adet"] += 1
-    else:
-        urun["adet"] -= 1
+    with db() as con:
+        cur = con.cursor()
+
+        # ÜRÜNÜ BUL
+        cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
+        row = cur.fetchone()
+
+        if not row:
+            return jsonify({"ok": False})
+
+        urun_id, ad, adet = row
+
+        # 🔥 ARTIR / AZALT
+        if tip == "giris":
+            adet += 1
+        else:
+            adet -= 1
+
+        if adet < 0:
+            adet = 0
+
+        # GÜNCELLE
+        cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet, urun_id))
+        con.commit()
 
     return jsonify({
         "ok": True,
-        "ad": urun["ad"],
-        "adet": urun["adet"]
+        "ad": ad,
+        "adet": adet
     })
 
 # KAMERA (KESİN ÇALIŞAN)
