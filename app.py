@@ -242,15 +242,17 @@ def hizli_islem():
         "ad": ad,
         "adet": adet
     })
-
+    
 # KAMERA (KESİN ÇALIŞAN)
 from flask import render_template
 
 @app.route("/kamera/<tip>")
 def kamera(tip):
     return render_template("kamera.html")
-    @app.route("/")
-def index():
+
+
+@app.route("/kamera_test")
+def kamera_test():
     return f"""
 <!DOCTYPE html>
 <html>
@@ -259,30 +261,49 @@ def index():
 </head>
 <body>
 
+<div id="sonuc"></div>
+
 <script>
-    document.getElementById("sonuc").innerText = "✅ OK";
 
-    document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
-    return;
-}}
-    // 🔊 SES BURADA
-    let bip = new Audio();
-    bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
-    bip.play();
+fetch("/hizli_islem", {{
+    method: "POST",
+    headers: {{
+        "Content-Type": "application/json"
+    }},
+    body: JSON.stringify({{
+        barkod: "123",
+        tip: "giris"
+    }})
+}})
+.then(res => res.json())
+.then(data => {{
 
-    document.getElementById("sonuc").innerText =
-        data.ad + " | Stok: " + data.adet;
-}} else {{
-    document.getElementById("sonuc").innerText = "❌ Ürün bulunamadı";
-}}
+    if(data.ok){{
+
+        document.getElementById("sonuc").innerText =
+            data.ad + " | Stok: " + data.adet;
+
+        // 🔊 SES BURADA
+        let bip = new Audio();
+        bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
+        bip.play();
+
+    }} else {{
+
+        document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
+
+    }}
+
 }})
 .catch(err => console.log(err));
-}};
+
 </script>
 
 </body>
 </html>
 """
     
-    """ if __name__ == "__main__":
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+    
+ 
