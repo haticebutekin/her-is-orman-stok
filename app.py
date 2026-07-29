@@ -200,8 +200,11 @@ def hizli_islem():
     })
 
 # KAMERA (KESİN ÇALIŞAN)
+from flask import render_template
+
 @app.route("/kamera/<tip>")
 def kamera(tip):
+    return render_template("kamera.html")
     return f"""
 <!DOCTYPE html>
 <html>
