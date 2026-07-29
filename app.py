@@ -235,7 +235,7 @@ video {
 <h1>📷 Okut</h1>
 <p id="durum">Kamera başlatılıyor...</p>
 
-<video id="video" autoplay playsinline></video>
+<video id="video" width="100%" height="300"></video>
 
 <script>
 let reader = new ZXing.BrowserMultiFormatReader();
@@ -246,57 +246,37 @@ async function baslat() {
     try {
         const video = document.getElementById("video");
 
-        const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+       const codeReader = new ZXing.BrowserMultiFormatReader();
 
-        if (devices.length === 0) {
-            document.getElementById("durum").innerText = "Kamera bulunamadı";
-            return;
-        }
+let sonOkuma = 0;
 
-        const deviceId = devices[0].deviceId;
+const codeReader = new ZXing.BrowserMultiFormatReader();
 
-        document.getElementById("durum").innerText = "Kamera hazır";
+codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
 
-        reader.decodeFromVideoDevice(deviceId, video, (result, err) => {
+    if (result) {
 
-            if (result && !kilit) {
+        const simdi = Date.now();
 
-                kilit = true;
+        if (simdi - sonOkuma < 2000) return; // 👈 BURASI ENGEL
+        sonOkuma = simdi;
 
-                let barkod = result.text.trim();
+        let barkod = result.text.trim();
 
-                console.log("OKUNAN:", barkod);
+        console.log("OKUNAN:", barkod);
 
-                fetch("/hizli_islem", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        barkod: barkod,
-                        tip: "giris"
-                    })
-                })
-                .then(r => r.json())
-                .then(d => {
-
-                    if (d.ok) {
-                        document.getElementById("durum").innerText =
-                            d.ad + " | Adet: " + d.adet;
-                    } else {
-                        document.getElementById("durum").innerText =
-                            "Ürün bulunamadı";
-                    }
-
-                    setTimeout(() => {
-                        kilit = false;
-                    }, 1500);
-                })
-                .catch(() => {
-                    kilit = false;
-                });
-            }
+        fetch("/barkod_ekle", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                barkod: barkod
+            })
         });
+    }
+
+});
 
     } catch (e) {
         document.getElementById("durum").innerText =
