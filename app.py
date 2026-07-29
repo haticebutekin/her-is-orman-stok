@@ -228,13 +228,13 @@ def etiket(kod):
 def hizli_islem():
 
     data = request.get_json()
-
     barkod = data.get("barkod")
     tip = data.get("tip")
 
-    urun = Urun.query.filter_by(barkod=barkod).first()
-
-    if not urun:
+ with db() as con:
+    urun = con.execute("SELECT * FROM urun WHERE barkod=?", (barkod,)).fetchone()
+   
+     if not urun:
         return jsonify({"ok": False})
 
     if tip == "giris":
@@ -243,7 +243,7 @@ def hizli_islem():
     elif tip == "cikis":
         urun.adet -= 1
 
-    db.session.commit()
+    con.execute("UPDATE urun SET adet=? WHERE barkod=?", (adet, barkod))
 
     return jsonify({
         "ok": True,
@@ -256,11 +256,6 @@ def hizli_islem():
 def kamera(tip):
 
     html = """
-    ... HTML KODU ...
-    """
-
-    return html.replace("TIP_BURAYA", tip)
-    
 <!DOCTYPE html>
 <html>
 <head>
@@ -268,15 +263,12 @@ def kamera(tip):
 
 <style>
 body{background:#000;color:white;text-align:center;font-family:Arial}
-video{width:90%;border-radius:15px}
 </style>
 </head>
 
 <body>
 
 <h2>📷 Okut</h2>
-
-<video id="video" autoplay muted playsinline></video>
 
 <div id="sonuc">Kamera açılıyor...</div>
 <div id="reader" style="width:90%;margin:auto"></div>
@@ -286,7 +278,6 @@ video{width:90%;border-radius:15px}
 <script>
 
 const sonuc = document.getElementById("sonuc");
-
 let aktif = true;
 
 function onScanSuccess(decodedText) {
@@ -318,9 +309,7 @@ function onScanSuccess(decodedText) {
             sonuc.innerHTML = "❌ Ürün yok";
         }
 
-        setTimeout(()=>{
-            aktif = true;
-        },1000);
+        setTimeout(()=>{ aktif = true; },1000);
 
     });
 
@@ -330,21 +319,16 @@ const html5QrCode = new Html5Qrcode("reader");
 
 Html5Qrcode.getCameras().then(devices => {
 
-    if (devices && devices.length) {
+    if (devices.length) {
 
         html5QrCode.start(
             { facingMode: "environment" },
-            {
-                fps: 10,
-                qrbox: { width: 250, height: 150 }
-            },
+            { fps: 10, qrbox: { width: 250, height: 150 } },
             onScanSuccess
         );
 
     }
 
-}).catch(err=>{
-    sonuc.innerHTML = "Kamera hatası: " + err;
 });
 
 </script>
@@ -352,7 +336,6 @@ Html5Qrcode.getCameras().then(devices => {
 </body>
 </html>
 """
-
     return html.replace("TIP_BURAYA", tip)
     
 if __name__=="__main__":
