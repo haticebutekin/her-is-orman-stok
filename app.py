@@ -332,7 +332,7 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
 
             document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
     return;
-}
+}}
                // 🔊 SES BURADA
     let bip = new Audio();
     bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
