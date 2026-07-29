@@ -249,86 +249,27 @@ from flask import render_template
 @app.route("/kamera/<tip>")
 def kamera(tip):
     return render_template("kamera.html")
-    return f"""
+   return f"""
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<script src="https://unpkg.com/@zxing/library@latest"></script>
+<meta charset="UTF-8">
+<title>Stok</title>
 </head>
+<body>
 
-<body style="background:#111;color:white;text-align:center">
-
-<h2>Kamera ({tip.upper()})</h2>
-
-<button onclick="sesAc()">🔊 Sesi Aç</button>
-
-<video id="video" width="300" height="200" style="border:1px solid white"></video>
-<p id="sonuc">Okunan: -</p>
+<div id="sonuc"></div>
 
 <script>
-const codeReader = new ZXing.BrowserMultiFormatReader();
 
-// 🔊 SES (İNTERNETTEN - DOSYA DERDİ YOK)
-const bip = new Audio();
-bip.src = "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
-bip.load();
+fetch("/islem", {{
+    method: "POST"
+}})
+.then(res => res.json())
+.then(data => {{
 
-let sesHazir = false;
-let sonOkuma = 0;
+    if(data.ok){{
 
-// 🔥 SES AKTİF ET (BUTON ŞART)
-function sesAc(){{
-    sesHazir = true;
-
-    // 🔊 sesi zorla aç
-    document.body.addEventListener("click", function(){{
-        bip.play();
-    }}, { once: true });
-
-    alert("Ses aktif! Şimdi okut.");
-}}
-
-codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
-    if (result) {{
-
-        const barkod = result.text.trim();
-        const simdi = Date.now();
-
-        // 🔥 3 saniye bekleme (seri düşme engel)
-        if (simdi - sonOkuma < 3000) return;
-        sonOkuma = simdi;
-
-        console.log("OKUNAN:", barkod);
-
-        // 🔊 SES
-        if (sesHazir) {{
-            bip.currentTime = 0;
-            bip.play();
-        }}
-
-        // 📳 TİTREŞİM
-        if (navigator.vibrate) {{
-            navigator.vibrate(150);
-        }}
-
-        document.getElementById("sonuc").innerText = "Okunan: " + barkod;
-
-        // 🔥 BACKEND İŞLEM
-        fetch("/hizli_islem", {{
-            method: "POST",
-            headers: {{ "Content-Type": "application/json" }},
-            body: JSON.stringify({
-                barkod: barkod,
-                tip: "{{tip}}"})
-        }})
-        .then(res => res.json())
-        
-       .then(data => {
-
-    if(data.ok){
-
-        // ✅ BAŞARILI
         document.getElementById("sonuc").innerText =
             data.ad + " | Stok: " + data.adet;
 
@@ -337,19 +278,20 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
         bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
         bip.play();
 
-    } else {
+    }} else {{
 
-        // ❌ HATALI ÜRÜN
         document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
 
-    }
+    }}
 
-})
+}})
 .catch(err => console.log(err));
- 
-    </script> 
-    </body> 
-    </html> 
+
+</script>
+
+</body>
+</html>
+"""
     
     """ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
