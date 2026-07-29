@@ -204,44 +204,51 @@ def hizli_islem():
 def kamera(tip):
 
     html = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+
+<body style="background:black;color:white;text-align:center">
+
+<h2>Kamera</h2>
+<div id="reader" style="width:90%;margin:auto"></div>
+<div id="sonuc">Kamera başlatılıyor...</div>
+
 <script>
 
 function onScanSuccess(decodedText) {
 
-    fetch("/hizli_islem",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
+    document.getElementById("sonuc").innerHTML = "Okundu: " + decodedText;
+
+    fetch("/hizli_islem", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
             barkod: decodedText,
             tip: "TIP_BURAYA"
         })
     })
+    .then(r => r.json())
+    .then(data => {
 
-}
-
-</script>
-"""
-
-    return html.replace("TIP_BURAYA", tip)
-    .then(r=>r.json())
-    .then(data=>{
         if(data.ok){
             document.getElementById("sonuc").innerHTML =
             "✅ " + data.ad + "<br>Stok: " + data.adet;
         } else {
             document.getElementById("sonuc").innerHTML = "❌ Ürün yok";
         }
+
     });
 
 }
 
-let scanner = new Html5QrcodeScanner(
-    "reader",
-    {
-        fps: 10,
-        qrbox: { width: 250, height: 150 }
-    }
-);
+let scanner = new Html5QrcodeScanner("reader", {
+    fps: 10,
+    qrbox: { width: 250, height: 150 }
+});
 
 scanner.render(onScanSuccess);
 
@@ -250,6 +257,7 @@ scanner.render(onScanSuccess);
 </body>
 </html>
 """
+
     return html.replace("TIP_BURAYA", tip)
 
 if __name__ == "__main__":
