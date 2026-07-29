@@ -249,49 +249,49 @@ from flask import render_template
 @app.route("/kamera/<tip>")
 def kamera(tip):
     return render_template("kamera.html")
-   return f"""
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Stok</title>
-</head>
-<body>
+    return f"""
+ <!DOCTYPE html>
+ <html>
+ <head>
+ <meta charset="UTF-8">
+ <title>Stok</title>
+ </head>
+ <body>
 
-<div id="sonuc"></div>
+ <div id="sonuc"></div>
 
-<script>
+ <script>
 
-fetch("/islem", {{
-    method: "POST"
-}})
-.then(res => res.json())
-.then(data => {{
+ fetch("/islem", {{
+     method: "POST"
+ }})
+ .then(res => res.json())
+ .then(data => {{
 
-    if(data.ok){{
+     if(data.ok){{
 
-        document.getElementById("sonuc").innerText =
-            data.ad + " | Stok: " + data.adet;
+         document.getElementById("sonuc").innerText =
+             data.ad + " | Stok: " + data.adet;
 
-        // 🔊 SES SADECE BAŞARIDA
-        let bip = new Audio();
-        bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
-        bip.play();
+         // 🔊 SES SADECE BAŞARIDA
+         let bip = new Audio();
+         bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
+         bip.play();
 
-    }} else {{
+     }} else {{
 
-        document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
+         document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
 
-    }}
+     }}
 
-}})
-.catch(err => console.log(err));
+ }})
+ .catch(err => console.log(err));
 
-</script>
+ </script>
 
-</body>
-</html>
-"""
+ </body>
+ </html>
+ """
     
     """ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
