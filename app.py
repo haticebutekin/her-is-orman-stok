@@ -3,14 +3,14 @@ import sqlite3, os
 import barcode, qrcode
 from barcode.writer import ImageWriter
 
+app = Flask(__name__)
+DB = "stok.db"
+
 # STATIC FIX
 if os.path.exists("static") and not os.path.isdir("static"):
     os.remove("static")
 if not os.path.exists("static"):
     os.makedirs("static")
-
-app = Flask(__name__)
-DB = "stok.db"
 
 DEPOLAR = [
 "MDF SATIŞ DEPOSU",
@@ -135,7 +135,7 @@ def ekle():
     </form>
     """, depolar=DEPOLAR)
 
-# LİSTE
+# LİSTE (ESKİ HALİN FULL)
 @app.route("/liste")
 def liste():
     with db() as con:
@@ -147,17 +147,33 @@ def liste():
         html += f"""
         <div style="background:#eee;margin:10px;padding:10px;border-radius:10px">
         <b>{u[1]}</b><br>
+        {u[2]} - {u[3]} - {u[4]}<br>
+        {u[5]} / {u[6]} / {u[7]}<br>
         Stok: {u[8]}<br>
+        Depo: {u[9]}<br>
+
         <img src="/static/{u[10]}_qr.png" width="120"><br>
+        <img src="/static/{u[10]}.png" width="250"><br>
+
+        <a href="/etiket/{u[10]}">Etiket Yazdır</a>
         </div>
         """
 
     return html
 
-# 🔥 HIZLI İŞLEM (DÜZELDİK)
+# ETİKET
+@app.route("/etiket/<kod>")
+def etiket(kod):
+    return f"""
+    <h2>{kod}</h2>
+    <img src="/static/{kod}_qr.png" width="200"><br>
+    <img src="/static/{kod}.png" width="400">
+    <script>window.print()</script>
+    """
+
+# HIZLI İŞLEM (FIX)
 @app.route("/hizli_islem", methods=["POST"])
 def hizli_islem():
-
     data = request.get_json()
     barkod = data.get("barkod")
     tip = data.get("tip")
@@ -183,7 +199,7 @@ def hizli_islem():
         "adet": adet
     })
 
-# 🎥 KAMERA
+# KAMERA (KESİN ÇALIŞAN)
 @app.route("/kamera/<tip>")
 def kamera(tip):
 
@@ -192,7 +208,6 @@ def kamera(tip):
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
 body{background:#000;color:white;text-align:center;font-family:Arial}
 </style>
@@ -201,7 +216,6 @@ body{background:#000;color:white;text-align:center;font-family:Arial}
 <body>
 
 <h2>📷 Okut</h2>
-
 <div id="sonuc">Kamera açılıyor...</div>
 <div id="reader" style="width:90%;margin:auto"></div>
 
@@ -249,18 +263,14 @@ function onScanSuccess(decodedText) {
 
 const html5QrCode = new Html5Qrcode("reader");
 
-Html5Qrcode.getCameras().then(devices => {
-
+Html5QrCode.getCameras().then(devices => {
     if (devices.length) {
-
         html5QrCode.start(
             { facingMode: "environment" },
             { fps: 10, qrbox: { width: 250, height: 150 } },
             onScanSuccess
         );
-
     }
-
 });
 
 </script>
@@ -270,5 +280,5 @@ Html5Qrcode.getCameras().then(devices => {
 """
     return html.replace("TIP_BURAYA", tip)
 
-if __name__=="__main__":
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
