@@ -231,16 +231,16 @@ let sesHazir = false;
 let sonOkuma = 0;
 
 // 🔥 SES AKTİF ET (BUTON ŞART)
-function sesAc(){
+function sesAc(){{
     sesHazir = true;
 
     // 🔊 sesi zorla aç
-    document.body.addEventListener("click", function(){
+    document.body.addEventListener("click", function(){{
         bip.play();
-    }, { once: true });
+    }}, { once: true });
 
     alert("Ses aktif! Şimdi okut.");
-}
+}}
 
 codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
     if (result) {{
