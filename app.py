@@ -209,12 +209,13 @@ def kamera(tip):
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://unpkg.com/@zxing/library@latest"></script>
-<button onclick="sesAc()">🔊 Sesi Aç</button>
 </head>
 
 <body style="background:#111;color:white;text-align:center">
 
 <h2>Kamera ({tip.upper()})</h2>
+
+<button onclick="sesAc()">🔊 Sesi Aç</button>
 
 <video id="video" width="300" height="200" style="border:1px solid white"></video>
 <p id="sonuc">Okunan: -</p>
@@ -225,6 +226,13 @@ const bip = new Audio("/static/bip.mp3");
 
 let sonOkuma = 0;
 let sonBarkod = "";
+let sesHazir = false;
+
+// 🔊 SES AKTİF ET
+function sesAc(){{
+    bip.play();
+    sesHazir = true;
+}}
 
 codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
     if (result) {{
@@ -232,12 +240,21 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
         const barkod = result.text.trim();
         const simdi = Date.now();
 
-        if (barkod === sonBarkod && (simdi - sonOkuma < 2000)) return;
+        // 🔥 GENEL BEKLEME (HER OKUTMA ARASI 3 SN)
+        if (simdi - sonOkuma < 3000) return;
 
-        sonBarkod = barkod;
         sonOkuma = simdi;
 
-        bip.play();
+        // 🔊 SES
+        if(sesHazir){{
+            bip.currentTime = 0;
+            bip.play();
+        }}
+
+        // 📳 TİTREŞİM
+        if (navigator.vibrate) {{
+            navigator.vibrate(150);
+        }}
 
         document.getElementById("sonuc").innerText = "Okunan: " + barkod;
 
@@ -255,7 +272,7 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
                 document.getElementById("sonuc").innerText =
                     data.ad + " | Stok: " + data.adet;
             }} else {{
-                document.getElementById("sonuc").innerText = "Ürün bulunamadı";
+                document.getElementById("sonuc").innerText = "❌ Ürün bulunamadı";
             }}
         }})
         .catch(err => console.log(err));
