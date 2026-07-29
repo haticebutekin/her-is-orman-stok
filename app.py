@@ -261,16 +261,19 @@ function onScanSuccess(decodedText) {
 
 }
 
-const html5QrCode = new Html5Qrcode("reader");
+Html5Qrcode.getCameras().then(devices => {
 
-Html5QrCode.getCameras().then(devices => {
-    if (devices.length) {
+    if (devices && devices.length) {
+
+        let cameraId = devices[0].id;
+
         html5QrCode.start(
-            { facingMode: "environment" },
+            cameraId,
             { fps: 10, qrbox: { width: 250, height: 150 } },
             onScanSuccess
         );
     }
+
 });
 
 </script>
