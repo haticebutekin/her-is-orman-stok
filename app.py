@@ -203,19 +203,26 @@ def hizli_islem():
 @app.route("/kamera/<tip>")
 def kamera(tip):
 
-    html = f"""
+    html = """
 <script>
 
-function onScanSuccess(decodedText) {{
+function onScanSuccess(decodedText) {
 
-    fetch("/hizli_islem",{{
+    fetch("/hizli_islem",{
         method:"POST",
-        headers:{{"Content-Type":"application/json"}},
-        body:JSON.stringify({{
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
             barkod: decodedText,
-            tip: "{tip}"
-        }})
+            tip: "TIP_BURAYA"
+        })
     })
+
+}
+
+</script>
+"""
+
+    return html.replace("TIP_BURAYA", tip)
     .then(r=>r.json())
     .then(data=>{
         if(data.ok){
