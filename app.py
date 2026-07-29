@@ -205,36 +205,17 @@ def kamera(tip):
 
     return f"""
 <!DOCTYPE html>
-<html lang="tr">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <script src="https://unpkg.com/@zxing/library@latest"></script>
-
-<style>
-body {{
-    margin:0;
-    background:black;
-    color:white;
-    text-align:center;
-    font-family:Arial;
-}}
-video {{
-    width:100%;
-}}
-#durum {{
-    margin:10px;
-}}
-</style>
 </head>
 
-<body>
+<body style="background:black;color:white;text-align:center">
 
 <h2>Kamera ({tip})</h2>
-<p id="durum">Kamera başlatılıyor...</p>
+<p id="durum">Başlatılıyor...</p>
 
-<video id="video"></video>
+<video id="video" width="100%"></video>
 
 <script>
 
@@ -247,9 +228,8 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
     if (result) {{
 
         const simdi = Date.now();
-
-        // 🔒 2 saniye kilit (spam engel)
         if (simdi - sonOkuma < 2000) return;
+
         sonOkuma = simdi;
 
         let barkod = result.text.trim();
@@ -272,21 +252,17 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
 
             if (data.ok) {{
                 document.getElementById("durum").innerText =
-                    data.ad + " | Yeni stok: " + data.adet;
+                    data.ad + " | Stok: " + data.adet;
             }} else {{
                 document.getElementById("durum").innerText =
-                    "❌ Ürün bulunamadı";
+                    "Ürün yok";
             }}
 
         }});
 
     }}
 
-    if (err && !(err instanceof ZXing.NotFoundException)) {{
-        console.log(err);
-    }}
-
-});
+}});
 
 </script>
 
