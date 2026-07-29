@@ -46,10 +46,22 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
         document.getElementById("sonuc").innerText = barkod;
 
         fetch("/hizli_islem", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ barkod: barkod })
-        });
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ barkod: barkod })
+})
+.then(res => res.json())
+.then(data => {
+
+    if(data.ok){
+        document.getElementById("sonuc").innerText =
+            "✅ " + data.ad + " | Stok: " + data.adet;
+    } else {
+        document.getElementById("sonuc").innerText =
+            "❌ Ürün bulunamadı";
+    }
+
+});
     }
 });
 </script>
