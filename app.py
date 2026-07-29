@@ -225,38 +225,42 @@ def etiket(kod):
 
 # HIZLI İŞLEM
 @app.route("/hizli_islem", methods=["POST"])
-def hizli():
-    data = request.json
-    barkod = data["barkod"]
-    tip = data["tip"]
+def hizli_islem():
 
-    with db() as con:
-        urun = con.execute("SELECT ad,adet FROM urun WHERE barkod=?", (barkod,)).fetchone()
+    data = request.get_json()
 
-        if not urun:
-            return jsonify({"ok":False})
+    barkod = data.get("barkod")
+    tip = data.get("tip")
 
-        adet = urun[1]
+    urun = Urun.query.filter_by(barkod=barkod).first()
 
-        if tip=="cikis":
-            if adet<=0:
-                return jsonify({"ok":False})
-            adet -= 1
-            islem="ÇIKIŞ"
-        else:
-            adet += 1
-            islem="GİRİŞ"
+    if not urun:
+        return jsonify({"ok": False})
 
-        con.execute("UPDATE urun SET adet=? WHERE barkod=?", (adet,barkod))
-        con.execute("INSERT INTO hareket(barkod,islem,adet) VALUES(?,?,?)",(barkod,islem,adet))
+    if tip == "giris":
+        urun.adet += 1
 
-    return jsonify({"ok":True,"ad":urun[0],"adet":adet})
+    elif tip == "cikis":
+        urun.adet -= 1
+
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "ad": urun.ad,
+        "adet": urun.adet
+    })
 
 # KAMERA (QR + BARKOD)
 @app.route("/kamera/<tip>")
 def kamera(tip):
 
     html = """
+    ... HTML KODU ...
+    """
+
+    return html.replace("TIP_BURAYA", tip)
+    
 <!DOCTYPE html>
 <html>
 <head>
