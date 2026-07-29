@@ -209,6 +209,7 @@ def kamera(tip):
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://unpkg.com/@zxing/library@latest"></script>
+<button onclick="sesAc()">🔊 Sesi Aç</button>
 </head>
 
 <body style="background:#111;color:white;text-align:center">
