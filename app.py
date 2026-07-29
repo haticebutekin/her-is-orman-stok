@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, render_template_string, jsonify, render_template
+from flask import Flask, request, redirect, render_template_string, jsonify
 import sqlite3, os
 import barcode, qrcode
 from barcode.writer import ImageWriter
@@ -202,35 +202,56 @@ def hareketler():
 # HIZLI İŞLEM
 @app.route("/hizli_islem", methods=["POST"])
 def hizli_islem():
-    data = request.get_json()
-    barkod = str(data.get("barkod","")).strip()
-    tip = data.get("tip","")
+    try:
+        data = request.get_json()
+        barkod = str(data.get("barkod","")).strip()
+        tip = data.get("tip","")
 
-    with db() as con:
-        cur = con.cursor()
-        cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
-        row = cur.fetchone()
+        with db() as con:
+            cur = con.cursor()
+            cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
+            row = cur.fetchone()
 
-        if not row:
-            return jsonify({"ok":False,"mesaj":"ÜRÜN YOK"})
+            if not row:
+                return jsonify({"ok":False,"mesaj":"ÜRÜN YOK"})
 
-        uid, ad, adet = row
+            uid, ad, adet = row
 
-        if tip=="giris":
-            adet+=1
-        else:
-            adet-=1
+            if tip=="giris":
+                adet+=1
+            else:
+                adet-=1
 
-        if adet<0:
-            adet=0
+            if adet<0:
+                adet=0
 
-        cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet,uid))
-        cur.execute("INSERT INTO hareket (barkod,ad,tip,adet) VALUES (?,?,?,?)",(barkod,ad,tip,adet))
-        con.commit()
+            cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet,uid))
+            cur.execute("INSERT INTO hareket (barkod,ad,tip,adet) VALUES (?,?,?,?)",(barkod,ad,tip,adet))
+            con.commit()
 
-    return jsonify({"ok":True,"ad":ad,"adet":adet})
+        return jsonify({"ok":True,"ad":ad,"adet":adet})
 
-# 🔥 KAMERA FIX (EN ÖNEMLİ)
+    except Exception as e:
+        print("HATA:", e)
+        return jsonify({"ok":False})
+
+# 🔥 OKUT API (YENİ)
+@app.route("/okut", methods=["POST"])
+def okut():
+    try:
+        data = request.get_json()
+        barkod = data.get("barkod") if data else "123456789"
+
+        return app.test_client().post("/hizli_islem", json={
+            "barkod": barkod,
+            "tip": "giris"
+        }).get_json()
+
+    except Exception as e:
+        print("HATA:", e)
+        return jsonify({"ok":False})
+
+# KAMERA
 @app.route("/kamera/<tip>")
 def kamera(tip):
     return render_template_string("""
@@ -238,38 +259,33 @@ def kamera(tip):
 
     <a href="/" style="padding:10px;background:#00b894;color:white;border-radius:10px;text-decoration:none">🏠 Ana Sayfa</a>
 
-    <h2>Kamera (Test)</h2>
+    <h2>Kamera</h2>
 
     <div id="sonuc">Hazır</div>
 
     <button onclick="gonder()">TEST OKUT</button>
 
     <script>
-    let TIP = "{{tip}}";
+let bip = new Audio();
+bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
 
-    function gonder(){
-        let barkod = prompt("Barkod gir:");
-
-        fetch("/hizli_islem",{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({barkod:barkod,tip:TIP})
-        })
-        .then(r=>r.json())
-        .then(data=>{
-            if(data.ok){
-                document.getElementById("sonuc").innerText = data.ad + " | " + data.adet;
-
-                let bip = new Audio();
-                bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
-                bip.play();
-
-            }else{
-                document.getElementById("sonuc").innerText = "❌ "+data.mesaj;
-            }
-        })
-    }
-    </script>
+function gonder(){
+    fetch("/okut", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({barkod:"123456789"})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(!data.ok){
+            document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
+            bip.play();
+        } else {
+            document.getElementById("sonuc").innerText = "✅ OKUNDU: " + data.ad;
+        }
+    });
+}
+</script>
     """)
 
 if __name__ == "__main__":
