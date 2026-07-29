@@ -203,95 +203,96 @@ def hizli_islem():
 @app.route("/kamera/<tip>")
 def kamera(tip):
 
-    html = """
+    return f"""
 <!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Okut</title>
+
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 
 <style>
-body {
+body {{
     margin:0;
     background:black;
     color:white;
     text-align:center;
     font-family:Arial;
-}
-h1 {
-    margin-top:20px;
-}
-video {
+}}
+video {{
     width:100%;
-    height:auto;
-}
+}}
+#durum {{
+    margin:10px;
+}}
 </style>
 </head>
 
 <body>
 
-<h1>📷 Okut</h1>
+<h2>Kamera ({tip})</h2>
 <p id="durum">Kamera başlatılıyor...</p>
 
-<video id="video" width="100%" height="300"></video>
+<video id="video"></video>
 
 <script>
-let reader = new ZXing.BrowserMultiFormatReader();
-let kilit = false;
-
-async function baslat() {
-
-    try {
-        const video = document.getElementById("video");
-
-       const codeReader = new ZXing.BrowserMultiFormatReader();
 
 let sonOkuma = 0;
 
 const codeReader = new ZXing.BrowserMultiFormatReader();
 
-codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
 
-    if (result) {
+    if (result) {{
 
         const simdi = Date.now();
 
-        if (simdi - sonOkuma < 2000) return; // 👈 BURASI ENGEL
+        // 🔒 2 saniye kilit (spam engel)
+        if (simdi - sonOkuma < 2000) return;
         sonOkuma = simdi;
 
         let barkod = result.text.trim();
 
-        console.log("OKUNAN:", barkod);
+        document.getElementById("durum").innerText =
+            "OKUNDU: " + barkod;
 
-        fetch("/barkod_ekle", {
+        fetch("/hizli_islem", {{
             method: "POST",
-            headers: {
+            headers: {{
                 "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                barkod: barkod
-            })
-        });
-    }
+            }},
+            body: JSON.stringify({{
+                barkod: barkod,
+                tip: "{tip}"
+            }})
+        }})
+        .then(r => r.json())
+        .then(data => {{
+
+            if (data.ok) {{
+                document.getElementById("durum").innerText =
+                    data.ad + " | Yeni stok: " + data.adet;
+            }} else {{
+                document.getElementById("durum").innerText =
+                    "❌ Ürün bulunamadı";
+            }}
+
+        }});
+
+    }}
+
+    if (err && !(err instanceof ZXing.NotFoundException)) {{
+        console.log(err);
+    }}
 
 });
 
-    } catch (e) {
-        document.getElementById("durum").innerText =
-            "Kamera hatası: " + e;
-    }
-}
-
-baslat();
 </script>
 
 </body>
 </html>
 """
-
-    return html.replace("TIP_BURAYA", tip)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
