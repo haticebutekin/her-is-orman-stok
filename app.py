@@ -223,19 +223,24 @@ def kamera(tip):
 const codeReader = new ZXing.BrowserMultiFormatReader();
 
 // 🔊 SES (İNTERNETTEN - DOSYA DERDİ YOK)
-const bip = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+const bip = new Audio();
+bip.src = "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
+bip.load();
 
 let sesHazir = false;
 let sonOkuma = 0;
 
 // 🔥 SES AKTİF ET (BUTON ŞART)
-function sesAc(){{
-    bip.play();
-    bip.pause();
-    bip.currentTime = 0;
+function sesAc(){
     sesHazir = true;
-    console.log("Ses aktif");
-}}
+
+    // 🔊 sesi zorla aç
+    document.body.addEventListener("click", function(){
+        bip.play();
+    }, { once: true });
+
+    alert("Ses aktif! Şimdi okut.");
+}
 
 codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
     if (result) {{
