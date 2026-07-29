@@ -255,39 +255,29 @@ def index():
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Stok</title>
+    <meta charset="UTF-8">
 </head>
 <body>
 
-<div id="sonuc"></div>
-
 <script>
+    document.getElementById("sonuc").innerText = "✅ OK";
 
-fetch("/islem", {{
-    method: "POST"
-}})
-.then(res => res.json())
-.then(data => {{
+    document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
+    return;
+}}
+    // 🔊 SES BURADA
+    let bip = new Audio();
+    bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
+    bip.play();
 
-    if(data.ok){{
-
-        document.getElementById("sonuc").innerText =
-            data.ad + " | Stok: " + data.adet;
-
-        let bip = new Audio();
-        bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
-        bip.play();
-
-    }} else {{
-
-        document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
-
-    }}
-
+    document.getElementById("sonuc").innerText =
+        data.ad + " | Stok: " + data.adet;
+}} else {{
+    document.getElementById("sonuc").innerText = "❌ Ürün bulunamadı";
+}}
 }})
 .catch(err => console.log(err));
-
+}};
 </script>
 
 </body>
