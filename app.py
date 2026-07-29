@@ -2,14 +2,14 @@ from flask import Flask, request, redirect, render_template_string, jsonify
 import sqlite3, os
 import barcode, qrcode
 from barcode.writer import ImageWriter
+
+# STATIC FIX
 if os.path.exists("static") and not os.path.isdir("static"):
     os.remove("static")
-
 if not os.path.exists("static"):
     os.makedirs("static")
-    
-app = Flask(__name__)
 
+app = Flask(__name__)
 DB = "stok.db"
 
 DEPOLAR = [
@@ -26,7 +26,7 @@ DEPOLAR = [
 def db():
     return sqlite3.connect(DB)
 
-# TABLOLAR
+# TABLO
 with db() as con:
     con.execute("""
     CREATE TABLE IF NOT EXISTS urun(
@@ -37,69 +37,23 @@ with db() as con:
     )
     """)
 
-    con.execute("""
-    CREATE TABLE IF NOT EXISTS hareket(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    barkod TEXT,islem TEXT,adet INTEGER,
-    tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
-
-# NUMERİK BARKOD (DAHA HIZLI OKUNUR)
+# BARKOD
 def barkod_uret():
     with db() as con:
         sayi = con.execute("SELECT COUNT(*) FROM urun").fetchone()[0] + 1
     return str(100000000000 + sayi)
 
-# BARKOD RESİM
 def barkod_resim(kod):
-
-    klasor = "static"
-
-    # Eğer static dosya ise sil
-    if os.path.exists(klasor) and not os.path.isdir(klasor):
-        os.remove(klasor)
-
-    # klasör yoksa oluştur
-    if not os.path.exists(klasor):
-        os.makedirs(klasor)
-
-
-    yol = os.path.join(klasor, kod)
-
+    yol = os.path.join("static", kod)
     CODE128 = barcode.get_barcode_class("code128")
-
     img = CODE128(kod, writer=ImageWriter())
+    img.save(yol)
 
-    img.save(
-        yol,
-        options={
-            "module_width":0.6,
-            "module_height":40,
-            "font_size":20,
-            "quiet_zone":10
-        }
-    )
-
-# QR
 def qr_uret(kod):
-
-    klasor = "static"
-
-    if os.path.exists(klasor) and not os.path.isdir(klasor):
-        os.remove(klasor)
-
-    if not os.path.exists(klasor):
-        os.makedirs(klasor)
-
-
     img = qrcode.make(kod)
+    img.save(os.path.join("static", kod+"_qr.png"))
 
-    img.save(
-        os.path.join(klasor, kod+"_qr.png")
-    )
-
-# ANA SAYFA
+# ANA
 @app.route("/")
 def index():
     return """
@@ -116,38 +70,32 @@ def index():
     <a href="/kamera/cikis">📤 Mal Çıkış</a>
     """
 
-# ÜRÜN EKLE
+# EKLE
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
     if request.method=="POST":
 
-        barkod = request.form.get("barkod")
-        if not barkod:
-            barkod = barkod_uret()
+        barkod = request.form.get("barkod") or barkod_uret()
 
-        try:
-            with db() as con:
-                con.execute("""
-                INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
-                VALUES(?,?,?,?,?,?,?,?,?,?)
-                """,(
-                request.form["ad"],
-                request.form["cins"],
-                request.form["ebat"],
-                request.form["kalinlik"],
-                request.form["yuzey"],
-                request.form["sinif"],
-                request.form["renk"],
-                int(request.form["adet"]),
-                request.form["depo"],
-                barkod
-                ))
+        with db() as con:
+            con.execute("""
+            INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
+            VALUES(?,?,?,?,?,?,?,?,?,?)
+            """,(
+            request.form["ad"],
+            request.form["cins"],
+            request.form["ebat"],
+            request.form["kalinlik"],
+            request.form["yuzey"],
+            request.form["sinif"],
+            request.form["renk"],
+            int(request.form["adet"]),
+            request.form["depo"],
+            barkod
+            ))
 
-            barkod_resim(barkod)
-            qr_uret(barkod)
-
-        except Exception as e:
-            return "HATA: "+str(e)
+        barkod_resim(barkod)
+        qr_uret(barkod)
 
         return redirect("/liste")
 
@@ -199,31 +147,14 @@ def liste():
         html += f"""
         <div style="background:#eee;margin:10px;padding:10px;border-radius:10px">
         <b>{u[1]}</b><br>
-        {u[2]} - {u[3]} - {u[4]}<br>
-        {u[5]} / {u[6]} / {u[7]}<br>
         Stok: {u[8]}<br>
-        Depo: {u[9]}<br>
-
         <img src="/static/{u[10]}_qr.png" width="120"><br>
-        <img src="/static/{u[10]}.png" width="250"><br>
-
-        <a href="/etiket/{u[10]}">Etiket Yazdır</a>
         </div>
         """
 
     return html
 
-# ETİKET
-@app.route("/etiket/<kod>")
-def etiket(kod):
-    return f"""
-    <h2>{kod}</h2>
-    <img src="/static/{kod}_qr.png" width="200"><br>
-    <img src="/static/{kod}.png" width="400">
-    <script>window.print()</script>
-    """
-
-# HIZLI İŞLEM
+# 🔥 HIZLI İŞLEM (DÜZELDİK)
 @app.route("/hizli_islem", methods=["POST"])
 def hizli_islem():
 
@@ -231,27 +162,28 @@ def hizli_islem():
     barkod = data.get("barkod")
     tip = data.get("tip")
 
- with db() as con:
-    urun = con.execute("SELECT * FROM urun WHERE barkod=?", (barkod,)).fetchone()
-   
-     if not urun:
-        return jsonify({"ok": False})
+    with db() as con:
+        urun = con.execute("SELECT * FROM urun WHERE barkod=?", (barkod,)).fetchone()
 
-    if tip == "giris":
-        urun.adet += 1
+        if not urun:
+            return jsonify({"ok": False})
 
-    elif tip == "cikis":
-        urun.adet -= 1
+        adet = urun[8]
 
-    con.execute("UPDATE urun SET adet=? WHERE barkod=?", (adet, barkod))
+        if tip == "giris":
+            adet += 1
+        elif tip == "cikis":
+            adet -= 1
+
+        con.execute("UPDATE urun SET adet=? WHERE barkod=?", (adet, barkod))
 
     return jsonify({
         "ok": True,
-        "ad": urun.ad,
-        "adet": urun.adet
+        "ad": urun[1],
+        "adet": adet
     })
 
-# KAMERA (QR + BARKOD)
+# 🎥 KAMERA
 @app.route("/kamera/<tip>")
 def kamera(tip):
 
@@ -337,6 +269,6 @@ Html5Qrcode.getCameras().then(devices => {
 </html>
 """
     return html.replace("TIP_BURAYA", tip)
-    
+
 if __name__=="__main__":
     app.run(host="0.0.0.0", port=5000)
