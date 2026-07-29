@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://unpkg.com/@zxing/library@latest"></script>
+</head>
+
+<body style="background:#111;color:white;text-align:center">
+
+<h2>Kamera</h2>
+
+<button onclick="sesAc()">🔊 Sesi Aç</button>
+
+<video id="video" width="300" height="200"></video>
+<p id="sonuc">Okunan: -</p>
+
+<script>
+const codeReader = new ZXing.BrowserMultiFormatReader();
+
+const bip = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+
+let sesHazir = false;
+let sonOkuma = 0;
+
+function sesAc(){
+    bip.play();
+    bip.pause();
+    bip.currentTime = 0;
+    sesHazir = true;
+}
+
+codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+    if (result) {
+
+        const barkod = result.text.trim();
+        const simdi = Date.now();
+
+        if (simdi - sonOkuma < 3000) return;
+        sonOkuma = simdi;
+
+        if (sesHazir) {
+            bip.currentTime = 0;
+            bip.play();
+        }
+
+        document.getElementById("sonuc").innerText = barkod;
+
+        fetch("/hizli_islem", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ barkod: barkod })
+        });
+    }
+});
+</script>
+
+</body>
+</html>
