@@ -219,11 +219,10 @@ const bip = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.og
 
 // 🔥 SESİ AKTİF ET (ŞART!)
 function sesAc(){
-    bip.play().then(()=>{
-        bip.pause();
-        bip.currentTime = 0;
-        sesHazir = true;
-    });
+    bip.play();
+bip.pause();
+bip.currentTime = 0;
+sesHazir = true;
 }
 let sonOkuma = 0;
 
