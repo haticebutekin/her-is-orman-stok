@@ -216,25 +216,19 @@ body{background:#000;color:white;text-align:center;font-family:Arial}
 <body>
 
 <h2>📷 Okut</h2>
-<div id="sonuc">Kamera açılıyor...</div>
-<div id="reader" style="width:90%;margin:auto"></div>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 
-<script>
+<div id="reader" style="width:90%;margin:auto"></div>
+<div id="sonuc">Kamera başlatılıyor...</div>
 
-const sonuc = document.getElementById("sonuc");
-let aktif = true;
+<script>
 
 function onScanSuccess(decodedText) {
 
-    if(!aktif) return;
-
-    aktif = false;
-
     navigator.vibrate(200);
 
-    sonuc.innerHTML = "Okundu: " + decodedText;
+    document.getElementById("sonuc").innerHTML = "Okundu: " + decodedText;
 
     fetch("/hizli_islem",{
         method:"POST",
@@ -246,35 +240,25 @@ function onScanSuccess(decodedText) {
     })
     .then(r=>r.json())
     .then(data=>{
-
         if(data.ok){
-            sonuc.innerHTML =
-            "✅ " + data.ad +
-            "<br>Stok: " + data.adet;
-        }else{
-            sonuc.innerHTML = "❌ Ürün yok";
+            document.getElementById("sonuc").innerHTML =
+            "✅ " + data.ad + "<br>Stok: " + data.adet;
+        } else {
+            document.getElementById("sonuc").innerHTML = "❌ Ürün yok";
         }
-
-        setTimeout(()=>{ aktif = true; },1000);
-
     });
 
 }
 
-Html5Qrcode.getCameras().then(devices => {
-
-    if (devices && devices.length) {
-
-        let cameraId = devices[0].id;
-
-        html5QrCode.start(
-            cameraId,
-            { fps: 10, qrbox: { width: 250, height: 150 } },
-            onScanSuccess
-        );
+let scanner = new Html5QrcodeScanner(
+    "reader",
+    {
+        fps: 10,
+        qrbox: { width: 250, height: 150 }
     }
+);
 
-});
+scanner.render(onScanSuccess);
 
 </script>
 
