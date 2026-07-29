@@ -320,8 +320,7 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
             headers: {{ "Content-Type": "application/json" }},
             body: JSON.stringify({
                 barkod: barkod,
-                tip: "{{tip}}"
-            })
+                tip: "{{tip}}"})
         }})
         .then(res => res.json())
         
