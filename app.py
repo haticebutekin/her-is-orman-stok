@@ -203,40 +203,18 @@ def hizli_islem():
 @app.route("/kamera/<tip>")
 def kamera(tip):
 
-    html = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-body{background:#000;color:white;text-align:center;font-family:Arial}
-</style>
-</head>
-
-<body>
-
-<h2>📷 Okut</h2>
-
-<script src="https://unpkg.com/html5-qrcode"></script>
-
-<div id="reader" style="width:90%;margin:auto"></div>
-<div id="sonuc">Kamera başlatılıyor...</div>
-
+    html = f"""
 <script>
 
-function onScanSuccess(decodedText) {
+function onScanSuccess(decodedText) {{
 
-    navigator.vibrate(200);
-
-    document.getElementById("sonuc").innerHTML = "Okundu: " + decodedText;
-
-    fetch("/hizli_islem",{
+    fetch("/hizli_islem",{{
         method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
+        headers:{{"Content-Type":"application/json"}},
+        body:JSON.stringify({{
             barkod: decodedText,
-            tip: "TIP_BURAYA"
-        })
+            tip: "{tip}"
+        }})
     })
     .then(r=>r.json())
     .then(data=>{
