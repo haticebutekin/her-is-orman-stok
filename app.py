@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, render_template_string, jsonify
+from flask import Flask, request, redirect, render_template_string, jsonify, render_template
 import sqlite3, os
 import barcode, qrcode
 from barcode.writer import ImageWriter
@@ -118,15 +118,9 @@ def ekle():
     input,select{width:100%;padding:10px;margin:5px}
     button{background:#00b894;color:white;padding:10px;border:0}
     </style>
-    <a href="/" style="
-    display:inline-block;
-    margin:10px;
-    padding:10px;
-    background:#00b894;
-    color:white;
-    border-radius:10px;
-    text-decoration:none;
-    ">🏠 Ana Sayfa</a>
+
+    <a href="/" style="padding:10px;background:#00b894;color:white;border-radius:10px;text-decoration:none">🏠 Ana Sayfa</a>
+
     <form method="post">
     <h2>Ürün Kartı</h2>
 
@@ -155,194 +149,128 @@ def ekle():
     </form>
     """, depolar=DEPOLAR)
 
-# LİSTE (ESKİ HALİN FULL)
+# LİSTE
 @app.route("/liste")
 def liste():
     with db() as con:
         urunler = con.execute("SELECT * FROM urun").fetchall()
 
     html = """
-<div style='text-align:center'>
-<a href="/" style="padding:10px;background:#00b894;color:white;border-radius:10px;text-decoration:none">🏠 Ana Sayfa</a>
-<h2>STOK</h2>
-</div>
-"""
+    <div style='text-align:center'>
+    <a href="/" style="padding:10px;background:#00b894;color:white;border-radius:10px;text-decoration:none">🏠 Ana Sayfa</a>
+    <h2>STOK</h2>
+    </div>
+    """
 
     for u in urunler:
         html += f"""
         <div style="background:#eee;margin:10px;padding:10px;border-radius:10px">
         <b>{u[1]}</b><br>
-        {u[2]} - {u[3]} - {u[4]}<br>
-        {u[5]} / {u[6]} / {u[7]}<br>
         Stok: {u[8]}<br>
-        Depo: {u[9]}<br>
-
         <img src="/static/{u[10]}_qr.png" width="120"><br>
         <img src="/static/{u[10]}.png" width="250"><br>
-
-        <a href="/etiket/{u[10]}">Etiket Yazdır</a>
         </div>
         """
 
     return html
 
-# ETİKET
-@app.route("/etiket/<kod>")
-def etiket(kod):
-    return f"""
-    <h2>{kod}</h2>
-    <img src="/static/{kod}_qr.png" width="200"><br>
-    <img src="/static/{kod}.png" width="400">
-    <script>window.print()</script>
-    """
-    
+# HAREKETLER
 @app.route("/hareketler")
 def hareketler():
     with db() as con:
-        rows = con.execute("SELECT barkod, ad, tip, adet, tarih FROM hareket ORDER BY id DESC LIMIT 50").fetchall()
+        rows = con.execute("SELECT barkod, ad, tip, adet, tarih FROM hareket ORDER BY id DESC").fetchall()
 
     html = """
     <div style="text-align:center">
     <a href="/" style="padding:10px;background:#00b894;color:white;border-radius:10px;text-decoration:none">🏠 Ana Sayfa</a>
-    <h2>📊 Son Hareketler</h2>
+    <h2>📊 Hareketler</h2>
     </div>
     """
 
     for r in rows:
-        try:
-            barkod, ad, tip, adet, tarih = r
-        except:
-            continue
-
-        renk = "green" if tip == "giris" else "red"
+        barkod, ad, tip, adet, tarih = r
+        renk = "green" if tip=="giris" else "red"
 
         html += f"""
         <div style="background:#222;color:white;margin:5px;padding:10px;border-left:5px solid {renk}">
-        {tarih} | {ad} | {tip.upper()} | Stok: {adet}
+        {tarih} | {ad} | {tip} | {adet}
         </div>
         """
 
     return html
-    
-# HIZLI İŞLEM (FIX)
+
+# HIZLI İŞLEM
 @app.route("/hizli_islem", methods=["POST"])
 def hizli_islem():
-    try:
-        data = request.get_json()
+    data = request.get_json()
+    barkod = str(data.get("barkod","")).strip()
+    tip = data.get("tip","")
 
-        if not data:
-            return jsonify({"ok": False, "mesaj": "VERİ YOK"})
+    with db() as con:
+        cur = con.cursor()
+        cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
+        row = cur.fetchone()
 
-        barkod = str(data.get("barkod", "")).strip()
-        tip = data.get("tip", "")
+        if not row:
+            return jsonify({"ok":False,"mesaj":"ÜRÜN YOK"})
 
-        if not barkod:
-            return jsonify({"ok": False, "mesaj": "BARKOD YOK"})
+        uid, ad, adet = row
 
-        if tip not in ["giris", "cikis"]:
-            return jsonify({"ok": False, "mesaj": "TİP HATALI"})
+        if tip=="giris":
+            adet+=1
+        else:
+            adet-=1
 
-        with db() as con:
-            cur = con.cursor()
+        if adet<0:
+            adet=0
 
-            cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
-            row = cur.fetchone()
+        cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet,uid))
+        cur.execute("INSERT INTO hareket (barkod,ad,tip,adet) VALUES (?,?,?,?)",(barkod,ad,tip,adet))
+        con.commit()
 
-            if not row:
-                return jsonify({"ok": False, "mesaj": "ÜRÜN YOK"})
+    return jsonify({"ok":True,"ad":ad,"adet":adet})
 
-            urun_id, ad, adet = row
-
-            if tip == "giris":
-                adet += 1
-            else:
-                adet -= 1
-
-            if adet < 0:
-                adet = 0
-
-            cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet, urun_id))
-
-            cur.execute("""
-            INSERT INTO hareket (barkod, ad, tip, adet)
-            VALUES (?, ?, ?, ?)
-            """, (barkod, ad, tip, adet))
-
-            con.commit()
-
-        return jsonify({
-            "ok": True,
-            "ad": ad,
-            "adet": adet
-        })
-
-    except Exception as e:
-        return jsonify({
-            "ok": False,
-            "mesaj": "HATA",
-            "detay": str(e)
-        })
-# KAMERA (KESİN ÇALIŞAN)
-from flask import render_template
-
+# 🔥 KAMERA FIX (EN ÖNEMLİ)
 @app.route("/kamera/<tip>")
 def kamera(tip):
-    return render_template("kamera.html")
+    return render_template_string("""
+    <body style="background:black;color:white;text-align:center">
 
+    <a href="/" style="padding:10px;background:#00b894;color:white;border-radius:10px;text-decoration:none">🏠 Ana Sayfa</a>
 
-@app.route("/kamera_test")
-def kamera_test():
-    return f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-</head>
-<body>
+    <h2>Kamera (Test)</h2>
 
-<div id="sonuc"></div>
+    <div id="sonuc">Hazır</div>
 
-<script>
+    <button onclick="gonder()">TEST OKUT</button>
 
-fetch("/hizli_islem", {{
-    method: "POST",
-    headers: {{
-        "Content-Type": "application/json"
-    }},
-    body: JSON.stringify({{
-        barkod: "123",
-        tip: "giris"
-    }})
-}})
-.then(res => res.json())
-.then(data => {{
+    <script>
+    let TIP = "{{tip}}";
 
-    if(data.ok){{
+    function gonder(){
+        let barkod = prompt("Barkod gir:");
 
-        document.getElementById("sonuc").innerText =
-            data.ad + " | Stok: " + data.adet;
+        fetch("/hizli_islem",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({barkod:barkod,tip:TIP})
+        })
+        .then(r=>r.json())
+        .then(data=>{
+            if(data.ok){
+                document.getElementById("sonuc").innerText = data.ad + " | " + data.adet;
 
-        // 🔊 SES BURADA
-        let bip = new Audio();
-        bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
-        bip.play();
+                let bip = new Audio();
+                bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
+                bip.play();
 
-    }} else {{
+            }else{
+                document.getElementById("sonuc").innerText = "❌ "+data.mesaj;
+            }
+        })
+    }
+    </script>
+    """)
 
-        document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
-
-    }}
-
-}})
-.catch(err => console.log(err));
-
-</script>
-
-</body>
-</html>
-"""
-    
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-    
- 
