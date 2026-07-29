@@ -215,22 +215,16 @@ const codeReader = new ZXing.BrowserMultiFormatReader();
 
 // 🔊 SES
 let sesHazir = false;
-const bip = new Audio("/static/bip.mp3");
+const bip = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
 // 🔥 SESİ AKTİF ET (ŞART!)
 function sesAc(){
-    bip.play()
-    .then(() => {
+    bip.play().then(()=>{
         bip.pause();
         bip.currentTime = 0;
         sesHazir = true;
-        console.log("Ses aktif");
-    })
-    .catch(err => {
-        alert("Tarayıcı sesi engelledi! Butona tekrar bas.");
     });
 }
-
 let sonOkuma = 0;
 
 codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
