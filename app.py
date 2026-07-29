@@ -225,13 +225,12 @@ const bip = new Audio("/static/bip.mp3");
 let sonOkuma = 0;
 let sonBarkod = "";
 
-codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
-    if (result) {
+codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
+    if (result) {{
 
         const barkod = result.text.trim();
         const simdi = Date.now();
 
-        // spam engelle
         if (barkod === sonBarkod && (simdi - sonOkuma < 2000)) return;
 
         sonBarkod = barkod;
@@ -259,8 +258,8 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
             }}
         }})
         .catch(err => console.log(err));
-    }
-});
+    }}
+}});
 </script>
 
 </body>
