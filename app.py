@@ -227,46 +227,61 @@ def hareketler():
 # HIZLI İŞLEM (FIX)
 @app.route("/hizli_islem", methods=["POST"])
 def hizli_islem():
-    data = request.get_json()
-    barkod = str(data.get("barkod")).strip()
-    tip = data.get("tip")
+    try:
+        data = request.get_json()
 
-    with db() as con:
-        cur = con.cursor()
+        if not data:
+            return jsonify({"ok": False, "mesaj": "VERİ YOK"})
 
-        # ÜRÜNÜ BUL
-        cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
-        row = cur.fetchone()
-        
-        if not row:
-            return jsonify({"ok": False, "mesaj": "ÜRÜN YOK"})
+        barkod = str(data.get("barkod", "")).strip()
+        tip = data.get("tip", "")
 
+        if not barkod:
+            return jsonify({"ok": False, "mesaj": "BARKOD YOK"})
 
-        urun_id, ad, adet = row
+        if tip not in ["giris", "cikis"]:
+            return jsonify({"ok": False, "mesaj": "TİP HATALI"})
 
-        # 🔥 ARTIR / AZALT
-        if tip == "giris":
-            adet += 1
-        else:
-            adet -= 1
+        with db() as con:
+            cur = con.cursor()
 
-        if adet < 0:
-            adet = 0
+            cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
+            row = cur.fetchone()
 
-        # GÜNCELLE
-        cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet, urun_id))
-        cur.execute("""
-        INSERT INTO hareket (barkod, ad, tip, adet)
-        VALUES (?, ?, ?, ?)
-        """, (barkod, ad, tip, adet))
-        con.commit()
+            if not row:
+                return jsonify({"ok": False, "mesaj": "ÜRÜN YOK"})
 
-    return jsonify({
-        "ok": True,
-        "ad": ad,
-        "adet": adet
-    })
-    
+            urun_id, ad, adet = row
+
+            if tip == "giris":
+                adet += 1
+            else:
+                adet -= 1
+
+            if adet < 0:
+                adet = 0
+
+            cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet, urun_id))
+
+            cur.execute("""
+            INSERT INTO hareket (barkod, ad, tip, adet)
+            VALUES (?, ?, ?, ?)
+            """, (barkod, ad, tip, adet))
+
+            con.commit()
+
+        return jsonify({
+            "ok": True,
+            "ad": ad,
+            "adet": adet
+        })
+
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "mesaj": "HATA",
+            "detay": str(e)
+        })
 # KAMERA (KESİN ÇALIŞAN)
 from flask import render_template
 
