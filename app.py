@@ -36,6 +36,17 @@ with db() as con:
     adet INTEGER,depo TEXT,barkod TEXT UNIQUE
     )
     """)
+with db() as con:
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS hareket(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    barkod TEXT,
+    ad TEXT,
+    tip TEXT,
+    adet INTEGER,
+    tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
 
 # BARKOD
 def barkod_uret():
@@ -68,6 +79,7 @@ def index():
     <a href="/liste">📋 Liste</a>
     <a href="/kamera/giris">📥 Mal Giriş</a>
     <a href="/kamera/cikis">📤 Mal Çıkış</a>
+    <a href="/hareketler">📊 Hareketler</a>
     """
 
 # EKLE
@@ -170,7 +182,24 @@ def etiket(kod):
     <img src="/static/{kod}.png" width="400">
     <script>window.print()</script>
     """
+    
+@app.route("/hareketler")
+def hareketler():
+    with db() as con:
+        rows = con.execute("SELECT * FROM hareket ORDER BY id DESC LIMIT 50").fetchall()
 
+    html = "<h2>📊 Son Hareketler</h2>"
+
+    for r in rows:
+        renk = "green" if r[3]=="giris" else "red"
+
+        html += f"""
+        <div style="background:#222;color:white;margin:5px;padding:10px;border-left:5px solid {renk}">
+        {r[5]} | {r[2]} | {r[3].upper()} | Stok: {r[4]}
+        </div>
+        """
+
+    return html
 # HIZLI İŞLEM (FIX)
 @app.route("/hizli_islem", methods=["POST"])
 def hizli_islem():
@@ -184,9 +213,10 @@ def hizli_islem():
         # ÜRÜNÜ BUL
         cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
         row = cur.fetchone()
-
+        
         if not row:
-            return jsonify({"ok": False})
+            return jsonify({"ok": False, "mesaj": "ÜRÜN YOK"})
+
 
         urun_id, ad, adet = row
 
@@ -201,6 +231,10 @@ def hizli_islem():
 
         # GÜNCELLE
         cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet, urun_id))
+        cur.execute("""
+        INSERT INTO hareket (barkod, ad, tip, adet)
+        VALUES (?, ?, ?, ?)
+        """, (barkod, ad, tip, adet))
         con.commit()
 
     return jsonify({
@@ -286,21 +320,34 @@ codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {{
             headers: {{ "Content-Type": "application/json" }},
             body: JSON.stringify({
                 barkod: barkod,
-                tip: "giris"  // veya "cikis"
+                tip: "{{tip}}"
             })
         }})
         .then(res => res.json())
+        
         .then(data => {{
+        
             if(data.ok){{
+            
+             document.getElementById("sonuc").innerText = "✅ OK";
+
+            document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
+    return;
+}
+               // 🔊 SES BURADA
+    let bip = new Audio();
+    bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
+    bip.play();
+
                 document.getElementById("sonuc").innerText =
                     data.ad + " | Stok: " + data.adet;
             }} else {{
                 document.getElementById("sonuc").innerText = "❌ Ürün bulunamadı";
             }}
-        }})
+        })
         .catch(err => console.log(err));
     }}
-}});
+});
 </script>
 
 </body>
