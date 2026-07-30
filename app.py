@@ -345,47 +345,158 @@ def geri_al():
 @app.route("/kamera/<tip>")
 def kamera(tip):
     return render_template_string("""
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest"></script>
 
-    <h2>{{tip.upper()}} OKUT</h2>
+<h2>{{tip.upper()}} OKUT</h2>
 
-    <video id="video" width="350" height="250" autoplay playsinline style="border:2px solid black"></video>
+<video id="video" width="350" height="250"
+autoplay playsinline
+style="border:2px solid black"></video>
 
-    <input type="text" id="kullanici" placeholder="İşlem yapan kişi"><br><br>
+<br><br>
 
-    <button onclick="baslat()">Kamerayı Başlat</button>
-    <button onclick="window.print()">🖨 Yazdır</button>
+<input type="text" id="kullanici" placeholder="İşlem yapan kişi">
 
-    <h3 id="sonuc"></h3>
+<br><br>
 
-    <script>
-    let codeReader;
-    let okundu = false;
+<button onclick="baslat()">📷 Kamerayı Başlat</button>
 
-   function baslat(){
+<button onclick="window.print()">🖨 Yazdır</button>
 
-    navigator.mediaDevices.getUserMedia({
-    video:true
-})
-.then(()=>{
-    console.log("kamera izni tamam");
-})
-.catch((e)=>{
-    alert("Kamera izni yok: " + e);
-});
+<h3 id="sonuc"></h3>
 
-    codeReader = new ZXing.BrowserMultiFormatReader();
-navigator.mediaDevices.getUserMedia({
-    video:true
-})
-.then(()=>{
-    console.log("kamera izni tamam");
-})
-.catch((e)=>{
-    alert("Kamera izni yok: " + e);
-});
-    </script>
-    """, tip=tip)
+
+<script>
+
+let codeReader;
+let okundu=false;
+
+
+async function baslat(){
+
+    try{
+
+        await navigator.mediaDevices.getUserMedia({
+            video:{
+                facingMode:"environment"
+            },
+            audio:false
+        });
+
+
+        codeReader = new ZXing.BrowserMultiFormatReader();
+
+
+        codeReader.decodeFromVideoDevice(
+            null,
+            "video",
+            (result, err)=>{
+
+
+                if(result && !okundu){
+
+                    okundu=true;
+
+
+                    let kullanici =
+                    document.getElementById("kullanici").value;
+
+
+                    if(!kullanici){
+
+                        alert("Kullanıcı gir!");
+
+                        okundu=false;
+
+                        return;
+                    }
+
+
+
+                    fetch("/hizli_islem",{
+
+                        method:"POST",
+
+                        headers:{
+                            "Content-Type":"application/json"
+                        },
+
+
+                        body:JSON.stringify({
+
+                            barkod:result.text,
+
+                            tip:"{{tip}}",
+
+                            kullanici:kullanici
+
+                        })
+
+                    })
+
+
+                    .then(res=>res.json())
+
+
+                    .then(data=>{
+
+
+                        if(data.ok){
+
+                            document.getElementById("sonuc").innerHTML =
+                            "✅ "
+                            +data.ad+
+                            " | Stok: "
+                            +data.adet;
+
+
+                        }else{
+
+
+                            document.getElementById("sonuc").innerHTML =
+                            "❌ "
+                            +(data.msg || "Ürün bulunamadı");
+
+
+                        }
+
+
+                        setTimeout(()=>{
+
+                            okundu=false;
+
+                        },2000);
+
+
+
+                    });
+
+
+                }
+
+
+            }
+
+        );
+
+
+    }
+
+    catch(e){
+
+        alert(
+        "Kamera açılamadı: "
+        +e
+        );
+
+    }
+
+}
+
+
+</script>
+
+""", tip=tip)
     
 if __name__ == "__main__":
     app.run(debug=True)
