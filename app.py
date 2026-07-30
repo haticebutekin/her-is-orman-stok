@@ -198,7 +198,7 @@ text-decoration:none;
 border-radius:8px;
 margin-bottom:10px;
 ">
-🏠 Ana Sayfa
+Ana Sayfa
 </a>
 
 <h3>Ürün Bilgisi</h3>
