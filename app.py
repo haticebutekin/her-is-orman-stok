@@ -130,17 +130,22 @@ def index():
 # EKLE
 @app.route("/ekle", methods=["GET","POST"])
 def ekle2():
+
     if request.method == "POST":
-        barkod = request.form.get("barkod") or barkod_uret()
+
+        barkod = request.form.get("barkod")
+
         if not barkod:
-           barkod = barkod_uret()
-           
+            barkod = barkod_uret()
 
         with db() as con:
             con.execute("""
-            INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
+            INSERT INTO urun(
+            ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod
+            )
             VALUES(?,?,?,?,?,?,?,?,?,?)
-            """,(
+            """,
+            (
                 request.form["ad"],
                 request.form["cins"],
                 request.form["ebat"],
@@ -153,45 +158,30 @@ def ekle2():
                 barkod
             ))
 
-       resim = barkod_resim(barkod)
-qr_uret(barkod)
+        barkod_resim(barkod)
+        qr_uret(barkod)
 
-return f"""
-<h2>✅ Ürün Kaydedildi</h2>
-
-<b>{request.form["ad"]}</b><br><br>
-
-📦 Barkod: {barkod}<br><br>
-
-<img src="/static/{barkod}.png" width="300"><br><br>
-
-<img src="/static/{barkod}_qr.png" width="150"><br><br>
-
-<a href="/liste">📦 Stok Listesine Git</a><br><br>
-
-<a href="/ekle">➕ Yeni Ürün Ekle</a>
-"""
-        
         return f"""
-<h2>✅ Ürün Kaydedildi</h2>
+        <h2>✅ Ürün Kaydedildi</h2>
 
-<b>{request.form["ad"]}</b><br><br>
+        <b>{request.form["ad"]}</b><br><br>
 
-📦 Barkod: {barkod}<br><br>
+        📦 Barkod: {barkod}<br><br>
 
-<img src="/static/{barkod}.png" width="300"><br><br>
+        <img src="/static/{barkod}.png" width="300"><br><br>
 
-<img src="/static/{barkod}_qr.png" width="150"><br><br>
+        <img src="/static/{barkod}_qr.png" width="150"><br><br>
 
-<a href="/liste">📦 Stok Listesine Git</a><br><br>
+        <a href="/liste">📦 Stok Listesine Git</a><br><br>
 
-<a href="/ekle">➕ Yeni Ürün Ekle</a>
-"""
+        <a href="/ekle">➕ Yeni Ürün Ekle</a>
+        """
 
     return render_template_string("""
-   <form method="post">
+<form method="post">
 
 <h3>Ürün Bilgisi</h3>
+
 <input name="barkod" placeholder="Boş bırak = otomatik barkod"><br><br>
 
 <input name="ad" placeholder="Ürün Adı" required><br><br>
@@ -202,12 +192,12 @@ return f"""
 
 <input name="kalinlik" placeholder="Kalınlık"><br><br>
 
-<!-- ✅ YÜZEY GERİ GELDİ -->
 <label>Yüzey</label><br>
+
 <select name="yuzey" required>
-    <option value="">Seçiniz</option>
-    <option value="HG">HG</option>
-    <option value="MAT">MAT</option>
+<option value="">Seçiniz</option>
+<option value="HG">HG</option>
+<option value="MAT">MAT</option>
 </select><br><br>
 
 <input name="sinif" placeholder="Sınıf"><br><br>
@@ -217,16 +207,19 @@ return f"""
 <input name="adet" type="number" placeholder="Adet" required><br><br>
 
 <label>Depo</label><br>
+
 <select name="depo">
 {% for d in depolar %}
 <option>{{d}}</option>
 {% endfor %}
-</select><br><br>
+</select>
+
+<br><br>
 
 <button>Kaydet</button>
 
 </form>
-    """, depolar=DEPOLAR)
+""", depolar=DEPOLAR)
 
 # LİSTE
 @app.route("/liste")
