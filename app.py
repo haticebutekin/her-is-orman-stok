@@ -145,7 +145,21 @@ def ekle2():
         barkod_resim(barkod)
         qr_uret(barkod)
 
-        return redirect("/liste")
+        return f"""
+<h2>✅ Ürün Kaydedildi</h2>
+
+<b>{request.form["ad"]}</b><br><br>
+
+📦 Barkod: {barkod}<br><br>
+
+<img src="/static/{barkod}.png" width="300"><br><br>
+
+<img src="/static/{barkod}_qr.png" width="150"><br><br>
+
+<a href="/liste">📦 Stok Listesine Git</a><br><br>
+
+<a href="/ekle">➕ Yeni Ürün Ekle</a>
+"""
 
     return render_template_string("""
    <form method="post">
@@ -311,6 +325,7 @@ def kamera(tip):
     <input type="text" id="kullanici" placeholder="İşlem yapan kişi"><br><br>
 
     <button onclick="baslat()">Kamerayı Başlat</button>
+    <button onclick="window.print()">🖨 Yazdır</button>
 
     <h3 id="sonuc"></h3>
 
