@@ -112,7 +112,12 @@ def ekle():
     <input name="cins" placeholder="Cins">
     <input name="ebat" placeholder="Ebat">
     <input name="kalinlik" placeholder="Kalınlık">
-    <input name="yuzey" placeholder="Yüzey">
+    <label>Yüzey</label>
+<select name="yuzey" required>
+    <option value="">Seçiniz</option>
+    <option value="HG">HG</option>
+    <option value="MAT">MAT</option>
+</select>
     <input name="sinif" placeholder="Sınıf">
     <input name="renk" placeholder="Renk">
     <input name="adet" type="number" placeholder="Adet">
