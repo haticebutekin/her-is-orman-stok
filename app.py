@@ -141,7 +141,7 @@ def hareket():
     return "Hareketler"
 # EKLE
 @app.route("/ekle", methods=["GET","POST"])
-def ekle():
+def ekle2():
     if request.method == "POST":
         barkod = request.form.get("barkod") or barkod_uret()
 
