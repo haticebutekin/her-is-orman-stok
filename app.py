@@ -235,6 +235,37 @@ def hizli_islem():
         print("HATA:", e)
         return jsonify({"ok":False})
 
+@app.route("/geri_al", methods=["POST"])
+def geri_al():
+    data = request.get_json()
+    barkod = data.get("barkod")
+    tip = data.get("tip")
+
+    with db() as con:
+        cur = con.cursor()
+
+        cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
+        row = cur.fetchone()
+
+        if not row:
+            return jsonify({"ok":False})
+
+        uid, ad, adet = row
+
+        # ters işlem
+        if tip == "giris":
+            adet -= 1
+        else:
+            adet += 1
+
+        if adet < 0:
+            adet = 0
+
+        cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet, uid))
+        con.commit()
+
+    return jsonify({"ok":True})
+
 # 🔥 OKUT API (YENİ)
 @app.route("/okut", methods=["POST"])
 def okut():
