@@ -375,78 +375,15 @@ def kamera(tip):
 });
 
     codeReader = new ZXing.BrowserMultiFormatReader();
-
-    codeReader.decodeFromVideoDevice(
-        undefined,
-        'video',
-        (result, err) => {
-
-            if(result && !okundu){
-
-                okundu = true;
-
-                let kullanici =
-                document.getElementById("kullanici").value;
-
-                if(!kullanici){
-                    alert("Kullanıcı gir!");
-                    okundu=false;
-                    return;
-                }
-
-
-                fetch("/hizli_islem",{
-
-                    method:"POST",
-
-                    headers:{
-                    "Content-Type":"application/json"
-                    },
-
-                    body:JSON.stringify({
-
-                        barkod:result.text,
-
-                        tip:"{{tip}}",
-
-                        kullanici:kullanici
-                    })
-
-                })
-
-                .then(r=>r.json())
-
-                .then(data=>{
-
-                    if(data.ok){
-
-                        document.getElementById("sonuc").innerHTML =
-                        "✅ "+data.ad+
-                        " | Stok: "+
-                        data.adet;
-
-                    }else{
-
-                        document.getElementById("sonuc").innerHTML =
-                        "❌ Ürün bulunamadı";
-
-                    }
-
-
-                    setTimeout(()=>{
-
-                        okundu=false;
-
-                    },2000);
-
-
-                });
-
-            }
-
-        }
-    );
-}
+navigator.mediaDevices.getUserMedia({
+    video:true
+})
+.then(()=>{
+    console.log("kamera izni tamam");
+})
+.catch((e)=>{
+    alert("Kamera izni yok: " + e);
+});
     </script>
     """, tip=tip)
     
