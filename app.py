@@ -361,6 +361,9 @@ def kamera(tip):
     <h2>{{tip.upper()}} OKUT</h2>
     
     return render_template_string("""
+    <a href="/">Ana Sayfa</a>
+    <h2>Başlık</h2>
+    """)
     <script src="https://unpkg.com/@zxing/library@latest"></script>
 
     <h2>{{tip.upper()}} OKUT</h2>
