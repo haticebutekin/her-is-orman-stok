@@ -368,6 +368,8 @@ def kamera(tip):
 
     <h2>{{tip.upper()}} OKUT</h2>
 
+    <button onclick="window.print()">🖨 Yazdır</button>
+    
     <video id="video" width="300" style="border:2px solid black"></video><br><br>
 
     <select id="kullanici">
@@ -392,7 +394,6 @@ def kamera(tip):
     </select>
 
     <button onclick="baslat()">Kamerayı Başlat</button>
-    <button onclick="window.print()">🖨 Yazdır</button>
 
     <h3 id="sonuc"></h3>
 
