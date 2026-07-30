@@ -261,31 +261,53 @@ def kamera(tip):
 
     <h2>Kamera</h2>
 
+    <video id="kamera" width="300" height="200" autoplay></video>
     <div id="sonuc">Hazır</div>
 
-    <button onclick="gonder()">TEST OKUT</button>
+    <script src="https://unpkg.com/html5-qrcode"></script>
 
     <script>
-let bip = new Audio();
-bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
+    let bip = new Audio();
+    bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
 
-function gonder(){
-    fetch("/okut", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({barkod:"123456789"})
-    })
-    .then(res => res.json())
-    .then(data => {
-        if(!data.ok){
-            document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
-            bip.play();
-        } else {
-            document.getElementById("sonuc").innerText = "✅ OKUNDU: " + data.ad;
-        }
-    });
-}
-</script>
+    function baslat(){
+        const qr = new Html5Qrcode("kamera");
+
+        qr.start(
+            { facingMode: "environment" },
+            {
+                fps: 10,
+                qrbox: 250
+            },
+            (decodedText) => {
+                gonder(decodedText);
+            }
+        );
+    }
+
+    function gonder(kod){
+        fetch("/hizli_islem", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({
+                barkod: kod,
+                tip: "{{tip}}"
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(!data.ok){
+                document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
+                bip.play();
+            } else {
+                document.getElementById("sonuc").innerText =
+                "✅ " + data.ad + " | Stok: " + data.adet;
+            }
+        });
+    }
+
+    baslat();
+    </script>
     """)
 
 if __name__ == "__main__":
