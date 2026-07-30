@@ -124,6 +124,9 @@ def index():
 def ekle2():
     if request.method == "POST":
         barkod = request.form.get("barkod") or barkod_uret()
+        if not barkod:
+           barkod = barkod_uret()
+           
 
         with db() as con:
             con.execute("""
@@ -144,7 +147,11 @@ def ekle2():
 
         barkod_resim(barkod)
         qr_uret(barkod)
-
+        return jsonify({
+        "barkod": barkod,
+        "resim": resim
+    })
+        
         return f"""
 <h2>✅ Ürün Kaydedildi</h2>
 
