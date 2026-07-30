@@ -250,7 +250,7 @@ def okut():
     except Exception as e:
         print("HATA:", e)
         return jsonify({"ok":False})
-
+        
 # KAMERA
 @app.route("/kamera/<tip>")
 def kamera(tip):
@@ -265,21 +265,40 @@ def kamera(tip):
 
     <div id="sonuc" style="margin-top:20px;font-size:20px;">Hazır...</div>
 
+    <div id="sayac" style="margin-top:10px;color:#00ffcc"></div>
+
     <script src="https://unpkg.com/@zxing/library@latest"></script>
 
     <script>
     const codeReader = new ZXing.BrowserMultiFormatReader();
 
     let bip = new Audio();
-    bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
+    bip.src = "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
 
     let sonKod = "";
     let kilit = false;
 
+    let sayac = {}; // ürün sayacı
+
     function titre(){
         if(navigator.vibrate){
-            navigator.vibrate(200);
+            navigator.vibrate(150);
         }
+    }
+
+    function sayacGuncelle(ad){
+        if(!sayac[ad]){
+            sayac[ad] = 1;
+        } else {
+            sayac[ad]++;
+        }
+
+        let html = "";
+        for(let urun in sayac){
+            html += urun + " : " + sayac[urun] + "<br>";
+        }
+
+        document.getElementById("sayac").innerHTML = html;
     }
 
     codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
@@ -287,6 +306,7 @@ def kamera(tip):
 
             let kod = result.text;
 
+            // spam engelle
             if(kilit) return;
             if(kod === sonKod) return;
 
@@ -295,7 +315,7 @@ def kamera(tip):
 
             gonder(kod);
 
-            setTimeout(()=>{ kilit = false; }, 1500);
+            setTimeout(()=>{ kilit = false; }, 1200);
         }
     });
 
@@ -317,8 +337,12 @@ def kamera(tip):
                 bip.play();
                 titre();
             } else {
+
                 document.getElementById("sonuc").innerHTML =
                 "<span style='color:lightgreen'>✅ " + data.ad + "<br>Stok: " + data.adet + "</span>";
+
+                sayacGuncelle(data.ad); // 🔥 YENİ
+                bip.play();
                 titre();
             }
 
@@ -326,6 +350,5 @@ def kamera(tip):
     }
     </script>
     """)
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
