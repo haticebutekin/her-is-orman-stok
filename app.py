@@ -68,7 +68,7 @@ def barkod_uret():
 def barkod_resim(kod):
     yol = os.path.join("static", kod)
 
-    CODE128 = barcode.get_barcode_class("codef128")
+    CODE128 = barcode.get_barcode_class("code128")
 
     img = CODE128(
         kod,
