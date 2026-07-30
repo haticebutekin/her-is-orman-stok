@@ -287,27 +287,66 @@ def geri_al():
 def kamera(tip):
     return render_template_string("""
     <script src="https://unpkg.com/@zxing/library@latest"></script>
-    <video id="video" width="300"></video>
-    <input type="text" id="kullanici" placeholder="İşlemi yapan kişi">
+
+    <h2>{{tip.upper()}} OKUT</h2>
+
+    <video id="video" width="300" style="border:2px solid black"></video><br><br>
+
+    <input type="text" id="kullanici" placeholder="İşlem yapan kişi"><br><br>
+
+    <button onclick="baslat()">Kamerayı Başlat</button>
+
+    <h3 id="sonuc"></h3>
 
     <script>
-    const codeReader = new ZXing.BrowserMultiFormatReader();
+    let codeReader;
+    let okundu = false;
 
-    codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
-        if (result) {
-            fetch("/hizli_islem", {
-                method:"POST",
-                headers:{"Content-Type":"application/json"},
-                body: JSON.stringify({
-                    barkod:result.text,
-                    tip:"{{tip}}",
-                    kullanici:document.getElementById("kullanici").value
+    function baslat(){
+        codeReader = new ZXing.BrowserMultiFormatReader();
+
+        codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+
+            if (result && !okundu) {
+
+                okundu = true;
+
+                let kullanici = document.getElementById("kullanici").value;
+
+                if (!kullanici) {
+                    alert("Kullanıcı gir!");
+                    okundu = false;
+                    return;
+                }
+
+                fetch("/hizli_islem", {
+                    method:"POST",
+                    headers:{"Content-Type":"application/json"},
+                    body: JSON.stringify({
+                        barkod: result.text,
+                        tip: "{{tip}}",
+                        kullanici: kullanici
+                    })
                 })
-            });
-        }
-    });
-    </script>
-    """)
+                .then(res => res.json())
+                .then(data => {
 
+                    if(data.ok){
+                        document.getElementById("sonuc").innerHTML =
+                            "✅ " + data.ad + " | Stok: " + data.adet;
+                    }else{
+                        document.getElementById("sonuc").innerHTML =
+                            "❌ Hata: " + (data.msg || "Ürün bulunamadı");
+                    }
+
+                    setTimeout(()=>{ okundu=false; }, 2000);
+                });
+
+            }
+        });
+    }
+    </script>
+    """, tip=tip)
+    
 if __name__ == "__main__":
     app.run(debug=True)
