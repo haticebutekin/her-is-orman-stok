@@ -349,7 +349,7 @@ def kamera(tip):
 
     <h2>{{tip.upper()}} OKUT</h2>
 
-    <video id="video" width="300" style="border:2px solid black"></video><br><br>
+    <video id="video" width="350" height="250" autoplay playsinline style="border:2px solid black"></video>
 
     <input type="text" id="kullanici" placeholder="İşlem yapan kişi"><br><br>
 
@@ -364,12 +364,22 @@ def kamera(tip):
 
    function baslat(){
 
+    navigator.mediaDevices.getUserMedia({
+    video:true
+})
+.then(()=>{
+    console.log("kamera izni tamam");
+})
+.catch((e)=>{
+    alert("Kamera izni yok: " + e);
+});
+
     codeReader = new ZXing.BrowserMultiFormatReader();
 
     codeReader.decodeFromVideoDevice(
-        null,
+        undefined,
         'video',
-        (result, err)=>{
+        (result, err) => {
 
             if(result && !okundu){
 
