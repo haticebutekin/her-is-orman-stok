@@ -261,29 +261,15 @@ def kamera(tip):
 
     <h2>Kamera Okuyucu</h2>
 
-    <div id="kamera" style="width:320px;height:320px;margin:auto;position:relative;border:4px solid #00ffcc;border-radius:10px;">
-        <div style="
-            position:absolute;
-            top:0;left:0;right:0;
-            height:3px;
-            background:red;
-            animation: scan 2s infinite;
-        "></div>
-    </div>
+    <video id="video" width="320" height="240" style="border:3px solid #00ffcc;border-radius:10px;"></video>
 
     <div id="sonuc" style="margin-top:20px;font-size:20px;">Hazır...</div>
 
-    <style>
-    @keyframes scan {
-        0% {top:0}
-        50% {top:95%}
-        100% {top:0}
-    }
-    </style>
-
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
 
     <script>
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+
     let bip = new Audio();
     bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
 
@@ -296,35 +282,22 @@ def kamera(tip):
         }
     }
 
-    function baslat(){
-        const qr = new Html5Qrcode("kamera");
+    codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+        if (result) {
 
-        qr.start(
-            { facingMode: "environment" },
-            {
-                fps: 15,
-                qrbox: { width: 250, height: 250 }
-            },
-            (decodedText) => {
+            let kod = result.text;
 
-                if(kilit) return;
+            if(kilit) return;
+            if(kod === sonKod) return;
 
-                if(decodedText === sonKod) return;
+            sonKod = kod;
+            kilit = true;
 
-                sonKod = decodedText;
-                kilit = true;
+            gonder(kod);
 
-                gonder(decodedText);
-
-                setTimeout(()=>{ kilit = false; }, 1500);
-            },
-            (err) => {
-                document.getElementById("sonuc").innerText = "📷 Kamera bekleniyor...";
-            }
-        ).catch(err=>{
-            document.getElementById("sonuc").innerText = "❌ Kamera izni yok";
-        });
-    }
+            setTimeout(()=>{ kilit = false; }, 1500);
+        }
+    });
 
     function gonder(kod){
         fetch("/hizli_islem", {
@@ -341,21 +314,16 @@ def kamera(tip):
             if(!data.ok){
                 document.getElementById("sonuc").innerHTML =
                 "<span style='color:red'>❌ ÜRÜN YOK</span>";
-
                 bip.play();
                 titre();
-
             } else {
                 document.getElementById("sonuc").innerHTML =
                 "<span style='color:lightgreen'>✅ " + data.ad + "<br>Stok: " + data.adet + "</span>";
-
                 titre();
             }
 
         });
     }
-
-    baslat();
     </script>
     """)
 
