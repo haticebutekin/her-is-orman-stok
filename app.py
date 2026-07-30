@@ -52,9 +52,18 @@ with db() as con:
 
 # BARKOD
 def barkod_uret():
-    with db() as con:
-        sayi = con.execute("SELECT COUNT(*) FROM urun").fetchone()[0] + 1
-    return str(100000000000 + sayi)
+    import random
+    while True:
+        kod = str(random.randint(100000000000,999999999999))
+
+        with db() as con:
+            var = con.execute(
+                "SELECT barkod FROM urun WHERE barkod=?",
+                (kod,)
+            ).fetchone()
+
+        if not var:
+            return kod
 
 def barkod_resim(kod):
     yol = os.path.join("static", kod)
