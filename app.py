@@ -78,6 +78,57 @@ def index():
     <a href="/hareketler">📊 Hareketler</a>
     """
 
+@app.route("/")
+def index():
+    return """
+    <html>
+    <head>
+    <style>
+    body {
+        background: #111;
+        font-family: Arial;
+        text-align: center;
+        color: white;
+    }
+
+    h1 {
+        margin-top: 20px;
+    }
+
+    .btn {
+        display: block;
+        width: 80%;
+        margin: 15px auto;
+        padding: 20px;
+        font-size: 22px;
+        border-radius: 10px;
+        text-decoration: none;
+        color: white;
+        font-weight: bold;
+    }
+
+    .mavi { background: linear-gradient(to right, #2196F3, #00BCD4); }
+    .yesil { background: linear-gradient(to right, #00C853, #64DD17); }
+    .turuncu { background: linear-gradient(to right, #FF6F00, #FF9800); }
+    .mor { background: linear-gradient(to right, #5E35B1, #7E57C2); }
+    .kirmizi { background: linear-gradient(to right, #D50000, #FF1744); }
+
+    </style>
+    </head>
+
+    <body>
+
+    <h1>📦 STOK PANEL</h1>
+
+    <a href="/ekle" class="btn mavi">➕ ÜRÜN EKLE</a>
+    <a href="/kamera/giris" class="btn yesil">⬆ GİRİŞ</a>
+    <a href="/kamera/cikis" class="btn turuncu">📷 OKUT</a>
+    <a href="/liste" class="btn mor">📦 STOK</a>
+    <a href="/hareketler" class="btn kirmizi">📊 HAREKET</a>
+
+    </body>
+    </html>
+    """
 # EKLE
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
