@@ -70,50 +70,28 @@ def qr_uret(kod):
 @app.route("/")
 def index():
     return """
-    <h1>📦 STOK PRO</h1>
-    <a href="/ekle">➕ Ürün Ekle</a><br>
-    <a href="/liste">📋 Liste</a><br>
-    <a href="/kamera/giris">📥 Giriş</a><br>
-    <a href="/kamera/cikis">📤 Çıkış</a><br>
-    <a href="/hareketler">📊 Hareketler</a>
-    """
-
-    return """
     <html>
     <head>
     <style>
-    body {
-        background: #111;
-        font-family: Arial;
-        text-align: center;
-        color: white;
-    }
-
-    h1 {
-        margin-top: 20px;
-    }
-
+    body { background:#111; color:white; text-align:center; font-family:Arial; }
     .btn {
-        display: block;
-        width: 80%;
-        margin: 15px auto;
-        padding: 20px;
-        font-size: 22px;
-        border-radius: 10px;
-        text-decoration: none;
-        color: white;
-        font-weight: bold;
+        display:block;
+        width:80%;
+        margin:15px auto;
+        padding:20px;
+        font-size:22px;
+        border-radius:10px;
+        text-decoration:none;
+        color:white;
+        font-weight:bold;
     }
-
-    .mavi { background: linear-gradient(to right, #2196F3, #00BCD4); }
-    .yesil { background: linear-gradient(to right, #00C853, #64DD17); }
-    .turuncu { background: linear-gradient(to right, #FF6F00, #FF9800); }
-    .mor { background: linear-gradient(to right, #5E35B1, #7E57C2); }
-    .kirmizi { background: linear-gradient(to right, #D50000, #FF1744); }
-
+    .mavi { background: linear-gradient(to right,#2196F3,#00BCD4); }
+    .yesil { background: linear-gradient(to right,#00C853,#64DD17); }
+    .turuncu { background: linear-gradient(to right,#FF6F00,#FF9800); }
+    .mor { background: linear-gradient(to right,#5E35B1,#7E57C2); }
+    .kirmizi { background: linear-gradient(to right,#D50000,#FF1744); }
     </style>
     </head>
-
     <body>
 
     <h1>📦 STOK PANEL</h1>
