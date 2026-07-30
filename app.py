@@ -136,6 +136,18 @@ def ekle():
     <input name="sinif" placeholder="Sınıf">
     <input name="renk" placeholder="Renk">
     <input name="adet" type="number" placeholder="Adet">
+    <h3>🧾 Okunan Ürünler</h3>
+    <div id="liste"></div>
+
+    <button onclick="onayla()" style="
+    margin-top:15px;
+    padding:12px;
+    background:green;
+    color:white;
+    border:0;
+    border-radius:10px">
+    ✅ İŞLEMİ TAMAMLA
+    </button>
 
     <select name="depo">
     {% for d in depolar %}
@@ -144,6 +156,7 @@ def ekle():
     </select>
 
     <input name="barkod" placeholder="Boş = otomatik">
+
 
     <button>KAYDET</button>
     </form>
