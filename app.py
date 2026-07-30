@@ -357,7 +357,7 @@ def geri_al():
 @app.route("/kamera/<tip>")
 def kamera(tip):
 
-    <a href="/">🏠 Ana Sayfa</a>
+    <a href="/"> Ana Sayfa</a>
     <h2>{{tip.upper()}} OKUT</h2>
     
     return render_template_string("""
