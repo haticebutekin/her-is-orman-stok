@@ -73,25 +73,38 @@ def index():
     <html>
     <head>
     <style>
-    body { background:#111; color:white; text-align:center; font-family:Arial; }
-    .btn {
-        display:block;
-        width:80%;
-        margin:15px auto;
-        padding:20px;
-        font-size:22px;
-        border-radius:10px;
-        text-decoration:none;
-        color:white;
-        font-weight:bold;
+    body {
+        background: #111;
+        font-family: Arial;
+        text-align: center;
+        color: white;
     }
-    .mavi { background: linear-gradient(to right,#2196F3,#00BCD4); }
-    .yesil { background: linear-gradient(to right,#00C853,#64DD17); }
-    .turuncu { background: linear-gradient(to right,#FF6F00,#FF9800); }
-    .mor { background: linear-gradient(to right,#5E35B1,#7E57C2); }
-    .kirmizi { background: linear-gradient(to right,#D50000,#FF1744); }
+
+    h1 {
+        margin-top: 20px;
+    }
+
+    .btn {
+        display: block;
+        width: 80%;
+        margin: 15px auto;
+        padding: 20px;
+        font-size: 22px;
+        border-radius: 10px;
+        text-decoration: none;
+        color: white;
+        font-weight: bold;
+    }
+
+    .mavi { background: linear-gradient(to right, #2196F3, #00BCD4); }
+    .yesil { background: linear-gradient(to right, #00C853, #64DD17); }
+    .turuncu { background: linear-gradient(to right, #FF6F00, #FF9800); }
+    .mor { background: linear-gradient(to right, #5E35B1, #7E57C2); }
+    .kirmizi { background: linear-gradient(to right, #D50000, #FF1744); }
+
     </style>
     </head>
+
     <body>
 
     <h1>📦 STOK PANEL</h1>
@@ -105,6 +118,27 @@ def index():
     </body>
     </html>
     """
+
+# Dummy sayfalar (çökmesin diye)
+@app.route("/ekle")
+def ekle():
+    return "Ürün ekleme sayfası"
+
+@app.route("/kamera/giris")
+def giris():
+    return "Giriş kamera"
+
+@app.route("/kamera/cikis")
+def cikis():
+    return "Çıkış kamera"
+
+@app.route("/liste")
+def liste():
+    return "Stok listesi"
+
+@app.route("/hareketler")
+def hareket():
+    return "Hareketler"
 # EKLE
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
