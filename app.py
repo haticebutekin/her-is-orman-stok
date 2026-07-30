@@ -57,7 +57,7 @@ def barkod_uret():
     return str(100000000000 + sayi)
 
 def barkod_resim(kod):
-    yol = os.path.join("static", kod + ".png")
+    yol = os.path.join("static", kod)  # .png YOK!
     CODE128 = barcode.get_barcode_class("code128")
     img = CODE128(kod, writer=ImageWriter())
     img.save(yol)
