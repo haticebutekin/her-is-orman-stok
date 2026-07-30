@@ -345,149 +345,68 @@ def geri_al():
 @app.route("/kamera/<tip>")
 def kamera(tip):
     return render_template_string("""
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest"></script>
-
+    
 <h2>{{tip.upper()}} OKUT</h2>
 
-<video id="video" width="350" height="250"
-autoplay playsinline
-style="border:2px solid black"></video>
+<video id="video"
+width="350"
+height="250"
+autoplay
+playsinline
+muted
+style="border:2px solid black">
+</video>
 
 <br><br>
 
-<input type="text" id="kullanici" placeholder="İşlem yapan kişi">
+<button onclick="kameraAc()">
+📷 Kamerayı Başlat
+</button>
 
-<br><br>
-
-<button onclick="baslat()">📷 Kamerayı Başlat</button>
-
-<button onclick="window.print()">🖨 Yazdır</button>
-
-<h3 id="sonuc"></h3>
+<h3 id="durum"></h3>
 
 
 <script>
 
-let codeReader;
-let okundu=false;
+async function kameraAc(){
 
-
-async function baslat(){
+    let durum=document.getElementById("durum");
 
     try{
 
+        durum.innerHTML="Kamera açılıyor...";
+
+
+        let stream =
         await navigator.mediaDevices.getUserMedia({
+
             video:{
-                facingMode:"environment"
+                facingMode:{
+                    exact:"environment"
+                }
             },
+
             audio:false
+
         });
 
 
-        codeReader = new ZXing.BrowserMultiFormatReader();
+        let video =
+        document.getElementById("video");
 
 
-        codeReader.decodeFromVideoDevice(
-            null,
-            "video",
-            (result, err)=>{
+        video.srcObject=stream;
 
 
-                if(result && !okundu){
-
-                    okundu=true;
-
-
-                    let kullanici =
-                    document.getElementById("kullanici").value;
-
-
-                    if(!kullanici){
-
-                        alert("Kullanıcı gir!");
-
-                        okundu=false;
-
-                        return;
-                    }
-
-
-
-                    fetch("/hizli_islem",{
-
-                        method:"POST",
-
-                        headers:{
-                            "Content-Type":"application/json"
-                        },
-
-
-                        body:JSON.stringify({
-
-                            barkod:result.text,
-
-                            tip:"{{tip}}",
-
-                            kullanici:kullanici
-
-                        })
-
-                    })
-
-
-                    .then(res=>res.json())
-
-
-                    .then(data=>{
-
-
-                        if(data.ok){
-
-                            document.getElementById("sonuc").innerHTML =
-                            "✅ "
-                            +data.ad+
-                            " | Stok: "
-                            +data.adet;
-
-
-                        }else{
-
-
-                            document.getElementById("sonuc").innerHTML =
-                            "❌ "
-                            +(data.msg || "Ürün bulunamadı");
-
-
-                        }
-
-
-                        setTimeout(()=>{
-
-                            okundu=false;
-
-                        },2000);
-
-
-
-                    });
-
-
-                }
-
-
-            }
-
-        );
+        durum.innerHTML="✅ Kamera açık";
 
 
     }
 
     catch(e){
 
-        alert(
-        "Kamera açılamadı: "
-        +e
-        );
+        durum.innerHTML =
+        "❌ Kamera hatası: "+e.message;
 
     }
 
@@ -495,6 +414,7 @@ async function baslat(){
 
 
 </script>
+
 
 """, tip=tip)
     
