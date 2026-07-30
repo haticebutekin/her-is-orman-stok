@@ -187,7 +187,19 @@ def ekle2():
         """
 
     return render_template_string("""
+    
 <form method="post">
+<a href="/" style="
+display:inline-block;
+padding:10px 20px;
+background:#2196F3;
+color:white;
+text-decoration:none;
+border-radius:8px;
+margin-bottom:10px;
+">
+🏠 Ana Sayfa
+</a>
 
 <h3>Ürün Bilgisi</h3>
 
@@ -344,6 +356,10 @@ def geri_al():
 # KAMERA
 @app.route("/kamera/<tip>")
 def kamera(tip):
+
+    <a href="/">🏠 Ana Sayfa</a>
+    <h2>{{tip.upper()}} OKUT</h2>
+    
     return render_template_string("""
     <script src="https://unpkg.com/@zxing/library@latest"></script>
 
@@ -351,7 +367,26 @@ def kamera(tip):
 
     <video id="video" width="300" style="border:2px solid black"></video><br><br>
 
-    <input type="text" id="kullanici" placeholder="İşlem yapan kişi"><br><br>
+    <select id="kullanici">
+    <option value="">Kullanıcı Seç</option>
+
+    <optgroup label="Depocular">
+    <option>Behiç</option>
+    <option>Ramazan</option>
+    <option>Orhan</option>
+    </optgroup>
+
+    <optgroup label="Muhasebe">
+    <option>İrem</option>
+    <option>Berke</option>
+    </optgroup>
+
+    <optgroup label="Patron">
+    <option>Hatice</option>
+    <option>Ahmet</option>
+    </optgroup>
+
+    </select>
 
     <button onclick="baslat()">Kamerayı Başlat</button>
     <button onclick="window.print()">🖨 Yazdır</button>
@@ -397,7 +432,7 @@ def kamera(tip):
                         "<br>➖ 1 adet " + ( "{{tip}}"=="cikis" ? "düşüldü" : "eklendi") +
                         "<br>📦 Kalan stok: " + data.adet;
                         setTimeout(()=>{
-                            window.location.href = "/";
+                            setTimeout(()=>{ okundu=false; 
                         }, 2000);
                     }else{
                         document.getElementById("sonuc").innerHTML =
