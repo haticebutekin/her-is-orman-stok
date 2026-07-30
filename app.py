@@ -107,27 +107,42 @@ def ekle():
         return redirect("/liste")
 
     return render_template_string("""
-    <form method="post">
-    <input name="ad" placeholder="Ad">
-    <input name="cins" placeholder="Cins">
-    <input name="ebat" placeholder="Ebat">
-    <input name="kalinlik" placeholder="Kalınlık">
-    <label>Yüzey</label>
+   <form method="post">
+
+<h3>Ürün Bilgisi</h3>
+
+<input name="ad" placeholder="Ürün Adı" required><br><br>
+
+<input name="cins" placeholder="Cins"><br><br>
+
+<input name="ebat" placeholder="Ebat"><br><br>
+
+<input name="kalinlik" placeholder="Kalınlık"><br><br>
+
+<!-- ✅ YÜZEY GERİ GELDİ -->
+<label>Yüzey</label><br>
 <select name="yuzey" required>
     <option value="">Seçiniz</option>
     <option value="HG">HG</option>
     <option value="MAT">MAT</option>
-</select>
-    <input name="sinif" placeholder="Sınıf">
-    <input name="renk" placeholder="Renk">
-    <input name="adet" type="number" placeholder="Adet">
-    <select name="depo">
-    {% for d in depolar %}
-    <option>{{d}}</option>
-    {% endfor %}
-    </select>
-    <button>Kaydet</button>
-    </form>
+</select><br><br>
+
+<input name="sinif" placeholder="Sınıf"><br><br>
+
+<input name="renk" placeholder="Renk"><br><br>
+
+<input name="adet" type="number" placeholder="Adet" required><br><br>
+
+<label>Depo</label><br>
+<select name="depo">
+{% for d in depolar %}
+<option>{{d}}</option>
+{% endfor %}
+</select><br><br>
+
+<button>Kaydet</button>
+
+</form>
     """, depolar=DEPOLAR)
 
 # LİSTE
