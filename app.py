@@ -8,9 +8,9 @@ DB = "stok.db"
 
 # STATIC FIX
 if os.path.exists("static") and not os.path.isdir("static"):
-os.remove("static")
+   os.remove("static")
 if not os.path.exists("static"):
-os.makedirs("static")
+   os.makedirs("static")
 
 DEPOLAR = [
 "MDF SATIŞ DEPOSU",
