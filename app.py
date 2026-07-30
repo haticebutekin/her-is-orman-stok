@@ -45,6 +45,7 @@ barkod TEXT,
 ad TEXT,
 tip TEXT,
 adet INTEGER,
+kullanici TEXT,
 tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 """)
@@ -82,6 +83,7 @@ a{display;margin:15px;padding:15px;background:#00b894;color;border-radius:10px;t
 <a href="/kamera/cikis">📤 Mal Çıkış</a>
 <a href="/hareketler">📊 Hareketler</a>
 """
+
 EKLE
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
@@ -147,11 +149,17 @@ button{background:#00b894;color:white;padding:10px;border:0}
 <button>KAYDET</button>
 </form>
 """, depolar=DEPOLAR)
+
 LİSTE
 @app.route("/liste")
 def liste():
 with db() as con:
 urunler = con.execute("SELECT * FROM urun").fetchall()
+
+html = "<h2>STOK</h2>"
+    for u in urunler:
+        html += f"<div>{u[1]} - {u[8]}</div>"
+    return html
 
 html = "<h2 style='text-align:center;color:white'>STOK</h2>"
 
@@ -165,11 +173,17 @@ for u in urunler:
     </div>
     """
 return html
+
 HAREKET
 @app.route("/hareketler")
 def hareketler():
 with db() as con:
-rows = con.execute("SELECT barkod, ad, tip, adet, tarih FROM hareket ORDER BY id DESC").fetchall()
+rows = con.execute("SELECT barkod, ad, tip, adet,kullanici tarih FROM hareket ORDER BY id DESC").fetchall()
+
+  html = "<h2>Hareketler</h2>"
+    for r in rows:
+        html += f"<div>{r}</div>"
+    return html
 
 html = "<h2 style='text-align:center;color:white'>Hareketler</h2>"
 
@@ -177,12 +191,14 @@ for r in rows:
     renk = "green" if r[2]=="giris" else "red"
     html += f"<div style='color:white;background:#222;margin:5px;padding:10px;border-left:5px solid {renk}'>{r}</div>"
 return html
+
 HIZLI İŞLEM
 @app.route("/hizli_islem", methods=["POST"])
 def hizli_islem():
-data = request.get_json()
-barkod = data.get("barkod")
-tip = data.get("tip")
+    data = request.get_json()
+    barkod = data.get("barkod")
+    tip = data.get("tip")
+    kullanici = data.get("kullanici", "Kamera")
 
 with db() as con:
     cur = con.cursor()
@@ -194,24 +210,33 @@ with db() as con:
 
     uid, ad, adet = row
 
+    if tip=="cikis" and adet <= 0:
+            return jsonify({"ok":False, "msg":"Stok bitti"})
+
     if tip=="giris":
         adet+=1
     else:
         adet-=1
-
+  
     if adet<0: adet=0
 
     cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet,uid))
-    cur.execute("INSERT INTO hareket (barkod,ad,tip,adet) VALUES (?,?,?,?)",(barkod,ad,tip,adet))
+    
+    cur.execute("""
+    INSERT INTO hareket (barkod,ad,tip,adet,kullanici) 
+    VALUES (?,?,?,?,?)"
+    """,(barkod,ad,tip,adet,kullanici))
+    
     con.commit()
 
 return jsonify({"ok":True,"ad":ad,"adet":adet})
+
 GERİ AL
 @app.route("/geri_al", methods=["POST"])
 def geri_al():
-data = request.get_json()
-barkod = data.get("barkod")
-tip = data.get("tip")
+    data = request.get_json()
+    barkod = data.get("barkod")
+    tip = data.get("tip")
 
 with db() as con:
     cur = con.cursor()
@@ -234,26 +259,43 @@ with db() as con:
     con.commit()
 
 return jsonify({"ok":True})
+
 KAMERA
 @app.route("/kamera/<tip>")
 def kamera(tip):
-return render_template_string("""
+    return render_template_string("""
 <script src="https://unpkg.com/@zxing/library@latest"></script>
-
 <body style="background:#000;color:white;text-align:center">
-
 <h2>KAMERA</h2>
-
 <video id="video" width="300"></video>
 <h1 id="sonuc">Hazır</h1>
 
-<div id="sayac">Toplam Okunan: 0</div>
-<div id="liste"></div>
+<input id="kullanici" placeholder="İşlem yapan">
 
-<button onclick="geriAl()">GERİ AL</button>
-<script> const codeReader = new ZXing.BrowserMultiFormatReader(); let sonKod = ""; let sonZaman = 0; let liste = []; let tip = "{{tip}}"; const sonuc = document.getElementById("sonuc"); const listeDiv = document.getElementById("liste"); const sayacDiv = document.getElementById("sayac"); codeReader.decodeFromVideoDevice(null, 'video', (result, err) => { if (result) { let kod = result.text; let simdi = Date.now(); if (kod === sonKod && simdi - sonZaman < 1000) return; sonKod = kod; sonZaman = simdi; fetch("/hizli_islem", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({barkod:kod, tip:tip}) }) .then(r=>r.json()) .then(d=>{ if(!d.ok){ sonuc.innerText = "ÜRÜN YOK"; return; } sonuc.innerText = d.ad + " | " + d.adet; liste.push(d.ad); listeDiv.innerHTML = liste.map(x=>"<div>"+x+"</div>").join(""); sayacDiv.innerText = "Toplam: " + liste.length; }) } }); function geriAl(){ fetch("/geri_al", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({barkod:sonKod, tip:tip}) }) } </script>
+<script>
+const codeReader = new ZXing.BrowserMultiFormatReader();
+let tip = "{{tip}}";
 
+codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+    if (result) {
+        let kod = result.text;
+        let kullanici = document.getElementById("kullanici").value;
+
+        fetch("/hizli_islem", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({barkod:kod, tip:tip, kullanici:kullanici})
+        })
+        .then(r=>r.json())
+        .then(d=>{
+            if(!d.ok){ alert("HATA"); return; }
+            document.getElementById("sonuc").innerText = d.ad + " | " + d.adet;
+        })
+    }
+});
+</script>
 """, tip=tip)
+
 if name == "main":
 app.run(debug=True)
 
