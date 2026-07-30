@@ -78,8 +78,6 @@ def index():
     <a href="/hareketler">📊 Hareketler</a>
     """
 
-@app.route("/")
-def index():
     return """
     <html>
     <head>
