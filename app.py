@@ -119,26 +119,6 @@ def index():
     </html>
     """
 
-# Dummy sayfalar (çökmesin diye)
-@app.route("/ekle")
-def ekle():
-    return "Ürün ekleme sayfası"
-
-@app.route("/kamera/giris")
-def giris():
-    return "Giriş kamera"
-
-@app.route("/kamera/cikis")
-def cikis():
-    return "Çıkış kamera"
-
-@app.route("/liste")
-def liste():
-    return "Stok listesi"
-
-@app.route("/hareketler")
-def hareket():
-    return "Hareketler"
 # EKLE
 @app.route("/ekle", methods=["GET","POST"])
 def ekle2():
