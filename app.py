@@ -57,10 +57,18 @@ def barkod_uret():
     return str(100000000000 + sayi)
 
 def barkod_resim(kod):
-    yol = os.path.join("static", kod)  # .png YOK!
-    CODE128 = barcode.get_barcode_class("code128")
-    img = CODE128(kod, writer=ImageWriter())
-    img.save(yol)
+    yol = os.path.join("static", kod)
+
+    CODE128 = barcode.get_barcode_class("codef128")
+
+    img = CODE128(
+        kod,
+        writer=ImageWriter()
+    )
+
+    dosya = img.save(yol)
+
+    return dosya + ".png"
 
 def qr_uret(kod):
     img = qrcode.make(kod)
@@ -145,12 +153,24 @@ def ekle2():
                 barkod
             ))
 
-        barkod_resim(barkod)
-        qr_uret(barkod)
-        return jsonify({
-        "barkod": barkod,
-        "resim": resim
-    })
+       resim = barkod_resim(barkod)
+qr_uret(barkod)
+
+return f"""
+<h2>✅ Ürün Kaydedildi</h2>
+
+<b>{request.form["ad"]}</b><br><br>
+
+📦 Barkod: {barkod}<br><br>
+
+<img src="/static/{barkod}.png" width="300"><br><br>
+
+<img src="/static/{barkod}_qr.png" width="150"><br><br>
+
+<a href="/liste">📦 Stok Listesine Git</a><br><br>
+
+<a href="/ekle">➕ Yeni Ürün Ekle</a>
+"""
         
         return f"""
 <h2>✅ Ürün Kaydedildi</h2>
