@@ -24,7 +24,7 @@ DEPOLAR = [
 ]
 
 def db():
-return sqlite3.connect(DB)
+    return sqlite3.connect(DB)
 
 TABLO
 with db() as con:
@@ -52,25 +52,25 @@ tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
 BARKOD
 def barkod_uret():
-with db() as con:
-sayi = con.execute("SELECT COUNT(*) FROM urun").fetchone()[0] + 1
-return str(100000000000 + sayi)
+    with db() as con:
+    sayi = con.execute("SELECT COUNT(*) FROM urun").fetchone()[0] + 1
+    return str(100000000000 + sayi)
 
 def barkod_resim(kod):
-yol = os.path.join("static", kod)
-CODE128 = barcode.get_barcode_class("code128")
-img = CODE128(kod, writer=ImageWriter())
-img.save(yol)
+    yol = os.path.join("static", kod)
+    CODE128 = barcode.get_barcode_class("code128")
+    img = CODE128(kod, writer=ImageWriter())
+    img.save(yol)
 
 def qr_uret(kod):
-img = qrcode.make(kod)
-img.save(os.path.join("static", kod+"_qr.png"))
+    img = qrcode.make(kod)
+    img.save(os.path.join("static", kod+"_qr.png"))
 
 ANA
 @app.route("/")
 def index():
-return """
-<style>
+     return """
+     <style>
 body{font-family;background:#111;color;text-align}
 a{display;margin:15px;padding:15px;background:#00b894;color;border-radius:10px;text-decoration}
 </style>
@@ -87,7 +87,7 @@ a{display;margin:15px;padding:15px;background:#00b894;color;border-radius:10px;t
 EKLE
 @app.route("/ekle", methods=["GET","POST"])
 def ekle():
-if request.method=="POST":
+     if request.method=="POST":
 
     barkod = request.form.get("barkod") or barkod_uret()
 
@@ -153,8 +153,8 @@ button{background:#00b894;color:white;padding:10px;border:0}
 LİSTE
 @app.route("/liste")
 def liste():
-with db() as con:
-urunler = con.execute("SELECT * FROM urun").fetchall()
+    with db() as con:
+    urunler = con.execute("SELECT * FROM urun").fetchall()
 
 html = "<h2>STOK</h2>"
     for u in urunler:
@@ -177,8 +177,8 @@ return html
 HAREKET
 @app.route("/hareketler")
 def hareketler():
-with db() as con:
-rows = con.execute("SELECT barkod, ad, tip, adet,kullanici tarih FROM hareket ORDER BY id DESC").fetchall()
+     with db() as con:
+     rows = con.execute("SELECT barkod, ad, tip, adet,kullanici tarih FROM hareket ORDER BY id DESC").fetchall()
 
   html = "<h2>Hareketler</h2>"
     for r in rows:
