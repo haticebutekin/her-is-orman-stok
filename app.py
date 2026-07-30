@@ -28,17 +28,17 @@ def db():
 
 TABLO
 with db() as con:
-con.execute("""
-CREATE TABLE IF NOT EXISTS urun(
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-ad TEXT,cins TEXT,ebat TEXT,kalinlik TEXT,
-yuzey TEXT,sinif TEXT,renk TEXT,
-adet INTEGER,depo TEXT,barkod TEXT UNIQUE
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS urun(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ad TEXT,cins TEXT,ebat TEXT,kalinlik TEXT,
+    yuzey TEXT,sinif TEXT,renk TEXT,
+    adet INTEGER,depo TEXT,barkod TEXT UNIQUE
 )
 """)
 
 with db() as con:
-con.execute("""
+    con.execute("""
 CREATE TABLE IF NOT EXISTS hareket(
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 barkod TEXT,
@@ -53,7 +53,7 @@ tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 BARKOD
 def barkod_uret():
     with db() as con:
-    sayi = con.execute("SELECT COUNT(*) FROM urun").fetchone()[0] + 1
+        sayi = con.execute("SELECT COUNT(*) FROM urun").fetchone()[0] + 1
     return str(100000000000 + sayi)
 
 def barkod_resim(kod):
@@ -154,7 +154,7 @@ LİSTE
 @app.route("/liste")
 def liste():
     with db() as con:
-    urunler = con.execute("SELECT * FROM urun").fetchall()
+        urunler = con.execute("SELECT * FROM urun").fetchall()
 
 html = "<h2>STOK</h2>"
     for u in urunler:
@@ -178,7 +178,7 @@ HAREKET
 @app.route("/hareketler")
 def hareketler():
      with db() as con:
-     rows = con.execute("SELECT barkod, ad, tip, adet,kullanici tarih FROM hareket ORDER BY id DESC").fetchall()
+         rows = con.execute("SELECT barkod, ad, tip, adet,kullanici tarih FROM hareket ORDER BY id DESC").fetchall()
 
   html = "<h2>Hareketler</h2>"
     for r in rows:
