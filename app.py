@@ -345,64 +345,68 @@ def geri_al():
 @app.route("/kamera/<tip>")
 def kamera(tip):
     return render_template_string("""
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
 
-<h2>{{tip.upper()}} OKUT</h2>
+    <h2>{{tip.upper()}} OKUT</h2>
 
-<video id="video"
-width="350"
-height="250"
-autoplay
-playsinline
-muted
-style="border:2px solid black">
-</video>
+    <video id="video" width="300" style="border:2px solid black"></video><br><br>
 
-<br><br>
+    <input type="text" id="kullanici" placeholder="İşlem yapan kişi"><br><br>
 
-<button onclick="kameraAc()">📷 Kamerayı Başlat</button>
+    <button onclick="baslat()">Kamerayı Başlat</button>
+    <button onclick="window.print()">🖨 Yazdır</button>
 
-<h3 id="sonuc"></h3>
+    <h3 id="sonuc"></h3>
 
+    <script>
+    let codeReader;
+    let okundu = false;
 
-<script>
+    function baslat(){
+        codeReader = new ZXing.BrowserMultiFormatReader();
 
-async function kameraAc(){
+        codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
 
-try{
+            if (result && !okundu) {
 
-let stream = await navigator.mediaDevices.getUserMedia({
+                okundu = true;
 
-video:{
-facingMode:"environment"
-},
+                let kullanici = document.getElementById("kullanici").value;
 
-audio:false
+                if (!kullanici) {
+                    alert("Kullanıcı gir!");
+                    okundu = false;
+                    return;
+                }
 
-});
+                fetch("/hizli_islem", {
+                    method:"POST",
+                    headers:{"Content-Type":"application/json"},
+                    body: JSON.stringify({
+                        barkod: result.text,
+                        tip: "{{tip}}",
+                        kullanici: kullanici
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
 
+                    if(data.ok){
+                        document.getElementById("sonuc").innerHTML =
+                            "✅ " + data.ad + " | Stok: " + data.adet;
+                    }else{
+                        document.getElementById("sonuc").innerHTML =
+                            "❌ Hata: " + (data.msg || "Ürün bulunamadı");
+                    }
 
-let video=document.getElementById("video");
+                    setTimeout(()=>{ okundu=false; }, 2000);
+                });
 
-video.srcObject=stream;
+            }
+        });
+    }
+    </script>
+    """, tip=tip)
 
-document.getElementById("sonuc").innerHTML =
-"✅ Kamera açık";
-
-
-}
-
-catch(e){
-
-document.getElementById("sonuc").innerHTML =
-"❌ Kamera hatası: "+e.message;
-
-}
-
-}
-
-</script>
-
-
-""", tip=tip)
 if __name__ == "__main__":
     app.run(debug=True)
