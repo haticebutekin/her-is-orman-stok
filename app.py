@@ -75,9 +75,7 @@ def barkod_resim(kod):
         writer=ImageWriter()
     )
 
-    dosya = img.save(yol)
-
-    return dosya + ".png"
+     img.save(os.path.join("static", kod))
 
 def qr_uret(kod):
     img = qrcode.make(kod)
