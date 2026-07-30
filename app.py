@@ -255,70 +255,46 @@ def okut():
 @app.route("/kamera/<tip>")
 def kamera(tip):
     return render_template_string("""
-    <body style="background:black;color:white;text-align:center">
+    <body style="background:#000;color:white;text-align:center;font-family:Arial">
 
-    <a href="/" style="padding:10px;background:#00b894;color:white;border-radius:10px;text-decoration:none">🏠 Ana Sayfa</a>
+    <a href="/" style="position:fixed;top:10px;left:10px;padding:10px;background:#00b894;color:white;border-radius:10px;text-decoration:none">🏠</a>
 
-    <h2>Kamera</h2>
+    <h2>Kamera Okuyucu</h2>
 
-    <video id="kamera" width="300" height="200" autoplay></video>
-    <div id="sonuc">Hazır</div>
+    <div id="kamera" style="width:320px;height:320px;margin:auto;position:relative;border:4px solid #00ffcc;border-radius:10px;">
+        <div style="
+            position:absolute;
+            top:0;left:0;right:0;
+            height:3px;
+            background:red;
+            animation: scan 2s infinite;
+        "></div>
+    </div>
+
+    <div id="sonuc" style="margin-top:20px;font-size:20px;">Hazır...</div>
+
+    <style>
+    @keyframes scan {
+        0% {top:0}
+        50% {top:95%}
+        100% {top:0}
+    }
+    </style>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
-    <div id="kamera" style="width:300px;margin:auto;"></div>
-
-<div id="sonuc">Kamera başlatılıyor...</div>
-
-<script src="https://unpkg.com/html5-qrcode"></script>
-
-<script>
-let bip = new Audio();
-bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
-
-function baslat(){
-    const qr = new Html5Qrcode("kamera");
-
-    qr.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
-        (decodedText) => {
-            gonder(decodedText);
-        },
-        (err) => {
-            document.getElementById("sonuc").innerText = "KAMERA AÇILMIYOR";
-        }
-    ).catch(err=>{
-        document.getElementById("sonuc").innerText = "KAMERA İZNİ YOK";
-    });
-}
-
-function gonder(kod){
-    fetch("/hizli_islem", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-            barkod: kod,
-            tip: "giris"
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if(!data.ok){
-            document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN";
-            bip.play();
-        } else {
-            document.getElementById("sonuc").innerText =
-            "✅ " + data.ad + " | " + data.adet;
-        }
-    });
-}
-
-baslat();
-</script>
 
     <script>
     let bip = new Audio();
     bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
+
+    let sonKod = "";
+    let kilit = false;
+
+    function titre(){
+        if(navigator.vibrate){
+            navigator.vibrate(200);
+        }
+    }
 
     function baslat(){
         const qr = new Html5Qrcode("kamera");
@@ -326,13 +302,28 @@ baslat();
         qr.start(
             { facingMode: "environment" },
             {
-                fps: 10,
-                qrbox: 250
+                fps: 15,
+                qrbox: { width: 250, height: 250 }
             },
             (decodedText) => {
+
+                if(kilit) return;
+
+                if(decodedText === sonKod) return;
+
+                sonKod = decodedText;
+                kilit = true;
+
                 gonder(decodedText);
+
+                setTimeout(()=>{ kilit = false; }, 1500);
+            },
+            (err) => {
+                document.getElementById("sonuc").innerText = "📷 Kamera bekleniyor...";
             }
-        );
+        ).catch(err=>{
+            document.getElementById("sonuc").innerText = "❌ Kamera izni yok";
+        });
     }
 
     function gonder(kod){
@@ -346,13 +337,21 @@ baslat();
         })
         .then(res => res.json())
         .then(data => {
+
             if(!data.ok){
-                document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN!";
+                document.getElementById("sonuc").innerHTML =
+                "<span style='color:red'>❌ ÜRÜN YOK</span>";
+
                 bip.play();
+                titre();
+
             } else {
-                document.getElementById("sonuc").innerText =
-                "✅ " + data.ad + " | Stok: " + data.adet;
+                document.getElementById("sonuc").innerHTML =
+                "<span style='color:lightgreen'>✅ " + data.ad + "<br>Stok: " + data.adet + "</span>";
+
+                titre();
             }
+
         });
     }
 
