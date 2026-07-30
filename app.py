@@ -44,6 +44,7 @@ with db() as con:
     ad TEXT,
     tip TEXT,
     adet INTEGER,
+    kullanici TEXT,
     tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
@@ -128,6 +129,7 @@ def ekle():
     <input name="cins" placeholder="Cinsi">
     <input name="ebat" placeholder="Ebat mm">
     <input name="kalinlik" placeholder="Kalınlık">
+    <input type="text" name="kullanici" placeholder="İşlemi yapan kişi" required>
 
     <select name="yuzey">
     <option>HG</option><option>MAT</option><option>PARLAK</option>
@@ -191,25 +193,19 @@ def liste():
 @app.route("/hareketler")
 def hareketler():
     with db() as con:
-        rows = con.execute("SELECT barkod, ad, tip, adet, tarih FROM hareket ORDER BY id DESC").fetchall()
+        data = con.execute("""
+        SELECT barkod, ad, tip, adet, kullanici, tarih
+        FROM hareket ORDER BY tarih DESC
+        """).fetchall()
 
-    html = """
-    <div style="text-align:center">
-    <a href="/" style="padding:10px;background:#00b894;color:white;border-radius:10px;text-decoration:none">🏠 Ana Sayfa</a>
-    <h2>📊 Hareketler</h2>
-    </div>
-    """
+    html = "<h2>📊 Hareketler</h2>"
+    html += "<table border=1>"
+    html += "<tr><th>Barkod</th><th>Ad</th><th>Tip</th><th>Adet</th><th>Kullanıcı</th><th>Tarih</th></tr>"
 
-    for r in rows:
-        barkod, ad, tip, adet, tarih = r
-        renk = "green" if tip=="giris" else "red"
+    for i in data:
+        html += f"<tr><td>{i[0]}</td><td>{i[1]}</td><td>{i[2]}</td><td>{i[3]}</td><td>{i[4]}</td><td>{i[5]}</td></tr>"
 
-        html += f"""
-        <div style="background:#222;color:white;margin:5px;padding:10px;border-left:5px solid {renk}">
-        {tarih} | {ad} | {tip} | {adet}
-        </div>
-        """
-
+    html += "</table>"
     return html
 
 # HIZLI İŞLEM
@@ -220,11 +216,37 @@ def hizli_islem():
         barkod = str(data.get("barkod","")).strip()
         tip = data.get("tip","")
 
+        # 🔍 ÖNCE STOKU KONTROL ET
+stok = con.execute("SELECT adet FROM urun WHERE barkod=?", (barkod,)).fetchone()
+
+            if not stok:
+            return "❌ Ürün bulunamadı!"
+
+            if stok[0] < adet:
+            return f"❌ Yetersiz stok! Mevcut: {stok[0]}"
+
+
         with db() as con:
             cur = con.cursor()
             cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
             row = cur.fetchone()
 
+            kullanici = request.form.get("kullanici", "Bilinmiyor")
+
+            con.execute("""
+            UPDATE urun SET adet = adet - ?
+            WHERE barkod=? AND adet >= ?
+            """, (adet, barkod, adet))
+
+if con.total_changes == 0:
+    return "❌ İşlem başarısız! Stok yetersiz olabilir."
+
+            con.execute("""
+            INSERT INTO hareket (barkod, ad, tip, adet, kullanici)
+            VALUES (?, ?, ?, ?, ?)
+            """, (barkod, ad, "GIRIS", adet, kullanici))
+            tip = "CIKIS"
+          
             if not row:
                 return jsonify({"ok":False,"mesaj":"ÜRÜN YOK"})
 
