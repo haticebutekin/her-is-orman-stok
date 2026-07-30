@@ -261,9 +261,23 @@ def kamera(tip):
 
     <h2>Kamera Okuyucu</h2>
 
-    <video id="video" width="320" height="240" style="border:3px solid #00ffcc;border-radius:10px;"></video>
+    <div style="position:relative;display:inline-block">
+        <video id="video" width="320" height="240" style="border-radius:10px;"></video>
 
-    <div id="sonuc" style="margin-top:20px;font-size:20px;">Hazır...</div>
+        <!-- 🎯 hedef kare -->
+        <div style="
+            position:absolute;
+            top:50%; left:50%;
+            width:150px; height:150px;
+            transform:translate(-50%,-50%);
+            border:3px solid #00ffcc;
+            border-radius:10px;">
+        </div>
+    </div>
+
+    <div id="sonuc" style="margin-top:20px;font-size:26px;font-weight:bold;">Hazır...</div>
+
+    <img id="urunResim" width="120" style="margin-top:10px;display:none">
 
     <div id="sayac" style="margin-top:10px;color:#00ffcc"></div>
 
@@ -272,17 +286,18 @@ def kamera(tip):
     <script>
     const codeReader = new ZXing.BrowserMultiFormatReader();
 
-    let bip = new Audio();
-    bip.src = "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
+    let ses_ok = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
+    let ses_cikis = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+    let ses_hata = new Audio("https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg");
 
     let sonKod = "";
     let kilit = false;
 
-    let sayac = {}; // ürün sayacı
+    let sayac = {};
 
     function titre(){
         if(navigator.vibrate){
-            navigator.vibrate(150);
+            navigator.vibrate(120);
         }
     }
 
@@ -306,7 +321,6 @@ def kamera(tip):
 
             let kod = result.text;
 
-            // spam engelle
             if(kilit) return;
             if(kod === sonKod) return;
 
@@ -315,7 +329,7 @@ def kamera(tip):
 
             gonder(kod);
 
-            setTimeout(()=>{ kilit = false; }, 1200);
+            setTimeout(()=>{ kilit = false; }, 1000);
         }
     });
 
@@ -334,15 +348,26 @@ def kamera(tip):
             if(!data.ok){
                 document.getElementById("sonuc").innerHTML =
                 "<span style='color:red'>❌ ÜRÜN YOK</span>";
-                bip.play();
+                ses_hata.play();
                 titre();
             } else {
 
+                // 📦 BÜYÜK YAZI
                 document.getElementById("sonuc").innerHTML =
-                "<span style='color:lightgreen'>✅ " + data.ad + "<br>Stok: " + data.adet + "</span>";
+                "<span style='color:lightgreen;font-size:30px'>" + data.ad + "</span><br>Stok: " + data.adet;
 
-                sayacGuncelle(data.ad); // 🔥 YENİ
-                bip.play();
+                // 🖼️ ürün resmi (QR)
+                document.getElementById("urunResim").src = "/static/" + kod + "_qr.png";
+                document.getElementById("urunResim").style.display = "block";
+
+                sayacGuncelle(data.ad);
+
+                if("{{tip}}" == "giris"){
+                    ses_ok.play();
+                } else {
+                    ses_cikis.play();
+                }
+
                 titre();
             }
 
