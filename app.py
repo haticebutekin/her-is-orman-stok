@@ -345,7 +345,8 @@ def geri_al():
 @app.route("/kamera/<tip>")
 def kamera(tip):
     return render_template_string("""
-    
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest"></script>
+
 <h2>{{tip.upper()}} OKUT</h2>
 
 <video id="video"
@@ -359,64 +360,143 @@ style="border:2px solid black">
 
 <br><br>
 
-<button onclick="kameraAc()">
-📷 Kamerayı Başlat
-</button>
+<input id="kullanici" placeholder="İşlem yapan kişi">
 
-<h3 id="durum"></h3>
+<br><br>
+
+<button onclick="baslat()">📷 Başlat</button>
+
+<h3 id="sonuc"></h3>
 
 
 <script>
 
-async function kameraAc(){
-
-    let durum=document.getElementById("durum");
-
-    try{
-
-        durum.innerHTML="Kamera açılıyor...";
+let codeReader;
+let okundu=false;
 
 
-        let stream =
-        await navigator.mediaDevices.getUserMedia({
+async function baslat(){
 
-            video:{
-                facingMode:{
-                    exact:"environment"
-                }
-            },
-
-            audio:false
-
-        });
+try{
 
 
-        let video =
-        document.getElementById("video");
+await navigator.mediaDevices.getUserMedia({
+    video:{
+        facingMode:"environment"
+    },
+    audio:false
+});
 
 
-        video.srcObject=stream;
+codeReader =
+new ZXing.BrowserMultiFormatReader();
 
 
-        durum.innerHTML="✅ Kamera açık";
+
+codeReader.decodeFromVideoDevice(
+null,
+"video",
+function(result,err){
 
 
-    }
+if(result && !okundu){
 
-    catch(e){
 
-        durum.innerHTML =
-        "❌ Kamera hatası: "+e.message;
+okundu=true;
 
-    }
+
+let barkod=result.text;
+
+
+let kullanici =
+document.getElementById("kullanici").value;
+
+
+fetch("/hizli_islem",{
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json"
+},
+
+
+body:JSON.stringify({
+
+barkod:barkod,
+
+tip:"{{tip}}",
+
+kullanici:kullanici || "Kamera"
+
+})
+
+})
+
+
+.then(r=>r.json())
+
+.then(data=>{
+
+
+if(data.ok){
+
+
+document.getElementById("sonuc").innerHTML =
+"✅ "
++data.ad+
+"<br>Barkod: "
++barkod+
+"<br>Kalan stok: "
++data.adet;
+
+
+
+}else{
+
+
+document.getElementById("sonuc").innerHTML =
+"❌ "
++(data.msg || "Ürün bulunamadı");
+
 
 }
 
 
+
+setTimeout(()=>{
+
+okundu=false;
+
+},2000);
+
+
+
+});
+
+
+
+}
+
+
+
+});
+
+
+
+}
+
+catch(e){
+
+alert("Kamera hatası: "+e);
+
+}
+
+
+}
+
 </script>
 
-
 """, tip=tip)
-    
 if __name__ == "__main__":
     app.run(debug=True)
