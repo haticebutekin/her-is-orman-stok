@@ -265,6 +265,56 @@ def kamera(tip):
     <div id="sonuc">Hazır</div>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <div id="kamera" style="width:300px;margin:auto;"></div>
+
+<div id="sonuc">Kamera başlatılıyor...</div>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<script>
+let bip = new Audio();
+bip.src = "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg";
+
+function baslat(){
+    const qr = new Html5Qrcode("kamera");
+
+    qr.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        (decodedText) => {
+            gonder(decodedText);
+        },
+        (err) => {
+            document.getElementById("sonuc").innerText = "KAMERA AÇILMIYOR";
+        }
+    ).catch(err=>{
+        document.getElementById("sonuc").innerText = "KAMERA İZNİ YOK";
+    });
+}
+
+function gonder(kod){
+    fetch("/hizli_islem", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+            barkod: kod,
+            tip: "giris"
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(!data.ok){
+            document.getElementById("sonuc").innerText = "❌ HATALI ÜRÜN";
+            bip.play();
+        } else {
+            document.getElementById("sonuc").innerText =
+            "✅ " + data.ad + " | " + data.adet;
+        }
+    });
+}
+
+baslat();
+</script>
 
     <script>
     let bip = new Audio();
