@@ -6,7 +6,7 @@ from barcode.writer import ImageWriter
 app = Flask(name)
 DB = "stok.db"
 
-STATIC FIX
+# STATIC FIX
 if os.path.exists("static") and not os.path.isdir("static"):
 os.remove("static")
 if not os.path.exists("static"):
