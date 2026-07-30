@@ -393,7 +393,12 @@ def kamera(tip):
 
                     if(data.ok){
                         document.getElementById("sonuc").innerHTML =
-                            "✅ " + data.ad + " | Stok: " + data.adet;
+                        "✅ " + data.ad +
+                        "<br>➖ 1 adet " + ( "{{tip}}"=="cikis" ? "düşüldü" : "eklendi") +
+                        "<br>📦 Kalan stok: " + data.adet;
+                        setTimeout(()=>{
+                            window.location.href = "/";
+                        }, 2000);
                     }else{
                         document.getElementById("sonuc").innerHTML =
                             "❌ Hata: " + (data.msg || "Ürün bulunamadı");
