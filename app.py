@@ -1,28 +1,3 @@
-
-
-
-
-Teklifi al
-
-
-Yapıştırılan metin(8).txt
-Belge
- buna eklenecekleri ekle bozup değiştirmeden
-
-Tamam abi 💪 sana hiçbir şeyi bozmadan, senin attığın kodun ÜSTÜNE eksikleri eklenmiş TEK PARÇA FULL app.py veriyorum. Direkt bunu koy çalıştır.
-
-Ekledikler:
-
-✅ Kamera JS (liste + sayaç + ses + spam engel)
-
-✅ geri al düzgün
-
-✅ liste gösterme
-
-✅ sayaç
-
-✅ UI eksikleri tamamlandı
-
 from flask import Flask, request, redirect, render_template_string, jsonify
 import sqlite3, os
 import barcode, qrcode
