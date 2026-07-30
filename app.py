@@ -259,23 +259,23 @@ def kamera(tip):
 
     <a href="/" style="position:fixed;top:10px;left:10px;padding:10px;background:#00b894;color:white;border-radius:10px;text-decoration:none">🏠</a>
 
-    <h2>Kamera Okuyucu</h2>
+    <h2>Kamera Okuyucu ULTRA</h2>
 
     <div style="position:relative;display:inline-block">
-        <video id="video" width="320" height="240" style="border-radius:10px;"></video>
+        <video id="video" width="320" height="240"></video>
 
-        <!-- 🎯 hedef kare -->
-        <div style="
+        <!-- 🎯 hedef alan -->
+        <div id="hedef" style="
             position:absolute;
             top:50%; left:50%;
-            width:150px; height:150px;
+            width:160px; height:160px;
             transform:translate(-50%,-50%);
-            border:3px solid #00ffcc;
-            border-radius:10px;">
+            border:4px solid #00ffcc;
+            border-radius:15px;">
         </div>
     </div>
 
-    <div id="sonuc" style="margin-top:20px;font-size:26px;font-weight:bold;">Hazır...</div>
+    <div id="sonuc" style="margin-top:20px;font-size:28px;font-weight:bold;">Hazır...</div>
 
     <img id="urunResim" width="120" style="margin-top:10px;display:none">
 
@@ -291,13 +291,13 @@ def kamera(tip):
     let ses_hata = new Audio("https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg");
 
     let sonKod = "";
-    let kilit = false;
+    let sonZaman = 0;
 
     let sayac = {};
 
     function titre(){
         if(navigator.vibrate){
-            navigator.vibrate(120);
+            navigator.vibrate(100);
         }
     }
 
@@ -316,20 +316,46 @@ def kamera(tip):
         document.getElementById("sayac").innerHTML = html;
     }
 
+    function kareIcindeMi(points){
+        // barkod merkezini hesapla
+        let x = 0, y = 0;
+        points.forEach(p=>{
+            x += p.x;
+            y += p.y;
+        });
+        x /= points.length;
+        y /= points.length;
+
+        // hedef kare koordinat
+        let hedef = document.getElementById("hedef").getBoundingClientRect();
+        let video = document.getElementById("video").getBoundingClientRect();
+
+        let sol = hedef.left - video.left;
+        let sag = sol + hedef.width;
+        let ust = hedef.top - video.top;
+        let alt = ust + hedef.height;
+
+        return (x > sol && x < sag && y > ust && y < alt);
+    }
+
     codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
         if (result) {
 
             let kod = result.text;
+            let simdi = Date.now();
 
-            if(kilit) return;
-            if(kod === sonKod) return;
+            // 🎯 sadece kare içindeyse
+            if(!kareIcindeMi(result.resultPoints)) return;
+
+            // ⚡ ultra cooldown (0.5 sn)
+            if(kod === sonKod && (simdi - sonZaman) < 500){
+                return;
+            }
 
             sonKod = kod;
-            kilit = true;
+            sonZaman = simdi;
 
             gonder(kod);
-
-            setTimeout(()=>{ kilit = false; }, 1000);
         }
     });
 
@@ -352,11 +378,9 @@ def kamera(tip):
                 titre();
             } else {
 
-                // 📦 BÜYÜK YAZI
                 document.getElementById("sonuc").innerHTML =
-                "<span style='color:lightgreen;font-size:30px'>" + data.ad + "</span><br>Stok: " + data.adet;
+                "<span style='color:lightgreen;font-size:32px'>" + data.ad + "</span><br>Stok: " + data.adet;
 
-                // 🖼️ ürün resmi (QR)
                 document.getElementById("urunResim").src = "/static/" + kod + "_qr.png";
                 document.getElementById("urunResim").style.display = "block";
 
