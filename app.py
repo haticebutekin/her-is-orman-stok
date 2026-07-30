@@ -345,7 +345,6 @@ def geri_al():
 @app.route("/kamera/<tip>")
 def kamera(tip):
     return render_template_string("""
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest"></script>
 
 <h2>{{tip.upper()}} OKUT</h2>
 
@@ -360,142 +359,49 @@ style="border:2px solid black">
 
 <br><br>
 
-<input id="kullanici" placeholder="İşlem yapan kişi">
-
-<br><br>
-
-<button onclick="baslat()">📷 Başlat</button>
+<button onclick="kameraAc()">📷 Kamerayı Başlat</button>
 
 <h3 id="sonuc"></h3>
 
 
 <script>
 
-let codeReader;
-let okundu=false;
-
-
-async function baslat(){
+async function kameraAc(){
 
 try{
 
+let stream = await navigator.mediaDevices.getUserMedia({
 
-await navigator.mediaDevices.getUserMedia({
-    video:{
-        facingMode:"environment"
-    },
-    audio:false
-});
-
-
-codeReader =
-new ZXing.BrowserMultiFormatReader();
-
-
-
-codeReader.decodeFromVideoDevice(
-null,
-"video",
-function(result,err){
-
-
-if(result && !okundu){
-
-
-okundu=true;
-
-
-let barkod=result.text;
-
-
-let kullanici =
-document.getElementById("kullanici").value;
-
-
-fetch("/hizli_islem",{
-
-method:"POST",
-
-headers:{
-"Content-Type":"application/json"
+video:{
+facingMode:"environment"
 },
 
-
-body:JSON.stringify({
-
-barkod:barkod,
-
-tip:"{{tip}}",
-
-kullanici:kullanici || "Kamera"
-
-})
-
-})
-
-
-.then(r=>r.json())
-
-.then(data=>{
-
-
-if(data.ok){
-
-
-document.getElementById("sonuc").innerHTML =
-"✅ "
-+data.ad+
-"<br>Barkod: "
-+barkod+
-"<br>Kalan stok: "
-+data.adet;
-
-
-
-}else{
-
-
-document.getElementById("sonuc").innerHTML =
-"❌ "
-+(data.msg || "Ürün bulunamadı");
-
-
-}
-
-
-
-setTimeout(()=>{
-
-okundu=false;
-
-},2000);
-
-
+audio:false
 
 });
 
 
+let video=document.getElementById("video");
 
-}
+video.srcObject=stream;
 
-
-
-});
-
+document.getElementById("sonuc").innerHTML =
+"✅ Kamera açık";
 
 
 }
 
 catch(e){
 
-alert("Kamera hatası: "+e);
+document.getElementById("sonuc").innerHTML =
+"❌ Kamera hatası: "+e.message;
 
 }
-
 
 }
 
 </script>
+
 
 """, tip=tip)
 if __name__ == "__main__":
