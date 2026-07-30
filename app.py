@@ -57,7 +57,7 @@ def barkod_uret():
     return str(100000000000 + sayi)
 
 def barkod_resim(kod):
-    yol = os.path.join("static", kod)
+    yol = os.path.join("static", kod + ".png")
     CODE128 = barcode.get_barcode_class("code128")
     img = CODE128(kod, writer=ImageWriter())
     img.save(yol)
@@ -151,6 +151,7 @@ def ekle2():
    <form method="post">
 
 <h3>Ürün Bilgisi</h3>
+<input name="barkod" placeholder="Boş bırak = otomatik barkod"><br><br>
 
 <input name="ad" placeholder="Ürün Adı" required><br><br>
 
@@ -194,7 +195,22 @@ def liste():
 
     html = "<h2>STOK</h2>"
     for u in urunler:
-        html += f"{u[1]} - {u[8]}<br>"
+        html += f"""
+<div style='border:1px solid gray; padding:10px; margin:10px'>
+<b>{u[1]}</b><br>
+Cins: {u[2]}<br>
+Ebat: {u[3]}<br>
+Kalınlık: {u[4]}<br>
+Yüzey: {u[5]}<br>
+Sınıf: {u[6]}<br>
+Renk: {u[7]}<br>
+Adet: {u[8]}<br>
+Depo: {u[9]}<br>
+Barkod: {u[10]}<br>
+<img src="/static/{u[10]}.png" width="200"><br>
+<img src="/static/{u[10]}_qr.png" width="100">
+</div>
+"""
     return html
 
 # HAREKET
