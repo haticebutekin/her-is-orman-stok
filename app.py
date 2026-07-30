@@ -383,6 +383,8 @@ def kamera(tip):
         if (result) {
 
             let kod = result.text;
+            sonKod = kod;
+            console.log("SON KOD:", sonKod);
             let simdi = Date.now();
 
             // 🎯 sadece kare içindeyse
@@ -409,6 +411,21 @@ def kamera(tip):
             tip: "{{tip}}"
         })
     })
+}
+
+    function geriAl(){
+    console.log("GERİ AL BASILDI", sonKod);
+
+    fetch("/geri_al", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+            barkod: sonKod,
+            tip: "{{tip}}"
+        })
+    })
+    .then(r => r.json())
+    .then(d => console.log("SONUÇ:", d));
 }
 
     function gonder(kod){
