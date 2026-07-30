@@ -247,7 +247,7 @@ def kamera(tip):
     return render_template_string("""
     <script src="https://unpkg.com/@zxing/library@latest"></script>
     <video id="video" width="300"></video>
-    <input id="kullanici" placeholder="İşlem yapan">
+    <input type="text" id="kullanici" placeholder="İşlemi yapan kişi">
 
     <script>
     const codeReader = new ZXing.BrowserMultiFormatReader();
