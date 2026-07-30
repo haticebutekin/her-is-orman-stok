@@ -307,6 +307,15 @@ def kamera(tip):
     </div>
 
     <div id="sonuc" style="margin-top:20px;font-size:28px;font-weight:bold;">Hazır...</div>
+    <button onclick="geriAl()" style="
+    margin-top:10px;
+    padding:10px;
+    background:red;
+    color:white;
+    border:0;
+    border-radius:10px">
+    ⛔ SON OKUTMAYI GERİ AL
+    </button>
 
     <img id="urunResim" width="120" style="margin-top:10px;display:none">
 
@@ -338,6 +347,7 @@ def kamera(tip):
         } else {
             sayac[ad]++;
         }
+        
 
         let html = "";
         for(let urun in sayac){
@@ -389,6 +399,17 @@ def kamera(tip):
             gonder(kod);
         }
     });
+
+    function geriAl(){
+    fetch("/geri_al", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+            barkod: sonKod,
+            tip: "{{tip}}"
+        })
+    })
+}
 
     function gonder(kod){
         fetch("/hizli_islem", {
