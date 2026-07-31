@@ -250,21 +250,33 @@ def ekle2():
         🏠 Ana Sayfaya Dön
         </a>
     barkod = request.args.get("barkod", "")   
+    
     return render_template_string("""
-<form method="post">
-<a href="/" style="
-display:inline-block;
-padding:10px 20px;
-background:#2196F3;
-color:white;
-text-decoration:none;
-border-radius:8px;
-margin-bottom:10px;
-">
-Ana Sayfa
-</a>
+    <a href="/" style="color:black;">🏠 Ana Sayfa</a>
+    <h2>Ürün Ekle</h2>
 
-"""
+<form method="post" action="/urun_kaydet">
+
+    <input type="hidden" name="barkod" value="{{barkod}}">
+
+    Ürün Adı:<br>
+    <input name="ad"><br><br>
+
+    Adet:<br>
+    <input name="adet" type="number"><br><br>
+
+    <button style="
+        display:inline-block;
+        padding:10px 20px;
+        background:green;
+        color:white;
+        border:none;
+    ">
+        Kaydet
+    </button>
+
+</form>
+""", barkod=barkod
 <h3>Ürün Bilgisi</h3>
 
 <input name="barkod" value="{{barkod}}" placeholder="Boş bırak = otomatik barkod">
