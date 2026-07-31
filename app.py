@@ -264,6 +264,7 @@ margin-bottom:10px;
 Ana Sayfa
 </a>
 
+"""
 <h3>Ürün Bilgisi</h3>
 
 <input name="barkod" value="{{barkod}}" placeholder="Boş bırak = otomatik barkod">
