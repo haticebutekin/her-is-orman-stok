@@ -441,6 +441,8 @@ def kamera(tip):
 let codeReader;
 let kilit = false;
 let bipSes;
+let sonBarkod = "";
+let onay = false;
 
 function baslat(){
 
@@ -524,9 +526,15 @@ function baslat(){
             // ONAY SİSTEMİ
             if (sonBarkod != barkod) {
                 sonBarkod = barkod;
+                onay = false;
+
                 document.getElementById("sonuc").innerHTML =
                 "Tekrar okut (onay): " + barkod;
+                kilit = false;
                 return;
+            }
+            if (!onay) {
+                onay = true;
             }
 
             okundu = true;
