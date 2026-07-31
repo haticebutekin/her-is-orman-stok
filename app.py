@@ -354,103 +354,103 @@ def geri_al():
     return jsonify({"ok":True})
 
 # KAMERA
+
 @app.route("/kamera/<tip>")
 def kamera(tip):
 
-    <a href="/"> Ana Sayfa</a>
-    <h2>{{tip.upper()}} OKUT</h2>
-    
-    return render_template_string("""
-        <button onclick="window.print()">🖨 Yazdır</button>
-    <a href="/">Ana Sayfa</a>
-    <h2>Başlık</h2>
-    """)
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
+```
+return render_template_string("""
+<a href="/">Ana Sayfa</a>
 
-    <h2>{{tip.upper()}} OKUT</h2>
+<h2>{{tip.upper()}} OKUT</h2>
 
-    
-    <video id="video" width="300" style="border:2px solid black"></video><br><br>
+<button onclick="window.print()">Yazdır</button>
 
-    <select id="kullanici">
-    <option value="">Kullanıcı Seç</option>
+<script src="https://unpkg.com/@zxing/library@latest"></script>
 
-    <optgroup label="Depocular">
-    <option>Behiç</option>
-    <option>Ramazan</option>
-    <option>Orhan</option>
-    </optgroup>
+<video id="video" width="300" style="border:2px solid black"></video><br><br>
 
-    <optgroup label="Muhasebe">
-    <option>İrem</option>
-    <option>Berke</option>
-    </optgroup>
+<select id="kullanici">
+<option value="">Kullanıcı Seç</option>
 
-    <optgroup label="Patron">
-    <option>Hatice</option>
-    <option>Ahmet</option>
-    </optgroup>
+<optgroup label="Depocular">
+<option>Behiç</option>
+<option>Ramazan</option>
+<option>Orhan</option>
+</optgroup>
 
-    </select>
+<optgroup label="Muhasebe">
+<option>İrem</option>
+<option>Berke</option>
+</optgroup>
 
-    <button onclick="baslat()">Kamerayı Başlat</button>
+<optgroup label="Patron">
+<option>Hatice</option>
+<option>Ahmet</option>
+</optgroup>
 
-    <h3 id="sonuc"></h3>
+</select>
 
-    <script>
-    let codeReader;
-    let okundu = false;
+<button onclick="baslat()">Kamerayı Başlat</button>
 
-    function baslat(){
-        codeReader = new ZXing.BrowserMultiFormatReader();
+<h3 id="sonuc"></h3>
 
-        codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+<script>
+let codeReader;
+let okundu = false;
 
-            if (result && !okundu) {
+function baslat(){
+    codeReader = new ZXing.BrowserMultiFormatReader();
 
-                okundu = true;
+    codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
 
-                let kullanici = document.getElementById("kullanici").value;
+        if (result && !okundu) {
 
-                if (!kullanici) {
-                    alert("Kullanıcı gir!");
-                    okundu = false;
-                    return;
+            okundu = true;
+
+            let kullanici = document.getElementById("kullanici").value;
+
+            if (!kullanici) {
+                alert("Kullanıcı gir!");
+                okundu = false;
+                return;
+            }
+
+            fetch("/hizli_islem", {
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body: JSON.stringify({
+                    barkod: result.text,
+                    tip: "{{tip}}",
+                    kullanici: kullanici
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+
+                if(data.ok){
+                    document.getElementById("sonuc").innerHTML =
+                    "✅ " + data.ad +
+                    "<br>➖ 1 adet " + ( "{{tip}}"=="cikis" ? "düşüldü" : "eklendi") +
+                    "<br>📦 Kalan stok: " + data.adet;
+                }else{
+                    document.getElementById("sonuc").innerHTML =
+                        "❌ Hata: " + (data.msg || "Ürün bulunamadı");
                 }
 
-                fetch("/hizli_islem", {
-                    method:"POST",
-                    headers:{"Content-Type":"application/json"},
-                    body: JSON.stringify({
-                        barkod: result.text,
-                        tip: "{{tip}}",
-                        kullanici: kullanici
-                    })
-                })
-                .then(res => res.json())
-                .then(data => {
+                setTimeout(function(){
+                    okundu = false;
+                }, 2000);
 
-                    if(data.ok){
-                        document.getElementById("sonuc").innerHTML =
-                        "✅ " + data.ad +
-                        "<br>➖ 1 adet " + ( "{{tip}}"=="cikis" ? "düşüldü" : "eklendi") +
-                        "<br>📦 Kalan stok: " + data.adet;
-                        setTimeout(()=>{
-                            setTimeout(()=>{ okundu=false; 
-                        }, 2000);
-                    }else{
-                        document.getElementById("sonuc").innerHTML =
-                            "❌ Hata: " + (data.msg || "Ürün bulunamadı");
-                    }
+            });
 
-                    setTimeout(()=>{ okundu=false; }, 2000);
-                });
+        }
+    });
+}
+</script>
+""", tip=tip)
+```
 
-            }
-        });
-    }
-    </script>
-    """, tip=tip)
 
 if __name__ == "__main__":
     app.run(debug=True)
