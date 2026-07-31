@@ -146,6 +146,21 @@ def index():
 
     <body>
 
+    <a href="/" style="
+    position:fixed;
+    top:10px;
+    left:10px;
+    padding:10px 15px;
+    background:#2196F3;
+    color:white;
+    text-decoration:none;
+    border-radius:8px;
+    font-weight:bold;
+    z-index:9999;
+    ">
+    🏠 Ana Sayfa
+    </a>
+
     <h1>📦 STOK PANEL</h1>
 
     <a href="/ekle" class="btn mavi">➕ ÜRÜN EKLE</a>
