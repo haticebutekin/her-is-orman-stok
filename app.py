@@ -292,29 +292,18 @@ def hizli_islem():
 
     with db() as con:
         cur = con.cursor()
+
         cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
         row = cur.fetchone()
 
-        # KULLANICI TOPLAMI
-toplam = con.execute("""
-SELECT SUM(adet) FROM hareket
-WHERE kullanici=? AND tip='cikis'
-""", (kullanici,)).fetchone()[0]
-
-if not toplam:
-    toplam = 0
         if not row:
-            return jsonify({
-                "ok": True,
-                "ad": ad,
-                "adet": adet,
-                "toplam": toplam
-})
+            return jsonify({"ok": False})
+
         uid, ad, adet = row
 
         # STOK KONTROL
         if tip == "cikis" and adet <= 0:
-            return jsonify({"ok":False, "msg":"Stok yok"})
+            return jsonify({"ok": False, "msg": "Stok yok"})
 
         if tip == "giris":
             adet += 1
@@ -326,15 +315,27 @@ if not toplam:
 
         cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet, uid))
 
+        # HAREKET KAYIT
         cur.execute("""
-        INSERT INTO hareket (barkod,ad,tip,adet,kullanici) 
-        VALUES (?,?,?,?,?)
-        """,(barkod,ad,tip,1,kullanici))
+        INSERT INTO hareket (barkod, ad, tip, adet, kullanici)
+        VALUES (?, ?, ?, ?, ?)
+        """, (barkod, ad, tip, 1, kullanici))
 
-        con.commit()
+        # 👇 KULLANICI TOPLAMI (DOĞRU YER)
+        toplam = cur.execute("""
+        SELECT SUM(adet) FROM hareket
+        WHERE kullanici=? AND tip='cikis'
+        """, (kullanici,)).fetchone()[0]
 
-    return jsonify({"ok":True,"ad":ad,"adet":adet})
+        if not toplam:
+            toplam = 0
 
+        return jsonify({
+            "ok": True,
+            "ad": ad,
+            "adet": adet,
+            "toplam": toplam
+        })
 # GERİ AL
 @app.route("/geri_al", methods=["POST"])
 def geri_al():
