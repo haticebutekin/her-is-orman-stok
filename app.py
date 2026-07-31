@@ -111,7 +111,7 @@ def index():
         <video id="video" width="300" height="200"></video>
 
         <h3 id="sonuc"></h3>
-
+        <script src="https://unpkg.com/@zxing/library@latest"></script>
                 
         background: #111;
         font-family: Arial;
@@ -153,7 +153,7 @@ def index():
     <a href="/kamera/cikis" class="btn turuncu">📷 OKUT</a>
     <a href="/liste" class="btn mor">📦 STOK</a>
     <a href="/hareketler" class="btn kirmizi">📊 HAREKET</a>
-
+    
     </body>
     </html>
     """
@@ -440,10 +440,16 @@ function baslat(){
     codeReader = new ZXing.BrowserMultiFormatReader();
 
     codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
-        if (result) {
-            okut(result);
-        }
-    });
+
+    if (result && result.text) {
+        console.log("OKUNDU:", result.text);
+        okut(result);
+    }
+
+    if (err && !(err instanceof ZXing.NotFoundException)) {
+        console.log(err);
+    }
+});
 }
 
 
