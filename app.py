@@ -207,6 +207,18 @@ def ekle2():
 
         <a href="/ekle">➕ Yeni Ürün Ekle</a>
         """
+        <br><br>
+        <a href="/" style="
+        display:inline-block;
+        padding:10px 20px;
+        background:#00C853;
+        color:white;
+        text-decoration:none;
+        border-radius:8px;
+        font-weight:bold;
+        ">
+        🏠 Ana Sayfaya Dön
+        </a>
 
     return render_template_string("""
     
