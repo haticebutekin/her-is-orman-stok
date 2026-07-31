@@ -354,102 +354,99 @@ def geri_al():
     return jsonify({"ok":True})
 
 # KAMERA
-
 @app.route("/kamera/<tip>")
 def kamera(tip):
 
-```
     return render_template_string("""
-<a href="/">Ana Sayfa</a>
+    <a href="/">Ana Sayfa</a>
 
-<h2>{{tip.upper()}} OKUT</h2>
+    <h2>{{tip.upper()}} OKUT</h2>
 
-<button onclick="window.print()">Yazdır</button>
+    <button onclick="window.print()">Yazdır</button>
 
-<script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
 
-<video id="video" width="300" style="border:2px solid black"></video><br><br>
+    <video id="video" width="300" style="border:2px solid black"></video><br><br>
 
-<select id="kullanici">
-<option value="">Kullanıcı Seç</option>
+    <select id="kullanici">
+    <option value="">Kullanıcı Seç</option>
 
-<optgroup label="Depocular">
-<option>Behiç</option>
-<option>Ramazan</option>
-<option>Orhan</option>
-</optgroup>
+    <optgroup label="Depocular">
+    <option>Behiç</option>
+    <option>Ramazan</option>
+    <option>Orhan</option>
+    </optgroup>
 
-<optgroup label="Muhasebe">
-<option>İrem</option>
-<option>Berke</option>
-</optgroup>
+    <optgroup label="Muhasebe">
+    <option>İrem</option>
+    <option>Berke</option>
+    </optgroup>
 
-<optgroup label="Patron">
-<option>Hatice</option>
-<option>Ahmet</option>
-</optgroup>
+    <optgroup label="Patron">
+    <option>Hatice</option>
+    <option>Ahmet</option>
+    </optgroup>
 
-</select>
+    </select>
 
-<button onclick="baslat()">Kamerayı Başlat</button>
+    <button onclick="baslat()">Kamerayı Başlat</button>
 
-<h3 id="sonuc"></h3>
+    <h3 id="sonuc"></h3>
 
-<script>
-let codeReader;
-let okundu = false;
+    <script>
+    let codeReader;
+    let okundu = false;
 
-function baslat(){
-    codeReader = new ZXing.BrowserMultiFormatReader();
+    function baslat(){
+        codeReader = new ZXing.BrowserMultiFormatReader();
 
-    codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+        codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
 
-        if (result && !okundu) {
+            if (result && !okundu) {
 
-            okundu = true;
+                okundu = true;
 
-            let kullanici = document.getElementById("kullanici").value;
+                let kullanici = document.getElementById("kullanici").value;
 
-            if (!kullanici) {
-                alert("Kullanıcı gir!");
-                okundu = false;
-                return;
-            }
-
-            fetch("/hizli_islem", {
-                method:"POST",
-                headers:{"Content-Type":"application/json"},
-                body: JSON.stringify({
-                    barkod: result.text,
-                    tip: "{{tip}}",
-                    kullanici: kullanici
-                })
-            })
-            .then(res => res.json())
-            .then(data => {
-
-                if(data.ok){
-                    document.getElementById("sonuc").innerHTML =
-                    "✅ " + data.ad +
-                    "<br>➖ 1 adet " + ( "{{tip}}"=="cikis" ? "düşüldü" : "eklendi") +
-                    "<br>📦 Kalan stok: " + data.adet;
-                }else{
-                    document.getElementById("sonuc").innerHTML =
-                        "❌ Hata: " + (data.msg || "Ürün bulunamadı");
+                if (!kullanici) {
+                    alert("Kullanıcı gir!");
+                    okundu = false;
+                    return;
                 }
 
-                setTimeout(function(){
-                    okundu = false;
-                }, 2000);
+                fetch("/hizli_islem", {
+                    method:"POST",
+                    headers:{"Content-Type":"application/json"},
+                    body: JSON.stringify({
+                        barkod: result.text,
+                        tip: "{{tip}}",
+                        kullanici: kullanici
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
 
-            });
+                    if(data.ok){
+                        document.getElementById("sonuc").innerHTML =
+                        "OK: " + data.ad +
+                        "<br>1 adet " + ( "{{tip}}"=="cikis" ? "dusuldu" : "eklendi") +
+                        "<br>Kalan stok: " + data.adet;
+                    }else{
+                        document.getElementById("sonuc").innerHTML =
+                            "Hata: " + (data.msg || "Urun bulunamadi");
+                    }
 
-        }
-    });
-}
-</script>
-""", tip=tip)
-```
+                    setTimeout(function(){
+                        okundu = false;
+                    }, 2000);
+
+                });
+
+            }
+        });
+    }
+    </script>
+    """, tip=tip)
 
 
 if __name__ == "__main__":
