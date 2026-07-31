@@ -477,6 +477,8 @@ function baslat(){
                     document.getElementById("sonuc").innerHTML =
                         "✅ Barkod: " + barkod + "<br>" +
                         "📦 Kalan: " + d.adet + "<br>" +
+                        "📊 Senin Toplam Çıkışın: " + d.toplam
+                        "📦 Ürün: " + d.ad + "<br>" +
                         "👤 Kullanıcı: " + kullanici;
                 } else {
                     document.getElementById("sonuc").innerHTML =
