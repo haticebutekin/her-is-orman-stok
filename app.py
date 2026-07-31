@@ -92,11 +92,27 @@ def index():
     <style>
     body {
         <button onclick="baslat()">Kamerayı Başlat</button>
+        <button onclick="location.reload()">🏠 Ana Sayfa</button>
+
+        <br><br>
+
+        <select id="kullanici">
+        <option>Ramazan</option>
+        <option>Orhan</option>
+        <option>Behiç</option>
+        <option>İrem</option>
+        <option>Berke</option>
+        <option>Hatice</option>
+        <option>Ahmet</option>
+        </select>
+
+        <br><br>
 
         <video id="video" width="300" height="200"></video>
 
         <h3 id="sonuc"></h3>
-        
+
+                
         background: #111;
         font-family: Arial;
         text-align: center;
@@ -411,11 +427,9 @@ def kamera(tip):
 
 let bipSes;
 let kilit = false;
-let aktifKullanici = "Ali"; // burayı sonra login yaparız
 
 function baslat(){
 
-    // 🔊 sesi hazırla
     bipSes = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
     bipSes.play().then(() => {
@@ -423,7 +437,6 @@ function baslat(){
         bipSes.currentTime = 0;
     });
 
-    // 📷 kamera başlat
     codeReader = new ZXing.BrowserMultiFormatReader();
 
     codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
@@ -436,11 +449,11 @@ function baslat(){
 
 function okut(result){
 
-    // 🚫 çok hızlı tekrar engelle
-    if (kilit) return;
+    if (kilit) return; // 🚫 seri düşmeyi engeller
     kilit = true;
 
     let barkod = result.text;
+    let kullanici = document.getElementById("kullanici").value;
 
     // 🔊 bip
     bipSes.currentTime = 0;
@@ -452,7 +465,7 @@ function okut(result){
         body: JSON.stringify({
             barkod: barkod,
             tip: "cikis",
-            kullanici: aktifKullanici
+            kullanici: kullanici
         })
     })
     .then(r => r.json())
@@ -461,14 +474,14 @@ function okut(result){
         if (d.ok) {
             document.getElementById("sonuc").innerHTML =
                 "✅ Barkod: " + barkod + "<br>" +
-                "👤 Kim: " + d.kullanici + "<br>" +
-                "📦 Adet: " + d.adet;
+                "👤 Kim: " + kullanici + "<br>" +
+                "📦 Kaç adet düştü: " + d.adet;
         } else {
             document.getElementById("sonuc").innerHTML =
                 "❌ Hata: " + (d.msg || "Bulunamadı");
         }
 
-        // ⏳ 2 saniye bekle → tekrar okutabilsin
+        // ⏳ 2 saniye kilit (yanlış basmayı engeller)
         setTimeout(() => {
             kilit = false;
         }, 2000);
