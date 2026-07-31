@@ -361,6 +361,7 @@ def kamera(tip):
     <h2>{{tip.upper()}} OKUT</h2>
     
     return render_template_string("""
+        <button onclick="window.print()">🖨 Yazdır</button>
     <a href="/">Ana Sayfa</a>
     <h2>Başlık</h2>
     """)
@@ -368,7 +369,6 @@ def kamera(tip):
 
     <h2>{{tip.upper()}} OKUT</h2>
 
-    <button onclick="window.print()">🖨 Yazdır</button>
     
     <video id="video" width="300" style="border:2px solid black"></video><br><br>
 
