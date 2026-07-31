@@ -170,6 +170,21 @@ def index():
     <a href="/hareketler" class="btn kirmizi">📊 HAREKET</a>
     
     </body>
+    <a href="/" style="
+    position:fixed;
+    top:10px;
+    left:10px;
+    padding:10px 15px;
+    background:#2196F3;
+    color:white;
+    text-decoration:none;
+    border-radius:8px;
+    font-weight:bold;
+    z-index:9999;
+    ">
+    🏠 Ana Sayfa
+    </a>
+
     </html>
     """
 
@@ -236,7 +251,7 @@ def ekle2():
         </a>
         """
     return render_template_string("""
-    
+barkod = request.args.get("barkod", "")    
 <form method="post">
 <a href="/" style="
 display:inline-block;
@@ -252,7 +267,7 @@ Ana Sayfa
 
 <h3>Ürün Bilgisi</h3>
 
-<input name="barkod" placeholder="Boş bırak = otomatik barkod"><br><br>
+<input name="barkod" value="{{barkod}}" placeholder="Boş bırak = otomatik barkod">
 
 <input name="ad" placeholder="Ürün Adı" required><br><br>
 
@@ -289,7 +304,7 @@ Ana Sayfa
 <button>Kaydet</button>
 
 </form>
-""", depolar=DEPOLAR)
+""", depolar=DEPOLAR, barkod=barkod)
 
 # LİSTE
 @app.route("/liste")
@@ -363,7 +378,10 @@ def hizli_islem():
         row = cur.fetchone()
 
         if not row:
-            return jsonify({"ok": False})
+            return jsonify({
+                "ok": False,
+                "yok": True
+        })
 
         uid, ad, adet = row
 
@@ -503,6 +521,16 @@ function baslat(){
             .then(d => {
 
                 if (d.ok) {
+     else if (d.yok) {
+
+                document.getElementById("sonuc").innerHTML =
+                "⚠ Ürün bulunamadı<br>Yeni ürün ekleniyor...";
+
+                 setTimeout(() => {
+                 window.location.href = "/ekle?barkod=" + barkod;
+                 }, 1000);
+              }
+                    
                     document.body.style.background = "green";
                     document.getElementById("sonuc").innerHTML =
                         "✅ Barkod: " + barkod + "<br>" +
