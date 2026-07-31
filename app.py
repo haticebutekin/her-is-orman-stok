@@ -476,6 +476,7 @@ function baslat(){
             .then(d => {
 
                 if (d.ok) {
+                    document.body.style.background = "green";
                     document.getElementById("sonuc").innerHTML =
                         "✅ Barkod: " + barkod + "<br>" +
                         "📦 Kalan: " + d.adet + "<br>" +
@@ -483,6 +484,7 @@ function baslat(){
                         "📦 Ürün: " + d.ad + "<br>" +
                         "👤 Kullanıcı: " + kullanici;
                 } else {
+                    document.body.style.background = "red";
                     document.getElementById("sonuc").innerHTML =
                         "❌ Hata: " + (d.msg || "Bulunamadı");
                 }
