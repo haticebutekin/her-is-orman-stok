@@ -577,10 +577,14 @@ function okut(result) {
         .then(data => {
 
             if(data.ok){
+            
+               new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg").play();
+                
                 document.getElementById("sonuc").innerHTML =
                 "OK: " + data.ad +
                 "<br>Kalan stok: " + data.adet +
                 "<br>Toplam cikisin: " + data.toplam;
+                "Hata: " + (data.msg || "Urun yok");
             }else{
                 document.getElementById("sonuc").innerHTML =
                 "Hata: " + (data.msg || "Urun yok");
