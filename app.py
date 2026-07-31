@@ -295,9 +295,21 @@ def hizli_islem():
         cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
         row = cur.fetchone()
 
-        if not row:
-            return jsonify({"ok":False})
+        # KULLANICI TOPLAMI
+toplam = con.execute("""
+SELECT SUM(adet) FROM hareket
+WHERE kullanici=? AND tip='cikis'
+""", (kullanici,)).fetchone()[0]
 
+if not toplam:
+    toplam = 0
+        if not row:
+            return jsonify({
+                "ok": True,
+                "ad": ad,
+                "adet": adet,
+                "toplam": toplam
+})
         uid, ad, adet = row
 
         # STOK KONTROL
@@ -404,6 +416,18 @@ def kamera(tip):
 
             if (result && !okundu) {
 
+                let sonBarkod = "";
+
+                if (result && !okundu) {
+
+                let barkod = result.text;
+
+               if (sonBarkod != barkod) {
+                   sonBarkod = barkod;
+                   document.getElementById("sonuc").innerHTML =
+                   "Tekrar okut (onay): " + barkod;
+                   return;
+    }
                 okundu = true;
 
                 let kullanici = document.getElementById("kullanici").value;
@@ -430,7 +454,8 @@ def kamera(tip):
                         document.getElementById("sonuc").innerHTML =
                         "OK: " + data.ad +
                         "<br>1 adet " + ( "{{tip}}"=="cikis" ? "dusuldu" : "eklendi") +
-                        "<br>Kalan stok: " + data.adet;
+                        "<br>Kalan stok: " + data.adet +
+                        "<br><b>Senin toplam cikisin: " + data.toplam + "</b>";
                     }else{
                         document.getElementById("sonuc").innerHTML =
                             "Hata: " + (data.msg || "Urun bulunamadi");
