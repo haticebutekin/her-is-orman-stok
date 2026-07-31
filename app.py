@@ -455,7 +455,7 @@ def geri_al():
 def kamera(tip):
 
     return render_template_string("""
-    <a href="/">Ana Sayfa</a>
+<a href="/">Ana Sayfa</a>
 
 <h2>{{tip.upper()}} OKUT</h2>
 
