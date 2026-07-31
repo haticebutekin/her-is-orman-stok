@@ -206,7 +206,7 @@ def ekle2():
         <a href="/liste">📦 Stok Listesine Git</a><br><br>
 
         <a href="/ekle">➕ Yeni Ürün Ekle</a>
-        """
+    
         <br><br>
         <a href="/" style="
         display:inline-block;
@@ -219,7 +219,7 @@ def ekle2():
         ">
         🏠 Ana Sayfaya Dön
         </a>
-
+        """
     return render_template_string("""
     
 <form method="post">
