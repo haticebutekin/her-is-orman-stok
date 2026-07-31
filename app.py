@@ -429,11 +429,33 @@ function okut(result){
 
     let barkod = result.text;
 
-    // 🔊 BİP
+    // 🔊 bip sesi
     bipSes.currentTime = 0;
-    bipSes.play().catch(e => console.log("çalınamadı", e));
+    bipSes.play().catch(e => console.log(e));
 
-    document.getElementById("sonuc").innerHTML = "OK: " + barkod;
+    fetch("/hizli_islem", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            barkod: barkod,
+            tip: "cikis",
+            kullanici: "Ali"
+        })
+    })
+    .then(r => r.json())
+    .then(d => {
+
+        if (d.ok) {
+            document.getElementById("sonuc").innerHTML =
+                "✅ Barkod: " + barkod + "<br>" +
+                "👤 Kullanıcı: " + d.kullanici + "<br>" +
+                "📦 Adet: " + d.adet;
+        } else {
+            document.getElementById("sonuc").innerHTML =
+                "❌ Hata: " + (d.msg || "Bulunamadı");
+        }
+
+    });
 }
 </script>
 
