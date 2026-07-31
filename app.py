@@ -412,85 +412,87 @@ def kamera(tip):
     return render_template_string("""
     <a href="/">Ana Sayfa</a>
 
-    <h2>{{tip.upper()}} OKUT</h2>
+<h2>{{tip.upper()}} OKUT</h2>
 
-    <button onclick="window.print()">Yazdır</button>
+<button onclick="baslat()">Kamerayı Başlat</button>
 
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
+<br><br>
 
-   <button onclick="baslat()">Kamerayı Başlat</button>
+<select id="kullanici">
+<option>Ramazan</option>
+<option>Orhan</option>
+<option>Behiç</option>
+<option>İrem</option>
+<option>Berke</option>
+<option>Hatice</option>
+<option>Ahmet</option>
+</select>
+
+<br><br>
 
 <video id="video" width="300" height="200"></video>
+
 <h3 id="sonuc"></h3>
+
+<script src="https://unpkg.com/@zxing/library@latest"></script>
 
 <script>
 
-let bipSes;
+let codeReader;
 let kilit = false;
+let bipSes;
 
 function baslat(){
 
     bipSes = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
-    bipSes.play().then(() => {
-        bipSes.pause();
-        bipSes.currentTime = 0;
-    });
-
     codeReader = new ZXing.BrowserMultiFormatReader();
 
     codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
 
-    if (result && result.text) {
-        console.log("OKUNDU:", result.text);
-        okut(result);
-    }
+        if (result && !kilit) {
 
-    if (err && !(err instanceof ZXing.NotFoundException)) {
-        console.log(err);
-    }
-});
-}
+            kilit = true;
 
+            let barkod = result.text;
+            let kullanici = document.getElementById("kullanici").value;
 
-function okut(result){
+            // 🔊 bip sesi
+            bipSes.currentTime = 0;
+            bipSes.play().catch(e => console.log(e));
 
-    if (kilit) return; // 🚫 seri düşmeyi engeller
-    kilit = true;
+            fetch("/hizli_islem", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    barkod: barkod,
+                    tip: "{{tip}}",
+                    kullanici: kullanici
+                })
+            })
+            .then(r => r.json())
+            .then(d => {
 
-    let barkod = result.text;
-    let kullanici = document.getElementById("kullanici").value;
+                if (d.ok) {
+                    document.getElementById("sonuc").innerHTML =
+                        "✅ Barkod: " + barkod + "<br>" +
+                        "📦 Kalan: " + d.adet + "<br>" +
+                        "👤 Kullanıcı: " + kullanici;
+                } else {
+                    document.getElementById("sonuc").innerHTML =
+                        "❌ Hata: " + (d.msg || "Bulunamadı");
+                }
 
-    // 🔊 bip
-    bipSes.currentTime = 0;
-    bipSes.play().catch(e => console.log(e));
+                setTimeout(() => {
+                    kilit = false;
+                }, 2000);
 
-    fetch("/hizli_islem", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-            barkod: barkod,
-            tip: "cikis",
-            kullanici: kullanici
-        })
-    })
-    .then(r => r.json())
-    .then(d => {
-
-        if (d.ok) {
-            document.getElementById("sonuc").innerHTML =
-                "✅ Barkod: " + barkod + "<br>" +
-                "👤 Kim: " + kullanici + "<br>" +
-                "📦 Kaç adet düştü: " + d.adet;
-        } else {
-            document.getElementById("sonuc").innerHTML =
-                "❌ Hata: " + (d.msg || "Bulunamadı");
+            });
         }
 
-        // ⏳ 2 saniye kilit (yanlış basmayı engeller)
-        setTimeout(() => {
-            kilit = false;
-        }, 2000);
+        if (err && !(err instanceof ZXing.NotFoundException)) {
+            console.log(err);
+        }
 
     });
 }
