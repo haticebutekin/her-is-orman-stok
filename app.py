@@ -91,6 +91,12 @@ def index():
     <head>
     <style>
     body {
+        <button onclick="baslat()">Kamerayı Başlat</button>
+
+        <video id="video" width="300" height="200"></video>
+
+        <h3 id="sonuc"></h3>
+        
         background: #111;
         font-family: Arial;
         text-align: center;
@@ -402,20 +408,22 @@ def kamera(tip):
 <h3 id="sonuc"></h3>
 
 <script>
+
 let bipSes;
+let kilit = false;
+let aktifKullanici = "Ali"; // burayı sonra login yaparız
 
 function baslat(){
 
-    // 🔊 SESİ KULLANICI TIKLAMASIYLA AKTİF ET
+    // 🔊 sesi hazırla
     bipSes = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
     bipSes.play().then(() => {
         bipSes.pause();
         bipSes.currentTime = 0;
-        console.log("Ses hazır");
-    }).catch(e => console.log("Ses hatası:", e));
+    });
 
-    // 📷 kamera
+    // 📷 kamera başlat
     codeReader = new ZXing.BrowserMultiFormatReader();
 
     codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
@@ -425,11 +433,16 @@ function baslat(){
     });
 }
 
+
 function okut(result){
+
+    // 🚫 çok hızlı tekrar engelle
+    if (kilit) return;
+    kilit = true;
 
     let barkod = result.text;
 
-    // 🔊 bip sesi
+    // 🔊 bip
     bipSes.currentTime = 0;
     bipSes.play().catch(e => console.log(e));
 
@@ -439,7 +452,7 @@ function okut(result){
         body: JSON.stringify({
             barkod: barkod,
             tip: "cikis",
-            kullanici: "Ali"
+            kullanici: aktifKullanici
         })
     })
     .then(r => r.json())
@@ -448,15 +461,21 @@ function okut(result){
         if (d.ok) {
             document.getElementById("sonuc").innerHTML =
                 "✅ Barkod: " + barkod + "<br>" +
-                "👤 Kullanıcı: " + d.kullanici + "<br>" +
+                "👤 Kim: " + d.kullanici + "<br>" +
                 "📦 Adet: " + d.adet;
         } else {
             document.getElementById("sonuc").innerHTML =
                 "❌ Hata: " + (d.msg || "Bulunamadı");
         }
 
+        // ⏳ 2 saniye bekle → tekrar okutabilsin
+        setTimeout(() => {
+            kilit = false;
+        }, 2000);
+
     });
 }
+
 </script>
 
 let bipSes;
