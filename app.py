@@ -424,6 +424,70 @@ def kamera(tip):
     <h3 id="sonuc"></h3>
 
     <script>
+let codeReader;
+let okundu = false;
+let sonBarkod = "";
+
+function baslat(){
+    codeReader = new ZXing.BrowserMultiFormatReader();
+
+    codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+
+        if (result && !okundu) {
+
+            let barkod = result.text;
+
+            // ONAY SİSTEMİ
+            if (sonBarkod != barkod) {
+                sonBarkod = barkod;
+                document.getElementById("sonuc").innerHTML =
+                "Tekrar okut (onay): " + barkod;
+                return;
+            }
+
+            okundu = true;
+
+            let kullanici = document.getElementById("kullanici").value;
+
+            if (!kullanici) {
+                alert("Kullanıcı seç!");
+                okundu = false;
+                return;
+            }
+
+            fetch("/hizli_islem", {
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body: JSON.stringify({
+                    barkod: barkod,
+                    tip: "{{tip}}",
+                    kullanici: kullanici
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+
+                if(data.ok){
+                    document.getElementById("sonuc").innerHTML =
+                    "OK: " + data.ad +
+                    "<br>Kalan stok: " + data.adet +
+                    "<br>Toplam: " + data.toplam;
+                }else{
+                    document.getElementById("sonuc").innerHTML =
+                    "Hata: " + (data.msg || "Urun yok");
+                }
+
+                setTimeout(function(){
+                    okundu = false;
+                }, 2000);
+
+            });
+        }
+    });
+}
+</script>
+
+    <script>
     let codeReader;
     let okundu = false;
 
