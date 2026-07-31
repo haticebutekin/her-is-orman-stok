@@ -281,6 +281,23 @@ def hareketler():
     for r in rows:
         html += f"{r}<br>"
     return html
+    
+@app.route("/kullanici_ozet/<kullanici>")
+def kullanici_ozet(kullanici):
+    with db() as con:
+        rows = con.execute("""
+        SELECT tip, SUM(adet) 
+        FROM hareket 
+        WHERE kullanici=? 
+        GROUP BY tip
+        """, (kullanici,)).fetchall()
+
+    html = f"<h2>{kullanici} Özeti</h2>"
+
+    for r in rows:
+        html += f"{r[0]}: {r[1]} adet<br>"
+
+    return html
 
 # HIZLI İŞLEM
 @app.route("/hizli_islem", methods=["POST"])
@@ -418,10 +435,56 @@ def kamera(tip):
     if (result && !okundu) {
 
         let barkod = result.text;
+        <script>
+let sonBarkod = "";
+let onaylandi = false;
 
+function okut(result) {
+
+    let barkod = result.text;
+
+    if (sonBarkod != barkod) {
+        sonBarkod = barkod;
+        onaylandi = false;
+
+        document.getElementById("sonuc").innerHTML =
+        "Tekrar okut (onay): " + barkod;
+
+        return;
+    }
+
+    if (!onaylandi) {
+        onaylandi = true;
+
+        fetch("/hizli_islem", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                barkod: barkod,
+                tip: "cikis",
+                kullanici: "Ali"
+            })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                document.getElementById("sonuc").innerHTML =
+                "✅ Düşüldü: " + barkod;
+            } else {
+                document.getElementById("sonuc").innerHTML =
+                "❌ Hata: " + (d.msg || "Bulunamadı");
+            }
+        });
+
+        sonBarkod = "";
+    }
+}
+</script>
         // ONAY SİSTEMİ
         if (sonBarkod != barkod) {
-            sonBarkod = barkod;
+            sonBarko
+            
+            = barkod;
             document.getElementById("sonuc").innerHTML =
             "Tekrar okut (onay): " + barkod;
             return;
