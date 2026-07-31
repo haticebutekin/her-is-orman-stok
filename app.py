@@ -465,24 +465,23 @@ def geri_al():
 # KAMERA
 @app.route("/kamera/<tip>")
 def kamera(tip):
+return render_template_string(""" <a href="/">🏠 Ana Sayfa</a>
 
-    return render_template_string("""
-<a href="/">Ana Sayfa</a>
-
+```
 <h2>{{tip.upper()}} OKUT</h2>
 
-<button onclick="baslat()">Kamerayı Başlat</button>
+<button onclick="baslat()">📷 Kamerayı Başlat</button>
 
 <br><br>
 
 <select id="kullanici">
-<option>Ramazan</option>
-<option>Orhan</option>
-<option>Behiç</option>
-<option>İrem</option>
-<option>Berke</option>
-<option>Hatice</option>
-<option>Ahmet</option>
+    <option>Ramazan</option>
+    <option>Orhan</option>
+    <option>Behiç</option>
+    <option>İrem</option>
+    <option>Berke</option>
+    <option>Hatice</option>
+    <option>Ahmet</option>
 </select>
 
 <br><br>
@@ -494,16 +493,14 @@ def kamera(tip):
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 
 <script>
-
 let codeReader;
 let kilit = false;
-let bipSes;
 let sonBarkod = "";
-let onay = false;
+let onaylandi = false;
 
 function baslat(){
 
-    bipSes = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+    const bip = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
     codeReader = new ZXing.BrowserMultiFormatReader();
 
@@ -511,14 +508,26 @@ function baslat(){
 
         if (result && !kilit) {
 
+            let barkod = result.text;
+
+            // ✅ ONAY SİSTEMİ (iki kere okut)
+            if (sonBarkod !== barkod) {
+                sonBarkod = barkod;
+                onaylandi = false;
+
+                document.getElementById("sonuc").innerHTML =
+                    "⚠ Tekrar okut (onay): " + barkod;
+
+                return;
+            }
+
+            if (!onaylandi) {
+                onaylandi = true;
+            }
+
             kilit = true;
 
-            let barkod = result.text;
             let kullanici = document.getElementById("kullanici").value;
-
-            // 🔊 bip sesi
-            bipSes.currentTime = 0;
-            bipSes.play().catch(e => console.log(e));
 
             fetch("/hizli_islem", {
                 method: "POST",
@@ -533,31 +542,26 @@ function baslat(){
             .then(d => {
 
                 if (d.ok) {
-     else if (d.yok) {
+                    bip.play();
 
-                document.getElementById("sonuc").innerHTML =
-                "⚠ Ürün bulunamadı<br>Yeni ürün ekleniyor...";
-
-                 setTimeout(() => {
-                 window.location.href = "/ekle?barkod=" + barkod;
-                 }, 1000);
-              }
-                    
                     document.body.style.background = "green";
+
                     document.getElementById("sonuc").innerHTML =
-                        "✅ Barkod: " + barkod + "<br>" +
+                        "✅ Ürün: " + d.ad + "<br>" +
                         "📦 Kalan: " + d.adet + "<br>" +
-                        "📊 Senin Toplam Çıkışın: " + d.toplam
-                        "📦 Ürün: " + d.ad + "<br>" +
-                        "👤 Kullanıcı: " + kullanici;
+                        "📊 Senin Toplam: " + d.toplam;
                 } else {
                     document.body.style.background = "red";
+
                     document.getElementById("sonuc").innerHTML =
                         "❌ Hata: " + (d.msg || "Bulunamadı");
                 }
 
+                // tekrar okutma için reset
                 setTimeout(() => {
                     kilit = false;
+                    sonBarkod = "";
+                    onaylandi = false;
                 }, 2000);
 
             });
@@ -566,209 +570,10 @@ function baslat(){
         if (err && !(err instanceof ZXing.NotFoundException)) {
             console.log(err);
         }
-
-    });
-}
-
-</script>
-
-let bipSes;
-
-function baslat(){
-    bipSes = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-    bipSes.load();
-}
-
-let codeReader;
-let okundu = false;
-let sonBarkod = "";
-
-function baslat(){
-    codeReader = new ZXing.BrowserMultiFormatReader();
-
-    codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
-
-        if (result && !okundu) {
-
-            let barkod = result.text;
-
-            // ONAY SİSTEMİ
-            if (sonBarkod != barkod) {
-                sonBarkod = barkod;
-                onay = false;
-
-                document.getElementById("sonuc").innerHTML =
-                "Tekrar okut (onay): " + barkod;
-                kilit = false;
-                return;
-            }
-            if (!onay) {
-                onay = true;
-            }
-
-            okundu = true;
-
-            let kullanici = document.getElementById("kullanici").value;
-
-            if (!kullanici) {
-                alert("Kullanıcı seç!");
-                okundu = false;
-                return;
-            }
-
-            fetch("/hizli_islem", {
-                method:"POST",
-                headers:{"Content-Type":"application/json"},
-                body: JSON.stringify({
-                    barkod: barkod,
-                    tip: "{{tip}}",
-                    kullanici: kullanici
-                })
-            })
-            .then(res => res.json())
-            .then(data => {
-
-                if(data.ok){
-                    document.getElementById("sonuc").innerHTML =
-                    "OK: " + data.ad +
-                    "<br>Kalan stok: " + data.adet +
-                    "<br>Toplam: " + data.toplam;
-                }else{
-                    document.getElementById("sonuc").innerHTML =
-                    "Hata: " + (data.msg || "Urun yok");
-                }
-
-                setTimeout(function(){
-                    okundu = false;
-                }, 2000);
-
-            });
-        }
     });
 }
 </script>
-
-    <script>
-    let codeReader;
-    let okundu = false;
-
-    function baslat(){
-        codeReader = new ZXing.BrowserMultiFormatReader();
-
-        codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
-
-    if (result && !okundu) {
-
-        let barkod = result.text;
-        <script>
-let sonBarkod = "";
-let onaylandi = false;
-
-function okut(result) {
-
-    let barkod = result.text;
-
-    if (sonBarkod != barkod) {
-        sonBarkod = barkod;
-        onaylandi = false;
-
-        document.getElementById("sonuc").innerHTML =
-        "Tekrar okut (onay): " + barkod;
-
-        return;
-    }
-
-    if (!onaylandi) {
-        onaylandi = true;
-
-        fetch("/hizli_islem", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({
-                barkod: barkod,
-                tip: "cikis",
-                kullanici: "Ali"
-            })
-        })
-        .then(r => r.json())
-        .then(d => {
-            if (d.ok) {
-                // 🔊 SES
-                bip.currentTime = 0;
-                bip.play().catch(e => console.log(e));
-
-                document.getElementById("sonuc").innerHTML =
-                "✅ Düşüldü: " + barkod;
-
-            } else {
-                document.getElementById("sonuc").innerHTML =
-                "✅ Düşüldü: " + barkod;
-            } else {
-                document.getElementById("sonuc").innerHTML =
-                "❌ Hata: " + (d.msg || "Bulunamadı");
-            }
-        });
-
-        sonBarkod = "";
-    }
-}
-</script>
-        // ONAY SİSTEMİ
-        if (sonBarkod != barkod) {
-            sonBarko
-            
-            = barkod;
-            document.getElementById("sonuc").innerHTML =
-            "Tekrar okut (onay): " + barkod;
-            return;
-        }
-
-        okundu = true;
-
-        let kullanici = document.getElementById("kullanici").value;
-
-        if (!kullanici) {
-            alert("Kullanıcı gir!");
-            okundu = false;
-            return;
-        }
-
-        fetch("/hizli_islem", {
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({
-                barkod: barkod,
-                tip: "{{tip}}",
-                kullanici: kullanici
-            })
-        })
-        .then(res => res.json())
-        .then(data => {
-
-            if(data.ok){
-            
-               new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg").play();
-                
-                document.getElementById("sonuc").innerHTML =
-                "OK: " + data.ad +
-                "<br>Kalan stok: " + data.adet +
-                "<br>Toplam cikisin: " + data.toplam;
-                "Hata: " + (data.msg || "Urun yok");
-            }else{
-                document.getElementById("sonuc").innerHTML =
-                "Hata: " + (data.msg || "Urun yok");
-            }
-
-            setTimeout(function(){
-                okundu = false;
-            }, 2000);
-
-        });
-    }
-});
-    </script>
-    """, tip=tip)
-
+""", tip=tip)
 
 if __name__ == "__main__":
     app.run(debug=True)
