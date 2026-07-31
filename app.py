@@ -415,62 +415,57 @@ def kamera(tip):
 
         codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
 
-            if (result && !okundu) {
+    if (result && !okundu) {
 
-                let sonBarkod = "";
+        let barkod = result.text;
 
-                if (result && !okundu) {
+        // ONAY SİSTEMİ
+        if (sonBarkod != barkod) {
+            sonBarkod = barkod;
+            document.getElementById("sonuc").innerHTML =
+            "Tekrar okut (onay): " + barkod;
+            return;
+        }
 
-                let barkod = result.text;
+        okundu = true;
 
-               if (sonBarkod != barkod) {
-                   sonBarkod = barkod;
-                   document.getElementById("sonuc").innerHTML =
-                   "Tekrar okut (onay): " + barkod;
-                   return;
-    }
-                okundu = true;
+        let kullanici = document.getElementById("kullanici").value;
 
-                let kullanici = document.getElementById("kullanici").value;
+        if (!kullanici) {
+            alert("Kullanıcı gir!");
+            okundu = false;
+            return;
+        }
 
-                if (!kullanici) {
-                    alert("Kullanıcı gir!");
-                    okundu = false;
-                    return;
-                }
+        fetch("/hizli_islem", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({
+                barkod: barkod,
+                tip: "{{tip}}",
+                kullanici: kullanici
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
 
-                fetch("/hizli_islem", {
-                    method:"POST",
-                    headers:{"Content-Type":"application/json"},
-                    body: JSON.stringify({
-                        barkod: result.text,
-                        tip: "{{tip}}",
-                        kullanici: kullanici
-                    })
-                })
-                .then(res => res.json())
-                .then(data => {
-
-                    if(data.ok){
-                        document.getElementById("sonuc").innerHTML =
-                        "OK: " + data.ad +
-                        "<br>1 adet " + ( "{{tip}}"=="cikis" ? "dusuldu" : "eklendi") +
-                        "<br>Kalan stok: " + data.adet +
-                        "<br><b>Senin toplam cikisin: " + data.toplam + "</b>";
-                    }else{
-                        document.getElementById("sonuc").innerHTML =
-                            "Hata: " + (data.msg || "Urun bulunamadi");
-                    }
-
-                    setTimeout(function(){
-                        okundu = false;
-                    }, 2000);
-
-                });
-
+            if(data.ok){
+                document.getElementById("sonuc").innerHTML =
+                "OK: " + data.ad +
+                "<br>Kalan stok: " + data.adet +
+                "<br>Toplam cikisin: " + data.toplam;
+            }else{
+                document.getElementById("sonuc").innerHTML =
+                "Hata: " + (data.msg || "Urun yok");
             }
+
+            setTimeout(function(){
+                okundu = false;
+            }, 2000);
+
         });
     }
+});
     </script>
     """, tip=tip)
 
