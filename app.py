@@ -396,36 +396,46 @@ def kamera(tip):
 
     <script src="https://unpkg.com/@zxing/library@latest"></script>
 
-    <button onclick="baslat()">Kamerayı Başlat</button>
+   <button onclick="baslat()">Kamerayı Başlat</button>
 
-    <video id="video" width="300" style="border:2px solid black"></video><br><br>
+<video id="video" width="300" height="200"></video>
+<h3 id="sonuc"></h3>
 
-    <select id="kullanici">
-    <option value="">Kullanıcı Seç</option>
+<script>
+let bipSes;
 
-    <optgroup label="Depocular">
-    <option>Behiç</option>
-    <option>Ramazan</option>
-    <option>Orhan</option>
-    </optgroup>
+function baslat(){
 
-    <optgroup label="Muhasebe">
-    <option>İrem</option>
-    <option>Berke</option>
-    </optgroup>
+    // 🔊 SESİ KULLANICI TIKLAMASIYLA AKTİF ET
+    bipSes = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
-    <optgroup label="Patron">
-    <option>Hatice</option>
-    <option>Ahmet</option>
-    </optgroup>
+    bipSes.play().then(() => {
+        bipSes.pause();
+        bipSes.currentTime = 0;
+        console.log("Ses hazır");
+    }).catch(e => console.log("Ses hatası:", e));
 
-    </select>
+    // 📷 kamera
+    codeReader = new ZXing.BrowserMultiFormatReader();
 
-    <button onclick="baslat()">Kamerayı Başlat</button>
+    codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+        if (result) {
+            okut(result);
+        }
+    });
+}
 
-    <h3 id="sonuc"></h3>
+function okut(result){
 
-    <script>
+    let barkod = result.text;
+
+    // 🔊 BİP
+    bipSes.currentTime = 0;
+    bipSes.play().catch(e => console.log("çalınamadı", e));
+
+    document.getElementById("sonuc").innerHTML = "OK: " + barkod;
+}
+</script>
 
 let bipSes;
 
