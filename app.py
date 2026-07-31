@@ -396,6 +396,8 @@ def kamera(tip):
 
     <script src="https://unpkg.com/@zxing/library@latest"></script>
 
+    <button onclick="baslat()">Kamerayı Başlat</button>
+
     <video id="video" width="300" style="border:2px solid black"></video><br><br>
 
     <select id="kullanici">
@@ -424,6 +426,14 @@ def kamera(tip):
     <h3 id="sonuc"></h3>
 
     <script>
+
+let bipSes;
+
+function baslat(){
+    bipSes = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+    bipSes.load();
+}
+
 let codeReader;
 let okundu = false;
 let sonBarkod = "";
@@ -532,6 +542,14 @@ function okut(result) {
         .then(r => r.json())
         .then(d => {
             if (d.ok) {
+                // 🔊 SES
+                bip.currentTime = 0;
+                bip.play().catch(e => console.log(e));
+
+                document.getElementById("sonuc").innerHTML =
+                "✅ Düşüldü: " + barkod;
+
+            } else {
                 document.getElementById("sonuc").innerHTML =
                 "✅ Düşüldü: " + barkod;
             } else {
