@@ -249,9 +249,8 @@ def ekle2():
         ">
         🏠 Ana Sayfaya Dön
         </a>
-        """
+    barkod = request.args.get("barkod", "")   
     return render_template_string("""
-barkod = request.args.get("barkod", "")    
 <form method="post">
 <a href="/" style="
 display:inline-block;
