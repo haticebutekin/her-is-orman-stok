@@ -102,7 +102,7 @@ from datetime import datetime
 
 @app.route("/barkod_ekle/<kod>", methods=["GET","POST"])
 def barkod_ekle(kod):
-     hareket_kayitlari.append(f"{barkod} giriş yapıldı")
+
     if request.method == "POST":
         isim = request.form.get("isim")
 
@@ -110,6 +110,9 @@ def barkod_ekle(kod):
             stoklar[kod] = {"ad": isim, "adet": 0}
 
         stoklar[kod]["adet"] += 1
+
+        # ✅ DOĞRU YER
+        hareket_kayitlari.append(f"{kod} giriş yapıldı")
 
         hareketler.append({
             "kod": kod,
@@ -140,7 +143,6 @@ def barkod_ekle(kod):
         <button type="submit">Kaydet</button>
     </form>
     """
-       
 def barkod_resim(kod):
     yol = os.path.join("static", kod)
 
@@ -258,7 +260,7 @@ def ekle2():
         barkod = request.form.get("barkod")
 
         if not barkod:
-            barkod = barkod_uret()
+            barkod = str(int(time.time()))
 
         with db() as con:
             con.execute("""
