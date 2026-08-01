@@ -90,44 +90,49 @@ def barkod_cikis(kod):
     else:
         conn.close()
         return "❌ Ürün bulunamadı"
-    
-@app.route("/barkod_ekle/<kod>", methods=["GET","POST"])
-def barkod_ekle(kod):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-
-    c.execute("SELECT id, adet FROM urun WHERE barkod=?", (kod,))
-    urun = c.fetchone()
-
-    if urun:
-        # Ürün varsa stok artır
-        c.execute("UPDATE urun SET adet = adet + 1 WHERE id=?", (urun[0],))
-        conn.commit()
-        conn.close()
-        return f"✅ Stok arttı: {kod}"
         
-    # Ürün yoksa → form göster
+from datetime import datetime    
+
+@@app.route("/barkod_ekle/<kod>", methods=["GET","POST"])
+def barkod_ekle(kod):
     if request.method == "POST":
         isim = request.form.get("isim")
 
-        c.execute("INSERT INTO urun (barkod, isim, adet) VALUES (?, ?, ?)",
-                  (kod, isim, 1))
-        conn.commit()
-        conn.close()
+        if kod not in stoklar:
+            stoklar[kod] = {"ad": isim, "adet": 0}
 
-        return f"✅ {isim} eklendi"
+        stoklar[kod]["adet"] += 1
 
-    conn.close()
+        hareketler.append({
+            "kod": kod,
+            "ad": isim,
+            "islem": "GİRİŞ",
+            "adet": 1,
+            "kalan": stoklar[kod]["adet"],
+            "tarih": datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+        })
+
+        return f"""
+        <h2>✅ ÜRÜN EKLENDİ</h2>
+        📦 Ürün: {isim}<br>
+        🔢 Barkod: {kod}<br>
+        ➕ Eklenen: 1<br>
+        📊 Toplam: {stoklar[kod]["adet"]}<br>
+        🕒 {hareketler[-1]["tarih"]}<br><br>
+
+        <a href="/">Ana Sayfa</a>
+        """
 
     return f"""
-    <h2>Yeni Ürün Ekle</h2>
-    <p>Barkod: {kod}</p>
+    <h2>Yeni Ürün</h2>
+    Barkod: {kod}<br><br>
 
-   <form method="POST">
-        <input type="text" name="isim" placeholder="Ürün adı">
+    <form method="POST">
+        <input type="text" name="isim" placeholder="Ürün adı" required>
         <button type="submit">Kaydet</button>
     </form>
     """
+🔥 3. ÇIKIŞ (DETAYLI)
        
 def barkod_resim(kod):
     yol = os.path.join("static", kod)
