@@ -80,12 +80,13 @@ def barkod_cikis(kod):
         conn.close()
 
         return f"""
-        <h2>✅ ÇIKIŞ YAPILDI</h2>
+        <h2>📤 ÇIKIŞ YAPILDI</h2>
         <p><b>Ürün:</b> {urun[1]}</p>
         <p><b>Çıkan:</b> 1 adet</p>
         <p><b>Kalan:</b> {yeni_adet}</p>
-        <a href="/kamera">Geri</a>
+        <a href="/kamera">🔙 Geri</a>
         """
+
     else:
         conn.close()
         return "❌ Ürün bulunamadı"
