@@ -91,7 +91,7 @@ def barkod_cikis(kod):
         conn.close()
         return "❌ Ürün bulunamadı"
     
-@app.route("/barkod_ekle/<kod>")
+@app.route("/barkod_ekle/<kod>", methods=["GET","POST"])
 def barkod_ekle(kod):
     conn = sqlite3.connect(DB)
     c = conn.cursor()
@@ -576,7 +576,7 @@ def kamera_giris():
     </script>
     """
  @app.route("/kamera_cikis")
-def kamera_cikis():
+ def kamera_cikis():
     return """
     <script src="https://unpkg.com/@zxing/library@latest"></script>
     <video id="video"></video>
@@ -644,7 +644,7 @@ function baslat(){
 
             let barkod = result.text;
             let kullanici = document.getElementById("kullanici").value;
-            window.location.href = "/barkod_cikis/" + barkod;
+           
             
             // 🔊 bip sesi
             bipSes.currentTime = 0;
@@ -665,11 +665,11 @@ function baslat(){
                 if (d.ok) {
                     document.body.style.background = "green";
                     document.getElementById("sonuc").innerHTML =
-                        "✅ Barkod: " + barkod + "<br>" +
-                        "📦 Kalan: " + d.adet + "<br>" +
-                        "📊 Senin Toplam Çıkışın: " + d.toplam
-                        "📦 Ürün: " + d.ad + "<br>" +
-                        "👤 Kullanıcı: " + kullanici;
+    "✅ Barkod: " + barkod + "<br>" +
+    "📦 Ürün: " + d.ad + "<br>" +
+    "📦 Kalan: " + d.adet + "<br>" +
+    "📊 Senin Toplam Çıkışın: " + d.toplam + "<br>" +
+    "👤 Kullanıcı: " + kullanici;
                 } else {
                     document.body.style.background = "red";
                     document.getElementById("sonuc").innerHTML =
