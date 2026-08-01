@@ -567,9 +567,9 @@ function baslat(){
             kilit = true;
 
             let barkod = result.text;
-            window.location.href = "/barkod_ekle/" + barkod;
             let kullanici = document.getElementById("kullanici").value;
-
+            window.location.href = "/barkod_ekle/" + barkod;
+            
             // 🔊 bip sesi
             bipSes.currentTime = 0;
             bipSes.play().catch(e => console.log(e));
