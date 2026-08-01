@@ -102,6 +102,7 @@ from datetime import datetime
 
 @app.route("/barkod_ekle/<kod>", methods=["GET","POST"])
 def barkod_ekle(kod):
+     hareket_kayitlari.append(f"{barkod} giriş yapıldı")
     if request.method == "POST":
         isim = request.form.get("isim")
 
@@ -391,8 +392,9 @@ Barkod: {u[10]}<br>
 </div>
 """
     return html
+    
+hareket_kayitlari = []
 
-# HAREKET
 @app.route("/hareketler")
 def hareket_listesi():
     html = "<h2>📊 TÜM HAREKETLER</h2><br>"
