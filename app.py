@@ -5,31 +5,6 @@ from barcode.writer import ImageWriter
 
 app = Flask(__name__)
 DB = "stok.db"
-def db_kontrol():
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS urunler (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        barkod TEXT,
-        isim TEXT,
-        cins TEXT,
-        ebat TEXT,
-        kalinlik TEXT,
-        sinif TEXT,
-        yuzey TEXT,
-        renk TEXT,
-        adet INTEGER,
-        depo TEXT,
-        tarih TEXT
-    )
-    """)
-
-    conn.commit()
-    conn.close()
-
-db_kontrol()
 
 # STATIC FIX
 if os.path.exists("static") and not os.path.isdir("static"):
@@ -95,12 +70,12 @@ def barkod_ekle(kod):
     conn = sqlite3.connect(DB)
     c = conn.cursor()
 
-    c.execute("SELECT id, adet FROM urunler WHERE barkod=?", (kod,))
+    c.execute("SELECT id, adet FROM urun WHERE barkod=?", (kod,))
     urun = c.fetchone()
 
     if urun:
         # Ürün varsa stok artır
-        c.execute("UPDATE urunler SET adet = adet + 1 WHERE id=?", (urun[0],))
+        c.execute("UPDATE urun SET adet = adet + 1 WHERE id=?", (urun[0],))
         conn.commit()
         conn.close()
         return f"✅ Stok arttı: {kod}"
