@@ -64,7 +64,27 @@ def barkod_uret():
 
         if not var:
             return kod
+            
+@app.route("/barkod_ekle/<kod>")
+def barkod_ekle(kod):
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
 
+    c.execute("SELECT id, adet FROM urunler WHERE barkod=?", (kod,))
+    urun = c.fetchone()
+
+    if urun:
+        # Ürün varsa stok artır
+        c.execute("UPDATE urunler SET adet = adet + 1 WHERE id=?", (urun[0],))
+        conn.commit()
+        conn.close()
+        return f"✅ Stok arttı: {kod}"
+
+    else:
+        conn.close()
+        # Ürün yok → ekleme sayfasına yönlendir
+        return redirect(f"/urun_ekle?barkod={kod}")
+        
 def barkod_resim(kod):
     yol = os.path.join("static", kod)
 
@@ -431,7 +451,70 @@ def geri_al():
         con.commit()
 
     return jsonify({"ok":True})
+@app.route("/urun_ekle", methods=["GET","POST"])
+def urun_ekle():
+    barkod = request.args.get("barkod","")
 
+    if request.method == "POST":
+        veri = (
+            request.form["barkod"],
+            request.form["isim"],
+            request.form["cins"],
+            request.form["ebat"],
+            request.form["kalinlik"],
+            request.form["sinif"],
+            request.form["yuzey"],
+            request.form["renk"],
+            request.form["adet"],
+            request.form["depo"]
+        )
+
+        conn = sqlite3.connect(DB)
+        c = conn.cursor()
+        c.execute("""
+        INSERT INTO urunler 
+        (barkod, isim, cins, ebat, kalinlik, sinif, yuzey, renk, adet, depo)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+        """, veri)
+        conn.commit()
+        conn.close()
+
+        return redirect("/panel")
+
+    return f"""
+    <form method="post">
+        Barkod: <input name="barkod" value="{barkod}"><br>
+        İsim: <input name="isim"><br>
+        Cinsi: <input name="cins"><br>
+        Ebat: <input name="ebat"><br>
+        Kalınlık: <input name="kalinlik"><br>
+        Sınıf: <input name="sinif"><br>
+
+        Yüzey:
+        <select name="yuzey">
+            <option>HG</option>
+            <option>MAT</option>
+            <option>PARLAK</option>
+        </select><br>
+
+        Renk: <input name="renk"><br>
+        Adet: <input name="adet" value="1"><br>
+
+        Depo:
+        <select name="depo">
+            <option>MDF SATIŞ DEPOSU</option>
+            <option>LAMİNANT DEPOSU</option>
+            <option>KAPI DEPOSU</option>
+            <option>HGLOSS DEPOSU (MORAY YANI)</option>
+            <option>SÜTÇÜ YANI</option>
+            <option>HELVACI YANI</option>
+            <option>RÖTBALANSÇI YANI</option>
+            <option>KESİMHANE</option>
+        </select><br>
+
+        <button>Kaydet</button>
+    </form>
+    """
 # KAMERA
 @app.route("/kamera/<tip>")
 def kamera(tip):
