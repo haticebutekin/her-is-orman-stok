@@ -567,6 +567,7 @@ function baslat(){
             kilit = true;
 
             let barkod = result.text;
+            window.location.href = "/barkod_ekle/" + barkod;
             let kullanici = document.getElementById("kullanici").value;
 
             // 🔊 bip sesi
