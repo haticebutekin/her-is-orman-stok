@@ -64,7 +64,32 @@ def barkod_uret():
 
         if not var:
             return kod
-            
+@app.route("/barkod_cikis/<kod>")
+def barkod_cikis(kod):
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+
+    c.execute("SELECT id, isim, adet FROM urun WHERE barkod=?", (kod,))
+    urun = c.fetchone()
+
+    if urun:
+        yeni_adet = urun[2] - 1
+
+        c.execute("UPDATE urun SET adet=? WHERE id=?", (yeni_adet, urun[0]))
+        conn.commit()
+        conn.close()
+
+        return f"""
+        <h2>✅ ÇIKIŞ YAPILDI</h2>
+        <p><b>Ürün:</b> {urun[1]}</p>
+        <p><b>Çıkan:</b> 1 adet</p>
+        <p><b>Kalan:</b> {yeni_adet}</p>
+        <a href="/kamera">Geri</a>
+        """
+    else:
+        conn.close()
+        return "❌ Ürün bulunamadı"
+    
 @app.route("/barkod_ekle/<kod>")
 def barkod_ekle(kod):
     conn = sqlite3.connect(DB)
@@ -79,12 +104,30 @@ def barkod_ekle(kod):
         conn.commit()
         conn.close()
         return f"✅ Stok arttı: {kod}"
-
-    else:
-        conn.close()
-        # Ürün yok → ekleme sayfasına yönlendir
-        return redirect(f"/urun_ekle?barkod={kod}")
         
+    # Ürün yoksa → form göster
+    if request.method == "POST":
+        isim = request.form.get("isim")
+
+        c.execute("INSERT INTO urun (barkod, isim, adet) VALUES (?, ?, ?)",
+                  (kod, isim, 1))
+        conn.commit()
+        conn.close()
+
+        return f"✅ {isim} eklendi"
+
+    conn.close()
+
+    return f"""
+    <h2>Yeni Ürün Ekle</h2>
+    <p>Barkod: {kod}</p>
+
+   <form method="POST">
+        <input type="text" name="isim" placeholder="Ürün adı">
+        <button type="submit">Kaydet</button>
+    </form>
+    """
+       
 def barkod_resim(kod):
     yol = os.path.join("static", kod)
 
