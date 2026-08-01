@@ -575,8 +575,9 @@ def kamera_giris():
     });
     </script>
     """
- @app.route("/kamera_cikis")
- def kamera_cikis():
+
+@app.route("/kamera_cikis")
+def kamera_cikis():
     return """
     <script src="https://unpkg.com/@zxing/library@latest"></script>
     <video id="video"></video>
@@ -590,7 +591,7 @@ def kamera_giris():
         }
     });
     </script>
-    """   
+    """
 # KAMERA
 @app.route("/kamera/<tip>")
 def kamera(tip):
