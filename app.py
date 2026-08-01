@@ -66,34 +66,41 @@ def barkod_uret():
             return kod
 @app.route("/barkod_cikis/<kod>")
 def barkod_cikis(kod):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
 
-    c.execute("SELECT id, isim, adet FROM urun WHERE barkod=?", (kod,))
-    urun = c.fetchone()
-
-    if urun:
-        yeni_adet = urun[2] - 1
-
-        c.execute("UPDATE urun SET adet=? WHERE id=?", (yeni_adet, urun[0]))
-        conn.commit()
-        conn.close()
-
+    if kod not in stoklar:
         return f"""
-        <h2>📤 ÇIKIŞ YAPILDI</h2>
-        <p><b>Ürün:</b> {urun[1]}</p>
-        <p><b>Çıkan:</b> 1 adet</p>
-        <p><b>Kalan:</b> {yeni_adet}</p>
-        <a href="/kamera">🔙 Geri</a>
+        <h2>❌ Ürün bulunamadı</h2>
+        Barkod: {kod}<br><br>
+
+        <a href="/barkod_ekle/{kod}">👉 Yeni ürün olarak ekle</a>
         """
 
-    else:
-        conn.close()
-        return "❌ Ürün bulunamadı"
-        
+    if stoklar[kod]["adet"] > 0:
+        stoklar[kod]["adet"] -= 1
+
+    hareketler.append({
+        "kod": kod,
+        "ad": stoklar[kod]["ad"],
+        "islem": "ÇIKIŞ",
+        "adet": 1,
+        "kalan": stoklar[kod]["adet"],
+        "tarih": datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+    })
+
+    return f"""
+    <h2>📤 ÇIKIŞ YAPILDI</h2>
+
+    📦 Ürün: {stoklar[kod]["ad"]}<br>
+    🔢 Barkod: {kod}<br>
+    ➖ Çıkan: 1<br>
+    📊 Kalan: {stoklar[kod]["adet"]}<br>
+    🕒 {hareketler[-1]["tarih"]}<br><br>
+
+    <a href="/">Ana Sayfa</a>
+    """
 from datetime import datetime    
 
-@@app.route("/barkod_ekle/<kod>", methods=["GET","POST"])
+@app.route("/barkod_ekle/<kod>", methods=["GET","POST"])
 def barkod_ekle(kod):
     if request.method == "POST":
         isim = request.form.get("isim")
@@ -132,7 +139,6 @@ def barkod_ekle(kod):
         <button type="submit">Kaydet</button>
     </form>
     """
-🔥 3. ÇIKIŞ (DETAYLI)
        
 def barkod_resim(kod):
     yol = os.path.join("static", kod)
@@ -388,33 +394,21 @@ Barkod: {u[10]}<br>
 
 # HAREKET
 @app.route("/hareketler")
-def hareketler():
-    with db() as con:
-        rows = con.execute("""
-        SELECT barkod, ad, tip, adet, kullanici, tarih 
-        FROM hareket ORDER BY id DESC
-        """).fetchall()
+def hareket_listesi():
+    html = "<h2>📊 TÜM HAREKETLER</h2><br>"
 
-    html = "<h2>Hareketler</h2>"
-    for r in rows:
-        html += f"{r}<br>"
-    return html
-    
-@app.route("/kullanici_ozet/<kullanici>")
-def kullanici_ozet(kullanici):
-    with db() as con:
-        rows = con.execute("""
-        SELECT tip, SUM(adet) 
-        FROM hareket 
-        WHERE kullanici=? 
-        GROUP BY tip
-        """, (kullanici,)).fetchall()
+    for h in reversed(hareketler):
+        html += f"""
+        📦 {h['ad']} <br>
+        🔢 {h['kod']} <br>
+        🔄 {h['islem']} <br>
+        ➕/➖ {h['adet']} <br>
+        📊 Kalan: {h['kalan']} <br>
+        🕒 {h['tarih']} <br>
+        ----------------------<br>
+        """
 
-    html = f"<h2>{kullanici} Özeti</h2>"
-
-    for r in rows:
-        html += f"{r[0]}: {r[1]} adet<br>"
-
+    html += "<br><a href='/'>Ana Sayfa</a>"
     return html
 
 # HIZLI İŞLEM
