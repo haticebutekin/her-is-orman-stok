@@ -558,6 +558,38 @@ def urun_ekle():
         <button>Kaydet</button>
     </form>
     """
+@app.route("/kamera_giris")
+def kamera_giris():
+    return """
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <video id="video"></video>
+
+    <script>
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+
+    codeReader.decodeFromVideoDevice(null, document.getElementById('video'), (result, err) => {
+        if (result) {
+            window.location.href = "/barkod_ekle/" + result.text;
+        }
+    });
+    </script>
+    """
+ @app.route("/kamera_cikis")
+def kamera_cikis():
+    return """
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <video id="video"></video>
+
+    <script>
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+
+    codeReader.decodeFromVideoDevice(null, document.getElementById('video'), (result, err) => {
+        if (result) {
+            window.location.href = "/barkod_cikis/" + result.text;
+        }
+    });
+    </script>
+    """   
 # KAMERA
 @app.route("/kamera/<tip>")
 def kamera(tip):
@@ -611,7 +643,7 @@ function baslat(){
 
             let barkod = result.text;
             let kullanici = document.getElementById("kullanici").value;
-            window.location.href = "/barkod_ekle/" + barkod;
+            window.location.href = "/barkod_cikis/" + barkod;
             
             // 🔊 bip sesi
             bipSes.currentTime = 0;
