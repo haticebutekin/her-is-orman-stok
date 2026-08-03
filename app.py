@@ -6,6 +6,8 @@ import os, random, io
 from datetime import datetime
 import barcode, qrcode
 from barcode.writer import ImageWriter
+import os
+print("DATABASE_URL:", os.getenv("DATABASE_URL"))
 
 # ==================== VERİTABANI (Postgres) ====================
 # Render'da Postgres eklentisi oluşturunca sana bir "Internal Database URL"
