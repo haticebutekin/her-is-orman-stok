@@ -1,20 +1,25 @@
 from functools import wraps
 
 from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file
-import sqlite3, os, random, io
+import psycopg2
+import os, random, io
 from datetime import datetime
 import barcode, qrcode
 from barcode.writer import ImageWriter
 
-# Veri klasörü: Render'da kalıcı disk eklediğinde DATA_DIR env değişkenini
-# disk mount path'ine (örn. /var/data) ayarla, kod değiştirmene gerek kalmaz.
-DATA_DIR = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)) or ".")
+# ==================== VERİTABANI (Postgres) ====================
+# Render'da Postgres eklentisi oluşturunca sana bir "Internal Database URL"
+# verir. Bunu bu servisin Environment sekmesinde DATABASE_URL adıyla ekle.
+# Örnek: postgres://kullanici:sifre@host/veritabani
+#
+# Not: Eğer bağlantı hatası alırsan (SSL required vb.) DATABASE_URL'in
+# sonuna "?sslmode=require" ekleyebilirsin.
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-app = Flask(__name__, static_folder=os.path.join(DATA_DIR, "static"))
+app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)) or ".", "static"))
 app.secret_key = os.environ.get("SECRET_KEY", "bu-anahtari-canliya-almadan-once-degistir")
-DB = os.path.join(DATA_DIR, "stok.db")
 
-# STATIC FIX
+# STATIC FIX (sadece uygulama ikonları için kullanılıyor, artık ürün/barkod resmi için değil)
 if os.path.exists(app.static_folder) and not os.path.isdir(app.static_folder):
     os.remove(app.static_folder)
 if not os.path.exists(app.static_folder):
@@ -55,54 +60,80 @@ PIN_KODLARI = {
 
 
 def db():
-    return sqlite3.connect(DB)
+    """Her çağrıda yeni bir Postgres bağlantısı açar. 'with db() as con:' bloğu
+    bittiğinde otomatik commit/rollback yapılır ama bağlantıyı kapatmaz;
+    bu yüzden fonksiyonlar sonunda con.close() çağırıyoruz."""
+    return psycopg2.connect(DATABASE_URL)
 
 
-# TABLOLAR
-with db() as con:
-    con.execute("""
-    CREATE TABLE IF NOT EXISTS urun(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ad TEXT, cins TEXT, ebat TEXT, kalinlik TEXT,
-        yuzey TEXT, sinif TEXT, renk TEXT,
-        adet INTEGER, depo TEXT, barkod TEXT UNIQUE
-    )
-    """)
-    con.execute("""
-    CREATE TABLE IF NOT EXISTS hareket(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        barkod TEXT,
-        ad TEXT,
-        tip TEXT,
-        adet INTEGER,
-        kullanici TEXT,
-        tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
+def tablolari_olustur():
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS urun(
+                    id SERIAL PRIMARY KEY,
+                    ad TEXT, cins TEXT, ebat TEXT, kalinlik TEXT,
+                    yuzey TEXT, sinif TEXT, renk TEXT,
+                    adet INTEGER, depo TEXT, barkod TEXT UNIQUE
+                )
+                """)
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS hareket(
+                    id SERIAL PRIMARY KEY,
+                    barkod TEXT,
+                    ad TEXT,
+                    tip TEXT,
+                    adet INTEGER,
+                    kullanici TEXT,
+                    tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
+    finally:
+        con.close()
+
+
+if DATABASE_URL:
+    tablolari_olustur()
 
 
 def barkod_uret():
     while True:
         kod = str(random.randint(100000000000, 999999999999))
-        with db() as con:
-            var = con.execute("SELECT barkod FROM urun WHERE barkod=?", (kod,)).fetchone()
+        con = db()
+        try:
+            with con.cursor() as cur:
+                cur.execute("SELECT barkod FROM urun WHERE barkod=%s", (kod,))
+                var = cur.fetchone()
+        finally:
+            con.close()
         if not var:
             return kod
 
 
-def barkod_resim(kod):
+def barkod_png_bytes(kod):
+    """Barkod resmini diske yazmadan bellekte üretir."""
     CODE128 = barcode.get_barcode_class("code128")
-    img = CODE128(kod, writer=ImageWriter())
-    img.save(os.path.join(app.static_folder, kod))
+    bio = io.BytesIO()
+    CODE128(kod, writer=ImageWriter()).write(bio)
+    bio.seek(0)
+    return bio
 
 
-def qr_uret(kod):
+def qr_png_bytes(kod):
+    """QR resmini diske yazmadan bellekte üretir."""
     img = qrcode.make(kod)
-    img.save(os.path.join(app.static_folder, kod + "_qr.png"))
+    bio = io.BytesIO()
+    img.save(bio, format="PNG")
+    bio.seek(0)
+    return bio
 
 
 def ikon_uret():
-    """Uygulama ikonlarını (PWA / ana ekrana ekle için) bir kere üretir."""
+    """Uygulama ikonlarını (PWA / ana ekrana ekle için) bir kere üretir.
+    Bunlar kullanıcı verisi değil, sabit uygulama ikonu olduğu için static
+    klasöründe kalması sorun değil; her başlangıçta zaten yeniden üretiliyor."""
     try:
         from PIL import Image, ImageDraw
     except ImportError:
@@ -278,6 +309,17 @@ def qr_baglan():
     return send_file(bio, mimetype="image/png")
 
 
+# Barkod ve QR resimleri artık diske yazılmıyor; her istekte anlık üretiliyor.
+@app.route("/barkod/<kod>.png")
+def barkod_resim_endpoint(kod):
+    return send_file(barkod_png_bytes(kod), mimetype="image/png")
+
+
+@app.route("/qr/<kod>.png")
+def qr_resim_endpoint(kod):
+    return send_file(qr_png_bytes(kod), mimetype="image/png")
+
+
 def rol_gerekli(*izinli_roller):
     """Sadece belirtilen rollerin (ve her zaman patron + muhasebecinin) erişebileceği sayfalar için."""
     TAM_YETKILI = ("patron", "muhasebeci")
@@ -407,37 +449,39 @@ def ekle2():
         if not barkod:
             barkod = barkod_uret()
 
-        with db() as con:
-            con.execute("""
-            INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
-            VALUES(?,?,?,?,?,?,?,?,?,?)
-            """, (
-                ad,
-                request.form.get("cins", ""),
-                request.form.get("ebat", ""),
-                request.form.get("kalinlik", ""),
-                request.form.get("yuzey", ""),
-                request.form.get("sinif", ""),
-                request.form.get("renk", ""),
-                adet,
-                request.form.get("depo", ""),
-                barkod,
-            ))
-            con.execute("""
-            INSERT INTO hareket (barkod, ad, tip, adet, kullanici)
-            VALUES (?, ?, 'giris', ?, ?)
-            """, (barkod, ad, adet, session.get("kullanici", "Bilinmiyor")))
-
-        barkod_resim(barkod)
-        qr_uret(barkod)
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    cur.execute("""
+                    INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
+                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    """, (
+                        ad,
+                        request.form.get("cins", ""),
+                        request.form.get("ebat", ""),
+                        request.form.get("kalinlik", ""),
+                        request.form.get("yuzey", ""),
+                        request.form.get("sinif", ""),
+                        request.form.get("renk", ""),
+                        adet,
+                        request.form.get("depo", ""),
+                        barkod,
+                    ))
+                    cur.execute("""
+                    INSERT INTO hareket (barkod, ad, tip, adet, kullanici)
+                    VALUES (%s, %s, 'giris', %s, %s)
+                    """, (barkod, ad, adet, session.get("kullanici", "Bilinmiyor")))
+        finally:
+            con.close()
 
         icerik = (
             '<h2>✅ Ürün Kaydedildi</h2>'
             + '<p style="text-align:center;"><b>' + ad + '</b></p>'
             + '<div class="kart" style="text-align:center;">'
             + '📦 Barkod: ' + barkod + '<br><br>'
-            + '<img src="/static/' + barkod + '.png" width="260"><br><br>'
-            + '<img src="/static/' + barkod + '_qr.png" width="140">'
+            + '<img src="/barkod/' + barkod + '.png" width="260"><br><br>'
+            + '<img src="/qr/' + barkod + '.png" width="140">'
             + '</div>'
             + '<a class="btn mor" href="/liste">📦 Stok Listesine Git</a>'
             + '<a class="btn mavi" href="/ekle">➕ Yeni Ürün Ekle</a>'
@@ -490,8 +534,13 @@ def ekle2():
 @app.route("/liste")
 @rol_gerekli("muhasebeci")
 def liste():
-    with db() as con:
-        urunler = con.execute("SELECT * FROM urun").fetchall()
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT * FROM urun")
+            urunler = cur.fetchall()
+    finally:
+        con.close()
 
     kartlar = ""
     for u in urunler:
@@ -507,8 +556,8 @@ def liste():
         Adet: {u[8]}<br>
         Depo: {u[9]}<br>
         Barkod: {u[10]}<br>
-        <img src="/static/{u[10]}.png" width="180"><br>
-        <img src="/static/{u[10]}_qr.png" width="90">
+        <img src="/barkod/{u[10]}.png" width="180"><br>
+        <img src="/qr/{u[10]}.png" width="90">
         </div>
         """
 
@@ -535,14 +584,19 @@ def liste():
 @app.route("/hareketler")
 @rol_gerekli("muhasebeci")
 def hareket_listesi():
-    with db() as con:
-        kayitlar = con.execute("""
-            SELECT h.ad, h.barkod, h.tip, h.adet, h.kullanici, h.tarih,
-                   u.cins, u.sinif, u.yuzey, u.renk, u.ebat, u.depo
-            FROM hareket h
-            LEFT JOIN urun u ON u.barkod = h.barkod
-            ORDER BY h.id DESC
-        """).fetchall()
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT h.ad, h.barkod, h.tip, h.adet, h.kullanici, h.tarih,
+                       u.cins, u.sinif, u.yuzey, u.renk, u.ebat, u.depo
+                FROM hareket h
+                LEFT JOIN urun u ON u.barkod = h.barkod
+                ORDER BY h.id DESC
+            """)
+            kayitlar = cur.fetchall()
+    finally:
+        con.close()
 
     kartlar = ""
     for ad, barkod, tip, adet, kullanici, tarih, cins, sinif, yuzey, renk, ebat, depo in kayitlar:
@@ -594,10 +648,13 @@ def rapor_excel():
         c.font = Font(name="Arial", bold=True, color="FFFFFF")
         c.fill = PatternFill("solid", fgColor="2196F3")
 
-    with db() as con:
-        urunler = con.execute(
-            "SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod FROM urun"
-        ).fetchall()
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod FROM urun")
+            urunler = cur.fetchall()
+    finally:
+        con.close()
     for satir in urunler:
         ws1.append(list(satir))
     for row_cells in ws1.iter_rows(min_row=2):
@@ -615,10 +672,13 @@ def rapor_excel():
         c.font = Font(name="Arial", bold=True, color="FFFFFF")
         c.fill = PatternFill("solid", fgColor="2196F3")
 
-    with db() as con:
-        hareketler = con.execute(
-            "SELECT ad,barkod,tip,adet,kullanici,tarih FROM hareket ORDER BY id DESC"
-        ).fetchall()
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT ad,barkod,tip,adet,kullanici,tarih FROM hareket ORDER BY id DESC")
+            hareketler = cur.fetchall()
+    finally:
+        con.close()
     for satir in hareketler:
         ws2.append(list(satir))
     for row_cells in ws2.iter_rows(min_row=2):
@@ -657,10 +717,13 @@ def rapor_xls():
     for col, b in enumerate(basliklar1):
         ws1.write(0, col, b, baslik_stili)
 
-    with db() as con:
-        urunler = con.execute(
-            "SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod FROM urun"
-        ).fetchall()
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod FROM urun")
+            urunler = cur.fetchall()
+    finally:
+        con.close()
     for row_idx, satir in enumerate(urunler, start=1):
         for col_idx, deger in enumerate(satir):
             ws1.write(row_idx, col_idx, deger)
@@ -672,10 +735,13 @@ def rapor_xls():
     for col, b in enumerate(basliklar2):
         ws2.write(0, col, b, baslik_stili)
 
-    with db() as con:
-        hareketler = con.execute(
-            "SELECT ad,barkod,tip,adet,kullanici,tarih FROM hareket ORDER BY id DESC"
-        ).fetchall()
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT ad,barkod,tip,adet,kullanici,tarih FROM hareket ORDER BY id DESC")
+            hareketler = cur.fetchall()
+    finally:
+        con.close()
     for row_idx, satir in enumerate(hareketler, start=1):
         for col_idx, deger in enumerate(satir):
             ws2.write(row_idx, col_idx, str(deger) if deger is not None else "")
@@ -705,10 +771,13 @@ def rapor_csv():
     writer = csv.writer(si, delimiter=";")
     writer.writerow(["Ürün Adı", "Cins", "Ebat", "Kalınlık", "Yüzey", "Sınıf", "Renk", "Adet", "Depo", "Barkod"])
 
-    with db() as con:
-        urunler = con.execute(
-            "SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod FROM urun"
-        ).fetchall()
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod FROM urun")
+            urunler = cur.fetchall()
+    finally:
+        con.close()
     writer.writerows(urunler)
 
     output = io.BytesIO(si.getvalue().encode("utf-8-sig"))
@@ -731,47 +800,50 @@ def hizli_islem():
     tip = data.get("tip")
     kullanici = session.get("kullanici", "Bilinmiyor")
 
-    with db() as con:
-        cur = con.cursor()
-        cur.execute("SELECT id, ad, adet, cins, ebat, yuzey, sinif, renk, depo FROM urun WHERE barkod=?", (barkod,))
-        row = cur.fetchone()
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("SELECT id, ad, adet, cins, ebat, yuzey, sinif, renk, depo FROM urun WHERE barkod=%s", (barkod,))
+                row = cur.fetchone()
 
-        if not row:
-            if tip == "giris":
-                return jsonify({"ok": False, "yeni": True, "barkod": barkod})
-            return jsonify({"ok": False, "msg": "Bu ürün sizin sattığınız ürünler arasında değil, çıkış yapılamaz"})
+                if not row:
+                    if tip == "giris":
+                        return jsonify({"ok": False, "yeni": True, "barkod": barkod})
+                    return jsonify({"ok": False, "msg": "Bu ürün sizin sattığınız ürünler arasında değil, çıkış yapılamaz"})
 
-        uid, ad, adet, cins, ebat, yuzey, sinif, renk, depo = row
+                uid, ad, adet, cins, ebat, yuzey, sinif, renk, depo = row
 
-        if tip == "cikis" and adet <= 0:
-            return jsonify({"ok": False, "msg": "Stok yok"})
+                if tip == "cikis" and adet <= 0:
+                    return jsonify({"ok": False, "msg": "Stok yok"})
 
-        if tip == "giris":
-            adet += 1
-        else:
-            adet -= 1
-        if adet < 0:
-            adet = 0
+                if tip == "giris":
+                    adet += 1
+                else:
+                    adet -= 1
+                if adet < 0:
+                    adet = 0
 
-        cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet, uid))
-        cur.execute("""
-        INSERT INTO hareket (barkod, ad, tip, adet, kullanici)
-        VALUES (?, ?, ?, ?, ?)
-        """, (barkod, ad, tip, 1, kullanici))
+                cur.execute("UPDATE urun SET adet=%s WHERE id=%s", (adet, uid))
+                cur.execute("""
+                INSERT INTO hareket (barkod, ad, tip, adet, kullanici)
+                VALUES (%s, %s, %s, %s, %s)
+                """, (barkod, ad, tip, 1, kullanici))
 
-        toplam = cur.execute("""
-        SELECT SUM(adet) FROM hareket WHERE kullanici=? AND tip='cikis'
-        """, (kullanici,)).fetchone()[0]
-        if not toplam:
-            toplam = 0
+                cur.execute("""
+                SELECT SUM(adet) FROM hareket WHERE kullanici=%s AND tip='cikis'
+                """, (kullanici,))
+                toplam = cur.fetchone()[0]
+                if not toplam:
+                    toplam = 0
 
-        con.commit()
-
-        return jsonify({
-            "ok": True, "ad": ad, "adet": adet, "toplam": toplam,
-            "cins": cins, "ebat": ebat, "yuzey": yuzey, "sinif": sinif,
-            "renk": renk, "depo": depo,
-        })
+                return jsonify({
+                    "ok": True, "ad": ad, "adet": adet, "toplam": toplam,
+                    "cins": cins, "ebat": ebat, "yuzey": yuzey, "sinif": sinif,
+                    "renk": renk, "depo": depo,
+                })
+    finally:
+        con.close()
 
 
 # GERİ AL — depocu + patron
@@ -782,23 +854,26 @@ def geri_al():
     barkod = data.get("barkod")
     tip = data.get("tip")
 
-    with db() as con:
-        cur = con.cursor()
-        cur.execute("SELECT id, adet FROM urun WHERE barkod=?", (barkod,))
-        row = cur.fetchone()
-        if not row:
-            return jsonify({"ok": False})
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("SELECT id, adet FROM urun WHERE barkod=%s", (barkod,))
+                row = cur.fetchone()
+                if not row:
+                    return jsonify({"ok": False})
 
-        uid, adet = row
-        if tip == "giris":
-            adet -= 1
-        else:
-            adet += 1
-        if adet < 0:
-            adet = 0
+                uid, adet = row
+                if tip == "giris":
+                    adet -= 1
+                else:
+                    adet += 1
+                if adet < 0:
+                    adet = 0
 
-        cur.execute("UPDATE urun SET adet=? WHERE id=?", (adet, uid))
-        con.commit()
+                cur.execute("UPDATE urun SET adet=%s WHERE id=%s", (adet, uid))
+    finally:
+        con.close()
 
     return jsonify({"ok": True})
 
