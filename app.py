@@ -413,14 +413,20 @@ def liste():
 @rol_gerekli("muhasebeci")
 def hareket_listesi():
     with db() as con:
-        kayitlar = con.execute(
-            "SELECT ad, barkod, tip, adet, kullanici, tarih FROM hareket ORDER BY id DESC"
-        ).fetchall()
+        kayitlar = con.execute("""
+            SELECT h.ad, h.barkod, h.tip, h.adet, h.kullanici, h.tarih,
+                   u.cins, u.sinif, u.yuzey, u.renk, u.ebat, u.depo
+            FROM hareket h
+            LEFT JOIN urun u ON u.barkod = h.barkod
+            ORDER BY h.id DESC
+        """).fetchall()
 
     html = HOME_BTN + "<h2>📊 TÜM HAREKETLER</h2><br>"
-    for ad, barkod, tip, adet, kullanici, tarih in kayitlar:
+    for ad, barkod, tip, adet, kullanici, tarih, cins, sinif, yuzey, renk, ebat, depo in kayitlar:
         html += f"""
         📦 {ad} <br>
+        🏷️ Cins: {cins or '-'} &nbsp;&nbsp; 🔖 Sınıf: {sinif or '-'} &nbsp;&nbsp; ✨ Yüzey: {yuzey or '-'} <br>
+        🎨 Renk: {renk or '-'} &nbsp;&nbsp; 📏 Ebat: {ebat or '-'} &nbsp;&nbsp; 🏭 Depo: {depo or '-'} <br>
         🔢 {barkod} <br>
         🔄 {tip.upper()} <br>
         ➕/➖ {adet} <br>
@@ -505,7 +511,7 @@ def hizli_islem():
 
     with db() as con:
         cur = con.cursor()
-        cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=?", (barkod,))
+        cur.execute("SELECT id, ad, adet, cins, ebat, yuzey, sinif, renk, depo FROM urun WHERE barkod=?", (barkod,))
         row = cur.fetchone()
 
         if not row:
@@ -516,7 +522,7 @@ def hizli_islem():
             # ürünler çıkış yapılabilir. Kayıtlı olmayan barkod kesinlikle reddedilir.
             return jsonify({"ok": False, "msg": "Bu ürün sizin sattığınız ürünler arasında değil, çıkış yapılamaz"})
 
-        uid, ad, adet = row
+        uid, ad, adet, cins, ebat, yuzey, sinif, renk, depo = row
 
         if tip == "cikis" and adet <= 0:
             return jsonify({"ok": False, "msg": "Stok yok"})
@@ -542,7 +548,11 @@ def hizli_islem():
 
         con.commit()
 
-        return jsonify({"ok": True, "ad": ad, "adet": adet, "toplam": toplam})
+        return jsonify({
+            "ok": True, "ad": ad, "adet": adet, "toplam": toplam,
+            "cins": cins, "ebat": ebat, "yuzey": yuzey, "sinif": sinif,
+            "renk": renk, "depo": depo,
+        })
 
 
 # GERİ AL — depocu + patron
@@ -626,6 +636,12 @@ def kamera(tip):
                         document.getElementById("sonuc").innerHTML =
                             "✅ Barkod: " + barkod + "<br>" +
                             "📦 Ürün: " + d.ad + "<br>" +
+                            "🏷️ Cins: " + (d.cins || "-") + "<br>" +
+                            "🔖 Sınıf: " + (d.sinif || "-") + "<br>" +
+                            "✨ Yüzey: " + (d.yuzey || "-") + "<br>" +
+                            "🎨 Renk: " + (d.renk || "-") + "<br>" +
+                            "📏 Ebat: " + (d.ebat || "-") + "<br>" +
+                            "🏭 Depo: " + (d.depo || "-") + "<br>" +
                             "📦 Kalan: " + d.adet + "<br>" +
                             "📊 Senin Toplam Çıkışın: " + d.toplam + "<br>" +
                             "👤 Kullanıcı: {{kullanici}}";
