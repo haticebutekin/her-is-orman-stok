@@ -122,6 +122,8 @@ def index():
 # EKLE
 @app.route("/ekle", methods=["GET", "POST"])
 def ekle2():
+    on_dolu_barkod = request.args.get("barkod", "")
+
     if request.method == "POST":
         barkod = request.form.get("barkod")
         if not barkod:
@@ -143,6 +145,10 @@ def ekle2():
                 request.form["depo"],
                 barkod,
             ))
+            con.execute("""
+            INSERT INTO hareket (barkod, ad, tip, adet, kullanici)
+            VALUES (?, ?, 'giris', ?, ?)
+            """, (barkod, request.form["ad"], int(request.form["adet"]), "Yeni Ürün"))
 
         barkod_resim(barkod)
         qr_uret(barkod)
@@ -163,8 +169,12 @@ def ekle2():
 
     <h3>Ürün Bilgisi</h3>
 
+    {% if on_dolu_barkod %}
+    <p style="color:#2196F3;font-weight:bold;">📷 Okutulan barkod: {{on_dolu_barkod}} — bu ürün stokta yok, yeni ürün olarak ekleyin.</p>
+    {% endif %}
+
     <form method="post">
-    <input name="barkod" placeholder="Boş bırak = otomatik barkod"><br><br>
+    <input name="barkod" value="{{on_dolu_barkod}}" placeholder="Boş bırak = otomatik barkod"><br><br>
     <input name="ad" placeholder="Ürün Adı" required><br><br>
     <input name="cins" placeholder="Cins"><br><br>
     <input name="ebat" placeholder="Ebat"><br><br>
@@ -187,7 +197,7 @@ def ekle2():
     <br><br>
     <button>Kaydet</button>
     </form>
-    """, depolar=DEPOLAR)
+    """, depolar=DEPOLAR, on_dolu_barkod=on_dolu_barkod)
 
 
 # LİSTE
@@ -254,6 +264,9 @@ def hizli_islem():
         row = cur.fetchone()
 
         if not row:
+            if tip == "giris":
+                # Barkod DB'de yok ama giriş yapılıyor -> yeni ürün ekleme akışına yönlendir
+                return jsonify({"ok": False, "yeni": True, "barkod": barkod})
             return jsonify({"ok": False, "msg": "Ürün bulunamadı"})
 
         uid, ad, adet = row
@@ -379,6 +392,14 @@ def kamera(tip):
                             "📦 Kalan: " + d.adet + "<br>" +
                             "📊 Senin Toplam Çıkışın: " + d.toplam + "<br>" +
                             "👤 Kullanıcı: " + kullanici;
+                    } else if (d.yeni) {
+                        document.body.style.background = "#2196F3";
+                        document.getElementById("sonuc").innerHTML =
+                            "🆕 Bu barkod stokta yok, yeni ürün ekleme sayfasına yönlendiriliyorsunuz...";
+                        setTimeout(() => {
+                            window.location.href = "/ekle?barkod=" + encodeURIComponent(barkod);
+                        }, 1200);
+                        return;
                     } else {
                         document.body.style.background = "red";
                         document.getElementById("sonuc").innerHTML =
