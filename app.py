@@ -1,7 +1,7 @@
 from functools import wraps
 
 from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file
-import psycopg2, os, random, io
+import sqlite3, os, random, io
 from datetime import datetime
 import barcode, qrcode
 from barcode.writer import ImageWriter
@@ -55,7 +55,7 @@ PIN_KODLARI = {
 
 
 def db():
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
+    return sqlite3.connect(DB)
 
 
 # TABLOLAR
