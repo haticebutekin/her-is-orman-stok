@@ -1,10 +1,13 @@
-from flask import Flask, request, redirect, render_template_string, jsonify
+from functools import wraps
+
+from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file
 import sqlite3, os, random
 from datetime import datetime
 import barcode, qrcode
 from barcode.writer import ImageWriter
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "bu-anahtari-canliya-almadan-once-degistir")
 DB = "stok.db"
 
 # STATIC FIX
@@ -23,6 +26,28 @@ DEPOLAR = [
     "RÖTBALANSÇI YANI",
     "KESİMHANE",
 ]
+
+# KULLANICI -> ROL
+ROLLER = {
+    "Ramazan": "depocu",
+    "Behiç": "depocu",
+    "Orhan": "depocu",
+    "Berke": "muhasebeci",
+    "İrem": "muhasebeci",
+    "Hatice": "patron",
+    "Ahmet": "patron",
+}
+
+# KULLANICI -> PIN (GEÇİCİ! Canlıya almadan önce bunları gerçek PIN'lerle değiştirin)
+PIN_KODLARI = {
+    "Ramazan": "1111",
+    "Behiç": "1111",
+    "Orhan": "1111",
+    "Berke": "2222",
+    "İrem": "2222",
+    "Hatice": "2222",
+    "Ahmet": "2222",
+}
 
 
 def db():
@@ -72,9 +97,165 @@ def qr_uret(kod):
     img.save(os.path.join("static", kod + "_qr.png"))
 
 
+HOME_BTN = """
+<a href="/" style="
+position:fixed;
+top:10px;
+left:10px;
+padding:10px 15px;
+background:#2196F3;
+color:white;
+text-decoration:none;
+border-radius:8px;
+font-weight:bold;
+z-index:9999;
+box-shadow:0 2px 6px rgba(0,0,0,0.4);
+">
+🏠 Ana Sayfa
+</a>
+<a href="/kullanici_degistir" style="
+position:fixed;
+top:10px;
+right:10px;
+padding:10px 15px;
+background:#555;
+color:white;
+text-decoration:none;
+border-radius:8px;
+font-weight:bold;
+z-index:9999;
+box-shadow:0 2px 6px rgba(0,0,0,0.4);
+">
+🔁 Kullanıcı Değiştir
+</a>
+"""
+
+
+def rol_gerekli(*izinli_roller):
+    """Sadece belirtilen rollerin (ve her zaman patron + muhasebecinin) erişebileceği sayfalar için."""
+    TAM_YETKILI = ("patron", "muhasebeci")
+
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            rol = session.get("rol")
+            if not rol:
+                return redirect("/")
+            if rol not in TAM_YETKILI and rol not in izinli_roller:
+                return HOME_BTN + """
+                <h2>⛔ Bu sayfaya erişim yetkiniz yok</h2>
+                <p>Bu işlem senin rolüne kapalı. Yanlış kişi olarak girdiysen sağ üstten kullanıcı değiştir.</p>
+                """
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+# KULLANICI SEÇ / PIN GİR
+@app.route("/pin_gir/<isim>", methods=["GET", "POST"])
+def pin_gir(isim):
+    if isim not in ROLLER:
+        return redirect("/")
+
+    hata = None
+    if request.method == "POST":
+        girilen = request.form.get("pin", "")
+        if girilen == PIN_KODLARI.get(isim):
+            session["kullanici"] = isim
+            session["rol"] = ROLLER[isim]
+            return redirect("/")
+        hata = "❌ Yanlış PIN, tekrar dene"
+
+    return render_template_string("""
+    <html>
+    <head>
+    <style>
+    body { background:#111; font-family:Arial; text-align:center; color:white; padding-top:60px; }
+    input {
+        font-size: 32px;
+        text-align: center;
+        width: 180px;
+        padding: 10px;
+        border-radius: 10px;
+        border: none;
+        letter-spacing: 10px;
+    }
+    button {
+        display:block; margin:20px auto 0; padding:15px 40px;
+        font-size:20px; border-radius:10px; border:none;
+        background: linear-gradient(to right, #2196F3, #00BCD4);
+        color:white; font-weight:bold;
+    }
+    .geri { color:#999; text-decoration:none; display:block; margin-top:30px; }
+    </style>
+    </head>
+    <body>
+    <h2>👤 {{isim}}</h2>
+    <p>PIN gir</p>
+
+    {% if hata %}<p style="color:#FF5252;font-weight:bold;">{{hata}}</p>{% endif %}
+
+    <form method="post">
+    <input type="password" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" autofocus>
+    <br>
+    <button>Giriş Yap</button>
+    </form>
+
+    <a class="geri" href="/">⬅ Geri</a>
+    </body>
+    </html>
+    """, isim=isim, hata=hata)
+
+
+@app.route("/kullanici_degistir")
+def kullanici_degistir():
+    session.clear()
+    return redirect("/")
+
+
 # ANA
 @app.route("/")
 def index():
+    kullanici = session.get("kullanici")
+    rol = session.get("rol")
+
+    if not kullanici:
+        secim_html = ""
+        for isim in ROLLER:
+            secim_html += f'<a href="/pin_gir/{isim}" class="btn mavi">{isim}</a>'
+
+        return """
+        <html>
+        <head>
+        <style>
+        body { background:#111; font-family:Arial; text-align:center; color:white; }
+        h1 { margin-top:20px; }
+        .btn {
+            display:block; width:80%; margin:15px auto; padding:20px;
+            font-size:22px; border-radius:10px; text-decoration:none;
+            color:white; font-weight:bold;
+        }
+        .mavi { background: linear-gradient(to right, #2196F3, #00BCD4); }
+        </style>
+        </head>
+        <body>
+        <h1>👋 Kimsin?</h1>
+        """ + secim_html + """
+        </body>
+        </html>
+        """
+
+    # Role göre buton seti — patron ve muhasebeci tam yetkili
+    butonlar = ""
+    if rol in ("depocu", "muhasebeci", "patron"):
+        butonlar += '<a href="/kamera/giris" class="btn yesil">⬆ GİRİŞ</a>'
+        butonlar += '<a href="/kamera/cikis" class="btn turuncu">📷 ÇIKIŞ OKUT</a>'
+    if rol in ("muhasebeci", "patron"):
+        butonlar += '<a href="/ekle" class="btn mavi">➕ ÜRÜN EKLE</a>'
+        butonlar += '<a href="/liste" class="btn mor">📦 STOK</a>'
+        butonlar += '<a href="/hareketler" class="btn kirmizi">📊 HAREKET</a>'
+        butonlar += '<a href="/rapor/excel" class="btn turkuaz">📥 EXCEL RAPOR İNDİR</a>'
+
     return """
     <html>
     <head>
@@ -86,6 +267,7 @@ def index():
         color: white;
     }
     h1 { margin-top: 20px; }
+    h3 { color: #999; font-weight: normal; }
     .btn {
         display: block;
         width: 80%;
@@ -102,25 +284,25 @@ def index():
     .turuncu { background: linear-gradient(to right, #FF6F00, #FF9800); }
     .mor { background: linear-gradient(to right, #5E35B1, #7E57C2); }
     .kirmizi { background: linear-gradient(to right, #D50000, #FF1744); }
+    .turkuaz { background: linear-gradient(to right, #00838F, #00BFA5); }
     </style>
     </head>
     <body>
+    """ + HOME_BTN + f"""
 
     <h1>📦 STOK PANEL</h1>
+    <h3>👤 {kullanici} ({rol})</h3>
 
-    <a href="/ekle" class="btn mavi">➕ ÜRÜN EKLE</a>
-    <a href="/kamera/giris" class="btn yesil">⬆ GİRİŞ</a>
-    <a href="/kamera/cikis" class="btn turuncu">📷 OKUT</a>
-    <a href="/liste" class="btn mor">📦 STOK</a>
-    <a href="/hareketler" class="btn kirmizi">📊 HAREKET</a>
+    {butonlar}
 
     </body>
     </html>
     """
 
 
-# EKLE
+# EKLE — depocu (giriş sırasında yeni ürün) + patron
 @app.route("/ekle", methods=["GET", "POST"])
+@rol_gerekli("depocu", "patron")
 def ekle2():
     on_dolu_barkod = request.args.get("barkod", "")
 
@@ -148,12 +330,12 @@ def ekle2():
             con.execute("""
             INSERT INTO hareket (barkod, ad, tip, adet, kullanici)
             VALUES (?, ?, 'giris', ?, ?)
-            """, (barkod, request.form["ad"], int(request.form["adet"]), "Yeni Ürün"))
+            """, (barkod, request.form["ad"], int(request.form["adet"]), session.get("kullanici", "Bilinmiyor")))
 
         barkod_resim(barkod)
         qr_uret(barkod)
 
-        return f"""
+        return HOME_BTN + f"""
         <h2>✅ Ürün Kaydedildi</h2>
         <b>{request.form["ad"]}</b><br><br>
         📦 Barkod: {barkod}<br><br>
@@ -161,11 +343,9 @@ def ekle2():
         <img src="/static/{barkod}_qr.png" width="150"><br><br>
         <a href="/liste">📦 Stok Listesine Git</a><br><br>
         <a href="/ekle">➕ Yeni Ürün Ekle</a><br><br>
-        <a href="/" style="display:inline-block;padding:10px 20px;background:#00C853;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">🏠 Ana Sayfaya Dön</a>
         """
 
-    return render_template_string("""
-    <a href="/" style="display:inline-block;padding:10px 20px;background:#2196F3;color:white;text-decoration:none;border-radius:8px;margin-bottom:10px;">Ana Sayfa</a>
+    return render_template_string(HOME_BTN + """
 
     <h3>Ürün Bilgisi</h3>
 
@@ -200,13 +380,14 @@ def ekle2():
     """, depolar=DEPOLAR, on_dolu_barkod=on_dolu_barkod)
 
 
-# LİSTE
+# LİSTE — muhasebeci + patron
 @app.route("/liste")
+@rol_gerekli("muhasebeci")
 def liste():
     with db() as con:
         urunler = con.execute("SELECT * FROM urun").fetchall()
 
-    html = "<a href='/'>Ana Sayfa</a><h2>STOK</h2>"
+    html = HOME_BTN + "<h2>STOK</h2>"
     for u in urunler:
         html += f"""
         <div style='border:1px solid gray; padding:10px; margin:10px'>
@@ -227,15 +408,16 @@ def liste():
     return html
 
 
-# HAREKETLER — artık DB'den okunuyor (bellekte tutulan liste kaldırıldı)
+# HAREKETLER — muhasebeci + patron
 @app.route("/hareketler")
+@rol_gerekli("muhasebeci")
 def hareket_listesi():
     with db() as con:
         kayitlar = con.execute(
             "SELECT ad, barkod, tip, adet, kullanici, tarih FROM hareket ORDER BY id DESC"
         ).fetchall()
 
-    html = "<a href='/'>Ana Sayfa</a><h2>📊 TÜM HAREKETLER</h2><br>"
+    html = HOME_BTN + "<h2>📊 TÜM HAREKETLER</h2><br>"
     for ad, barkod, tip, adet, kullanici, tarih in kayitlar:
         html += f"""
         📦 {ad} <br>
@@ -246,17 +428,80 @@ def hareket_listesi():
         🕒 {tarih} <br>
         ----------------------<br>
         """
-    html += "<br><a href='/'>Ana Sayfa</a>"
     return html
 
 
-# HIZLI İŞLEM (kamera okutma sonrası çağrılır)
+# EXCEL RAPOR — muhasebeci + patron
+@app.route("/rapor/excel")
+@rol_gerekli("muhasebeci")
+def rapor_excel():
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    import io
+
+    wb = Workbook()
+
+    # --- STOK SAYFASI ---
+    ws1 = wb.active
+    ws1.title = "Stok"
+    basliklar1 = ["Ürün Adı", "Cins", "Ebat", "Kalınlık", "Yüzey", "Sınıf", "Renk", "Adet", "Depo", "Barkod"]
+    ws1.append(basliklar1)
+    for c in ws1[1]:
+        c.font = Font(name="Arial", bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="2196F3")
+
+    with db() as con:
+        urunler = con.execute(
+            "SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod FROM urun"
+        ).fetchall()
+    for satir in urunler:
+        ws1.append(list(satir))
+    for row_cells in ws1.iter_rows(min_row=2):
+        for cell in row_cells:
+            cell.font = Font(name="Arial")
+    for col_cells in ws1.columns:
+        uzunluk = max((len(str(c.value)) if c.value is not None else 0) for c in col_cells)
+        ws1.column_dimensions[col_cells[0].column_letter].width = min(max(uzunluk + 2, 10), 40)
+
+    # --- HAREKETLER SAYFASI ---
+    ws2 = wb.create_sheet("Hareketler")
+    basliklar2 = ["Ürün Adı", "Barkod", "İşlem", "Adet", "Kullanıcı", "Tarih"]
+    ws2.append(basliklar2)
+    for c in ws2[1]:
+        c.font = Font(name="Arial", bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="2196F3")
+
+    with db() as con:
+        hareketler = con.execute(
+            "SELECT ad,barkod,tip,adet,kullanici,tarih FROM hareket ORDER BY id DESC"
+        ).fetchall()
+    for satir in hareketler:
+        ws2.append(list(satir))
+    for row_cells in ws2.iter_rows(min_row=2):
+        for cell in row_cells:
+            cell.font = Font(name="Arial")
+    for col_cells in ws2.columns:
+        uzunluk = max((len(str(c.value)) if c.value is not None else 0) for c in col_cells)
+        ws2.column_dimensions[col_cells[0].column_letter].width = min(max(uzunluk + 2, 10), 30)
+
+    bio = io.BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+
+    dosya_adi = f"stok_raporu_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    return send_file(
+        bio,
+        as_attachment=True,
+        download_name=dosya_adi,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 @app.route("/hizli_islem", methods=["POST"])
+@rol_gerekli("depocu")
 def hizli_islem():
     data = request.get_json()
     barkod = data.get("barkod")
     tip = data.get("tip")
-    kullanici = data.get("kullanici", "Kamera")
+    kullanici = session.get("kullanici", "Bilinmiyor")
 
     with db() as con:
         cur = con.cursor()
@@ -267,7 +512,9 @@ def hizli_islem():
             if tip == "giris":
                 # Barkod DB'de yok ama giriş yapılıyor -> yeni ürün ekleme akışına yönlendir
                 return jsonify({"ok": False, "yeni": True, "barkod": barkod})
-            return jsonify({"ok": False, "msg": "Ürün bulunamadı"})
+            # Çıkış (mal verme) tarafında: sadece sizin sisteme kayıtlı sattığınız
+            # ürünler çıkış yapılabilir. Kayıtlı olmayan barkod kesinlikle reddedilir.
+            return jsonify({"ok": False, "msg": "Bu ürün sizin sattığınız ürünler arasında değil, çıkış yapılamaz"})
 
         uid, ad, adet = row
 
@@ -298,8 +545,9 @@ def hizli_islem():
         return jsonify({"ok": True, "ad": ad, "adet": adet, "toplam": toplam})
 
 
-# GERİ AL
+# GERİ AL — depocu + patron
 @app.route("/geri_al", methods=["POST"])
+@rol_gerekli("depocu")
 def geri_al():
     data = request.get_json()
     barkod = data.get("barkod")
@@ -326,26 +574,17 @@ def geri_al():
     return jsonify({"ok": True})
 
 
-# KAMERA (barkod okutma ekranı — tek, tekrarsız JS)
+# KAMERA (barkod okutma ekranı) — depocu + patron, kullanıcı artık oturumdan otomatik
 @app.route("/kamera/<tip>")
+@rol_gerekli("depocu")
 def kamera(tip):
-    return render_template_string("""
-    <a href="/">Ana Sayfa</a>
+    kullanici = session.get("kullanici", "Bilinmiyor")
+
+    return render_template_string(HOME_BTN + """
     <h2>{{tip.upper()}} OKUT</h2>
+    <h3 style="color:#999;">👤 {{kullanici}}</h3>
 
     <button onclick="baslat()">Kamerayı Başlat</button>
-
-    <br><br>
-
-    <select id="kullanici">
-    <option>Ramazan</option>
-    <option>Orhan</option>
-    <option>Behiç</option>
-    <option>İrem</option>
-    <option>Berke</option>
-    <option>Hatice</option>
-    <option>Ahmet</option>
-    </select>
 
     <br><br>
 
@@ -368,7 +607,6 @@ def kamera(tip):
                 kilit = true;
 
                 let barkod = result.text;
-                let kullanici = document.getElementById("kullanici").value;
 
                 bipSes.currentTime = 0;
                 bipSes.play().catch(e => console.log(e));
@@ -378,8 +616,7 @@ def kamera(tip):
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({
                         barkod: barkod,
-                        tip: "{{tip}}",
-                        kullanici: kullanici
+                        tip: "{{tip}}"
                     })
                 })
                 .then(r => r.json())
@@ -391,7 +628,7 @@ def kamera(tip):
                             "📦 Ürün: " + d.ad + "<br>" +
                             "📦 Kalan: " + d.adet + "<br>" +
                             "📊 Senin Toplam Çıkışın: " + d.toplam + "<br>" +
-                            "👤 Kullanıcı: " + kullanici;
+                            "👤 Kullanıcı: {{kullanici}}";
                     } else if (d.yeni) {
                         document.body.style.background = "#2196F3";
                         document.getElementById("sonuc").innerHTML =
@@ -416,7 +653,7 @@ def kamera(tip):
         });
     }
     </script>
-    """, tip=tip)
+    """, tip=tip, kullanici=kullanici)
 
 
 if __name__ == "__main__":
