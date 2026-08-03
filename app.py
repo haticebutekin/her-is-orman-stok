@@ -254,7 +254,9 @@ def index():
         butonlar += '<a href="/ekle" class="btn mavi">➕ ÜRÜN EKLE</a>'
         butonlar += '<a href="/liste" class="btn mor">📦 STOK</a>'
         butonlar += '<a href="/hareketler" class="btn kirmizi">📊 HAREKET</a>'
-        butonlar += '<a href="/rapor/excel" class="btn turkuaz">📥 EXCEL RAPOR İNDİR</a>'
+        butonlar += '<a href="/rapor/excel" class="btn turkuaz">📥 EXCEL (XLSX) İNDİR</a>'
+        butonlar += '<a href="/rapor/xls" class="btn turkuaz">📥 EXCEL 2003 (XLS) İNDİR</a>'
+        butonlar += '<a href="/rapor/csv" class="btn turkuaz">📥 CSV İNDİR</a>'
 
     return """
     <html>
@@ -437,7 +439,7 @@ def hareket_listesi():
     return html
 
 
-# EXCEL RAPOR — muhasebeci + patron
+# EXCEL RAPOR (XLSX — Excel 2007 ve üzeri) — muhasebeci + patron
 @app.route("/rapor/excel")
 @rol_gerekli("muhasebeci")
 def rapor_excel():
@@ -501,6 +503,98 @@ def rapor_excel():
         download_name=dosya_adi,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
+
+# EXCEL 2003 RAPOR (XLS — eski binary format) — muhasebeci + patron
+# openpyxl xlsx (Office 2007+) üretir; Excel 2003 bunu tanımaz.
+# Bu route xlwt ile klasik .xls üretir, Excel 2003 dahil her sürümde açılır.
+# Not: xlwt sayfa başına 65.536 satır / 256 sütun sınırına sahiptir.
+@app.route("/rapor/xls")
+@rol_gerekli("muhasebeci")
+def rapor_xls():
+    import xlwt
+    import io
+
+    wb = xlwt.Workbook()
+
+    baslik_stili = xlwt.easyxf(
+        "font: bold on, color white; pattern: pattern solid, fore_colour blue;"
+    )
+
+    # --- STOK SAYFASI ---
+    ws1 = wb.add_sheet("Stok")
+    basliklar1 = ["Ürün Adı", "Cins", "Ebat", "Kalınlık", "Yüzey", "Sınıf", "Renk", "Adet", "Depo", "Barkod"]
+    for col, b in enumerate(basliklar1):
+        ws1.write(0, col, b, baslik_stili)
+
+    with db() as con:
+        urunler = con.execute(
+            "SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod FROM urun"
+        ).fetchall()
+    for row_idx, satir in enumerate(urunler, start=1):
+        for col_idx, deger in enumerate(satir):
+            ws1.write(row_idx, col_idx, deger)
+    for col_idx in range(len(basliklar1)):
+        ws1.col(col_idx).width = 256 * 18  # yaklaşık 18 karakter genişlik
+
+    # --- HAREKETLER SAYFASI ---
+    ws2 = wb.add_sheet("Hareketler")
+    basliklar2 = ["Ürün Adı", "Barkod", "İşlem", "Adet", "Kullanıcı", "Tarih"]
+    for col, b in enumerate(basliklar2):
+        ws2.write(0, col, b, baslik_stili)
+
+    with db() as con:
+        hareketler = con.execute(
+            "SELECT ad,barkod,tip,adet,kullanici,tarih FROM hareket ORDER BY id DESC"
+        ).fetchall()
+    for row_idx, satir in enumerate(hareketler, start=1):
+        for col_idx, deger in enumerate(satir):
+            ws2.write(row_idx, col_idx, str(deger) if deger is not None else "")
+    for col_idx in range(len(basliklar2)):
+        ws2.col(col_idx).width = 256 * 18
+
+    bio = io.BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+
+    dosya_adi = f"stok_raporu_{datetime.now().strftime('%Y%m%d_%H%M')}.xls"
+    return send_file(
+        bio,
+        as_attachment=True,
+        download_name=dosya_adi,
+        mimetype="application/vnd.ms-excel",
+    )
+
+
+# CSV RAPOR (her Excel sürümünde sorunsuz açılır) — muhasebeci + patron
+@app.route("/rapor/csv")
+@rol_gerekli("muhasebeci")
+def rapor_csv():
+    import csv
+    import io
+
+    si = io.StringIO()
+    writer = csv.writer(si, delimiter=";")  # Türkçe Windows Excel ; ayraç bekler
+    writer.writerow(["Ürün Adı", "Cins", "Ebat", "Kalınlık", "Yüzey", "Sınıf", "Renk", "Adet", "Depo", "Barkod"])
+
+    with db() as con:
+        urunler = con.execute(
+            "SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod FROM urun"
+        ).fetchall()
+    writer.writerows(urunler)
+
+    output = io.BytesIO(si.getvalue().encode("utf-8-sig"))  # BOM: ş,ğ,ü,ö,ç,ı bozulmasın
+    output.seek(0)
+
+    dosya_adi = f"stok_raporu_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=dosya_adi,
+        mimetype="text/csv",
+    )
+
+
 @app.route("/hizli_islem", methods=["POST"])
 @rol_gerekli("depocu")
 def hizli_islem():
