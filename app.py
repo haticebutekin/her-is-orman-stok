@@ -1112,7 +1112,20 @@ def liste():
         function secilenleriYazdir(){
           var barkodlar = Array.from(document.querySelectorAll('.etiket-sec:checked')).map(k => k.value);
           if(barkodlar.length === 0) return;
-          window.open('/etiketler?barkodlar=' + barkodlar.join(','), '_blank');
+          var form = document.createElement('form');
+          form.method = 'POST';
+          form.action = '/etiketler';
+          form.target = '_blank';
+          barkodlar.forEach(function(b){
+            var girdi = document.createElement('input');
+            girdi.type = 'hidden';
+            girdi.name = 'barkod';
+            girdi.value = b;
+            form.appendChild(girdi);
+          });
+          document.body.appendChild(form);
+          form.submit();
+          document.body.removeChild(form);
         }
         </script>
         """
@@ -1451,20 +1464,20 @@ def etiket(barkod):
     <title>Etiket - {ad}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        @page {{ size: 80mm 50mm; margin: 3mm; }}
+        @page {{ size: 40mm 58mm; margin: 2mm; }}
         * {{ box-sizing: border-box; }}
         body {{
             font-family: Arial, sans-serif; margin:0; padding:0;
             background:#fff; color:#000;
         }}
         .etiket {{
-            width: 74mm; padding: 4mm; text-align:center;
+            width: 36mm; padding: 1.5mm; text-align:center; margin:0 auto;
         }}
-        .ad {{ font-size: 15px; font-weight:800; margin-bottom:2mm; line-height:1.2; }}
-        .ozellik {{ font-size: 10px; color:#333; margin-bottom:2mm; line-height:1.3; }}
-        .depo {{ font-size: 10px; color:#555; margin-bottom:2mm; }}
-        img.barkod {{ width: 100%; max-width: 65mm; }}
-        img.qr {{ width: 20mm; margin-top:2mm; }}
+        .ad {{ font-size: 11px; font-weight:800; margin-bottom:1mm; line-height:1.15; }}
+        .ozellik {{ font-size: 7.5px; color:#333; margin-bottom:1mm; line-height:1.25; }}
+        .depo {{ font-size: 7.5px; color:#555; margin-bottom:1mm; }}
+        img.barkod {{ width: 100%; max-width: 34mm; }}
+        img.qr {{ width: 13mm; margin-top:1mm; }}
         .yazdir-btn {{
             display:block; margin: 6mm auto 0; padding:14px 24px;
             background:#2196F3; color:white; border:none; border-radius:10px;
@@ -1494,11 +1507,14 @@ def etiket(barkod):
 # ÇOKLU ETİKET YAZDIRMA — seçilen ürünlerin etiketlerini tek A4 sayfasına
 # ızgara halinde dizer (yazıcı kağıdı israf etmeden birden fazla etiket basmak için).
 # muhasebeci + patron
-@app.route("/etiketler")
+@app.route("/etiketler", methods=["GET", "POST"])
 @rol_gerekli("muhasebeci")
 def etiketler():
-    barkod_param = request.args.get("barkodlar", "")
-    barkodlar = [b.strip() for b in barkod_param.split(",") if b.strip()]
+    if request.method == "POST":
+        barkodlar = [b.strip() for b in request.form.getlist("barkod") if b.strip()]
+    else:
+        barkod_param = request.args.get("barkodlar", "")
+        barkodlar = [b.strip() for b in barkod_param.split(",") if b.strip()]
 
     if not barkodlar:
         return sayfa('<p class="hata">❌ Etiket için ürün seçilmedi.</p><a class="btn gri" href="/liste">⬅ Stok Listesine Dön</a>', "Hata")
@@ -1542,14 +1558,14 @@ def etiketler():
     <title>Etiketler ({len(satirlar)} adet)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        @page {{ size: A4; margin: 8mm; }}
+        @page {{ size: 40mm 58mm; margin: 2mm; }}
         * {{ box-sizing: border-box; }}
         body {{
             font-family: Arial, sans-serif; margin:0; padding:0;
             background:#e9e9e9; color:#000;
         }}
         .sayfa-ic {{
-            max-width: 794px; margin: 0 auto; padding: 16px;
+            max-width: 500px; margin: 0 auto; padding: 16px;
         }}
         .ust-arac {{
             display:flex; justify-content:center; gap:10px; margin-bottom:16px;
@@ -1562,27 +1578,26 @@ def etiketler():
         .yazdir-btn {{ background:#2196F3; color:white; }}
         .geri-btn {{ background:#555; color:white; }}
         .izgara {{
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 4mm;
-            background:white; padding:4mm; border-radius:6px;
+            display: flex; flex-direction: column; gap: 4mm;
         }}
         .etiket {{
+            width: 36mm; margin: 0 auto;
             border: 1px dashed #bbb;
-            padding: 4mm; text-align:center;
-            page-break-inside: avoid;
-            break-inside: avoid;
+            padding: 1.5mm; text-align:center;
+            background: white;
+            page-break-after: always;
+            break-after: page;
         }}
-        .ad {{ font-size: 15px; font-weight:800; margin-bottom:2mm; line-height:1.2; }}
-        .ozellik {{ font-size: 10px; color:#333; margin-bottom:2mm; line-height:1.3; }}
-        .depo {{ font-size: 10px; color:#555; margin-bottom:2mm; }}
-        img.barkod {{ width: 100%; max-width: 65mm; }}
-        img.qr {{ width: 18mm; margin-top:2mm; }}
+        .etiket:last-child {{ page-break-after: auto; break-after: auto; }}
+        .ad {{ font-size: 11px; font-weight:800; margin-bottom:1mm; line-height:1.15; }}
+        .ozellik {{ font-size: 7.5px; color:#333; margin-bottom:1mm; line-height:1.25; }}
+        .depo {{ font-size: 7.5px; color:#555; margin-bottom:1mm; }}
+        img.barkod {{ width: 100%; max-width: 34mm; }}
+        img.qr {{ width: 13mm; margin-top:1mm; }}
         @media print {{
             .ust-arac {{ display:none; }}
             body {{ background:white; margin:0; }}
             .sayfa-ic {{ max-width:none; padding:0; }}
-            .izgara {{ padding:0; }}
             .etiket {{ border: none; }}
         }}
     </style>
