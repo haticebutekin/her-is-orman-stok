@@ -346,11 +346,101 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .okut-kart:active { transform: scale(0.97); filter:brightness(0.92); }
 .okut-yesil { background: linear-gradient(135deg, rgba(0,200,83,.22), rgba(100,221,23,.10)); border-color: rgba(100,221,23,.35); }
 .okut-turuncu { background: linear-gradient(135deg, rgba(255,111,0,.22), rgba(255,152,0,.10)); border-color: rgba(255,152,0,.35); }
+.okut-mavi { background: linear-gradient(135deg, rgba(33,150,243,.22), rgba(0,188,212,.10)); border-color: rgba(33,150,243,.35); }
+.okut-mor { background: linear-gradient(135deg, rgba(94,53,177,.28), rgba(126,87,194,.12)); border-color: rgba(126,87,194,.4); }
+.okut-kirmizi { background: linear-gradient(135deg, rgba(213,0,0,.22), rgba(255,23,68,.10)); border-color: rgba(255,23,68,.35); }
 .okut-ikon { font-size: 30px; width:46px; text-align:center; flex-shrink:0; }
 .okut-metin { flex:1; }
 .okut-baslik { font-size:17px; font-weight:700; }
 .okut-alt { font-size:12.5px; color: var(--muted); margin-top:2px; }
 .okut-ok { font-size:24px; color: var(--muted); }
+
+.bolum-baslik {
+  color: var(--muted); font-size:12.5px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.5px; margin: 22px 4px 8px;
+}
+.rapor-satir { display:flex; gap:8px; margin-bottom:6px; }
+.rapor-pil {
+  flex:1; text-align:center; padding:12px 6px; border-radius:999px;
+  background:#12151c; border:1px solid var(--border); color:var(--text);
+  text-decoration:none; font-weight:700; font-size:13px;
+  transition: transform .1s ease, filter .15s ease;
+}
+.rapor-pil:active { transform: scale(0.96); filter:brightness(1.15); }
+
+.kisi-kart {
+  display:flex; align-items:center; gap:14px; text-decoration:none; color:white;
+  border-radius: var(--radius); padding:14px 16px; margin:10px 0;
+  border:1px solid var(--border);
+  background: linear-gradient(180deg, var(--card2), var(--card));
+  transition: transform .1s ease, filter .15s ease;
+}
+.kisi-kart:active { transform: scale(0.98); filter:brightness(0.92); }
+.kisi-avatar {
+  width:44px; height:44px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:17px; color:white;
+}
+.kisi-yesil { background: linear-gradient(135deg, #00C853, #64DD17); }
+.kisi-mavi { background: linear-gradient(135deg, #2196F3, #00BCD4); }
+.kisi-mor { background: linear-gradient(135deg, #5E35B1, #7E57C2); }
+.kisi-metin { flex:1; }
+.kisi-ad { font-size:16px; font-weight:700; }
+.kisi-rol { font-size:12px; color:var(--muted); margin-top:1px; }
+
+/* --- Stok listesi kartları --- */
+.ozet-kutu:not(.ozet-yesil):not(.ozet-turuncu) .ozet-sayi { color: #64B5F6; }
+.urun-kart {
+  background: linear-gradient(180deg, var(--card2), var(--card));
+  border:1px solid var(--border); border-radius: var(--radius);
+  padding:14px 16px; margin:12px 0; text-align:left;
+  box-shadow: 0 2px 10px rgba(0,0,0,.18);
+}
+.urun-kart.urun-kritik { border-color: rgba(255,152,0,.5); }
+.etiket-sec-satir {
+  display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:10px;
+  text-transform:none; font-size:13px; color:var(--muted); font-weight:500;
+}
+.etiket-sec-satir input { width:19px; height:19px; margin:0; }
+.urun-ust { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.urun-ad { font-size:16.5px; font-weight:700; }
+.urun-adet-rozet {
+  flex-shrink:0; padding:4px 11px; border-radius:999px; font-size:12.5px; font-weight:700;
+  background: rgba(100,221,23,.15); color:#9CCC65;
+}
+.urun-adet-rozet.kritik { background: rgba(255,152,0,.18); color:#FFB74D; }
+.urun-ozellik { font-size:13px; color:var(--muted); margin-top:6px; line-height:1.5; }
+.urun-depo, .urun-barkod { font-size:12.5px; color:var(--muted); margin-top:3px; }
+.urun-gorseller { display:flex; align-items:center; gap:14px; margin-top:10px; }
+.urun-gorseller img:first-child { flex:1; max-width:180px; }
+.urun-gorseller img:last-child { width:64px; }
+.urun-aksiyonlar { margin-top:10px; }
+
+/* --- Hareketler zaman çizelgesi --- */
+.filtre-satir { display:flex; gap:8px; margin: 0 0 14px; }
+.filtre-cip {
+  flex:1; text-align:center; padding:9px 6px; border-radius:999px;
+  background:#12151c; border:1px solid var(--border); color:var(--muted);
+  font-weight:700; font-size:13px; cursor:pointer; transition: all .15s ease;
+}
+.filtre-cip.aktif { background: var(--accent); border-color: var(--accent); color:white; }
+.hareket-kart {
+  display:flex; gap:12px; align-items:flex-start;
+  background: linear-gradient(180deg, var(--card2), var(--card));
+  border:1px solid var(--border); border-left:3px solid var(--border);
+  border-radius: var(--radius); padding:13px 15px; margin:10px 0;
+}
+.hareket-kart.hareket-giris { border-left-color: #64DD17; }
+.hareket-kart.hareket-cikis { border-left-color: #FF9800; }
+.hareket-ikon { font-size:19px; flex-shrink:0; margin-top:1px; }
+.hareket-govde { flex:1; min-width:0; }
+.hareket-ust { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.hareket-ad { font-size:15px; font-weight:700; }
+.hareket-adet { font-size:13.5px; font-weight:800; flex-shrink:0; }
+.hareket-adet.giris { color:#9CCC65; }
+.hareket-adet.cikis { color:#FFB74D; }
+.hareket-detay { font-size:12.5px; color:var(--muted); margin-top:3px; }
+.hareket-alt { font-size:11.5px; color:var(--muted); margin-top:5px; opacity:.85; }
 """
 
 UST_BAR = """
@@ -454,19 +544,88 @@ def pin_gir(isim):
         hata = "❌ Yanlış PIN, tekrar dene"
 
     icerik = """
-    <h2>👤 {{isim}}</h2>
-    <p style="text-align:center;color:var(--muted);">PIN gir</p>
+    <style>
+    .pin-avatar {
+      width:72px; height:72px; border-radius:50%; margin: 6px auto 4px;
+      background: linear-gradient(135deg, #2196F3, #00BCD4);
+      display:flex; align-items:center; justify-content:center;
+      font-size:28px; font-weight:800; color:white;
+      box-shadow: 0 6px 20px rgba(33,150,243,.35);
+    }
+    .pin-noktalar { display:flex; justify-content:center; gap:14px; margin: 22px 0; }
+    .pin-nokta {
+      width:16px; height:16px; border-radius:50%; border:2px solid var(--border);
+      background:transparent; transition: all .12s ease;
+    }
+    .pin-nokta.dolu { background: var(--accent); border-color: var(--accent); }
+    .tuş-takimi { display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; max-width:280px; margin:0 auto; }
+    .tuş {
+      aspect-ratio:1; border-radius:50%; border:1px solid var(--border);
+      background:#12151c; color:white; font-size:22px; font-weight:700;
+      display:flex; align-items:center; justify-content:center; cursor:pointer;
+      transition: transform .08s ease, filter .12s ease;
+    }
+    .tuş:active { transform: scale(0.92); filter:brightness(1.3); background:var(--accent); }
+    .tuş.bos { background:transparent; border:none; cursor:default; }
+    .tuş.bos:active { transform:none; filter:none; background:transparent; }
+    </style>
+
+    <div class="pin-avatar">{{isim[0]|upper}}</div>
+    <h2 style="margin-bottom:2px;">{{isim}}</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">PIN gir</p>
 
     {% if hata %}<p class="hata">{{hata}}</p>{% endif %}
 
-    <form method="post">
-    <input class="pin-input" type="password" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" autofocus>
-    <button class="btn mavi">Giriş Yap</button>
+    <div class="pin-noktalar" id="noktalar">
+      <div class="pin-nokta"></div><div class="pin-nokta"></div>
+      <div class="pin-nokta"></div><div class="pin-nokta"></div>
+    </div>
+
+    <form method="post" id="pin-form">
+      <input type="hidden" name="pin" id="pin-gizli">
     </form>
+
+    <div class="tuş-takimi">
+      <div class="tuş" onclick="tuslaEkle('1')">1</div>
+      <div class="tuş" onclick="tuslaEkle('2')">2</div>
+      <div class="tuş" onclick="tuslaEkle('3')">3</div>
+      <div class="tuş" onclick="tuslaEkle('4')">4</div>
+      <div class="tuş" onclick="tuslaEkle('5')">5</div>
+      <div class="tuş" onclick="tuslaEkle('6')">6</div>
+      <div class="tuş" onclick="tuslaEkle('7')">7</div>
+      <div class="tuş" onclick="tuslaEkle('8')">8</div>
+      <div class="tuş" onclick="tuslaEkle('9')">9</div>
+      <div class="tuş bos"></div>
+      <div class="tuş" onclick="tuslaEkle('0')">0</div>
+      <div class="tuş" onclick="silTusu()">⌫</div>
+    </div>
 
     <p style="text-align:center;margin-top:24px;">
     <a href="/" style="color:var(--muted);text-decoration:none;">⬅ Geri</a>
     </p>
+
+    <script>
+    let girilenPin = "";
+    function noktalariGuncelle(){
+      document.querySelectorAll('.pin-nokta').forEach((n, i) => {
+        n.classList.toggle('dolu', i < girilenPin.length);
+      });
+    }
+    function tuslaEkle(rakam){
+      if(girilenPin.length >= 4) return;
+      girilenPin += rakam;
+      if(navigator.vibrate) navigator.vibrate(15);
+      noktalariGuncelle();
+      if(girilenPin.length === 4){
+        document.getElementById('pin-gizli').value = girilenPin;
+        setTimeout(() => document.getElementById('pin-form').submit(), 120);
+      }
+    }
+    function silTusu(){
+      girilenPin = girilenPin.slice(0, -1);
+      noktalariGuncelle();
+    }
+    </script>
     """
     return render_template_string(sayfa(icerik, "Giriş"), isim=isim, hata=hata)
 
@@ -484,12 +643,27 @@ def index():
     rol = session.get("rol")
 
     if not kullanici:
+        ROL_ETIKET = {"depocu": "Depocu", "muhasebeci": "Muhasebeci", "patron": "Patron"}
+        ROL_RENK = {"depocu": "kisi-yesil", "muhasebeci": "kisi-mavi", "patron": "kisi-mor"}
         secim_html = ""
         for isim in ROLLER:
-            secim_html += '<a href="/pin_gir/' + isim + '" class="btn mavi">' + isim + '</a>'
+            bas_harf = isim[0].upper()
+            rol_adi = ROL_ETIKET.get(ROLLER[isim], "")
+            renk = ROL_RENK.get(ROLLER[isim], "kisi-mavi")
+            secim_html += f"""
+            <a href="/pin_gir/{isim}" class="kisi-kart">
+              <div class="kisi-avatar {renk}">{bas_harf}</div>
+              <div class="kisi-metin">
+                <div class="kisi-ad">{isim}</div>
+                <div class="kisi-rol">{rol_adi}</div>
+              </div>
+              <div class="okut-ok">›</div>
+            </a>
+            """
 
         icerik = (
             "<h1>👋 Kimsin?</h1>"
+            + '<h3 class="alt">Devam etmek için ismini seç</h3>'
             + secim_html
             + """
             <div class="kart qr-kutu">
@@ -524,12 +698,31 @@ def index():
         </a>
         """
     if rol in ("muhasebeci", "patron"):
-        butonlar += '<a href="/ekle" class="btn mavi">➕ ÜRÜN EKLE</a>'
-        butonlar += '<a href="/liste" class="btn mor">📦 STOK LİSTESİ</a>'
-        butonlar += '<a href="/hareketler" class="btn kirmizi">📊 HAREKETLER</a>'
-        butonlar += '<a href="/rapor/excel" class="btn turkuaz">📥 EXCEL (XLSX)</a>'
-        butonlar += '<a href="/rapor/xls" class="btn turkuaz">📥 EXCEL 2003 (XLS)</a>'
-        butonlar += '<a href="/rapor/csv" class="btn turkuaz">📥 CSV İNDİR</a>'
+        butonlar += """
+        <div class="bolum-baslik">İşlemler</div>
+        <a href="/ekle" class="okut-kart okut-mavi">
+          <div class="okut-ikon">➕</div>
+          <div class="okut-metin"><div class="okut-baslik">Ürün Ekle</div><div class="okut-alt">Yeni ürün kaydı oluştur</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/liste" class="okut-kart okut-mor">
+          <div class="okut-ikon">📦</div>
+          <div class="okut-metin"><div class="okut-baslik">Stok Listesi</div><div class="okut-alt">Ürünleri görüntüle, etiket bas</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/hareketler" class="okut-kart okut-kirmizi">
+          <div class="okut-ikon">📊</div>
+          <div class="okut-metin"><div class="okut-baslik">Hareketler</div><div class="okut-alt">Tüm giriş/çıkış geçmişi</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+
+        <div class="bolum-baslik">Raporlar</div>
+        <div class="rapor-satir">
+          <a href="/rapor/excel" class="rapor-pil">📥 XLSX</a>
+          <a href="/rapor/xls" class="rapor-pil">📥 XLS</a>
+          <a href="/rapor/csv" class="rapor-pil">📥 CSV</a>
+        </div>
+        """
 
     icerik = (
         "<h1>📦 STOK PANEL</h1>"
@@ -586,31 +779,43 @@ def ekle2():
             con.close()
 
         icerik = (
-            '<h2>✅ Ürün Kaydedildi</h2>'
-            + '<p style="text-align:center;"><b>' + ad + '</b></p>'
+            '<div style="text-align:center;font-size:52px;margin-bottom:4px;">✅</div>'
+            + '<h2 style="margin-top:0;">Ürün Kaydedildi</h2>'
+            + '<p style="text-align:center;color:var(--muted);margin-top:-8px;"><b style="color:var(--text);">' + ad + '</b></p>'
             + '<div class="kart" style="text-align:center;">'
-            + '📦 Barkod: ' + barkod + '<br><br>'
+            + '<span class="rozet">Barkod</span><br><br>'
+            + '<b style="font-size:18px;letter-spacing:1px;">' + barkod + '</b><br><br>'
             + '<img src="/barkod/' + barkod + '.png" width="260"><br><br>'
             + '<img src="/qr/' + barkod + '.png" width="140">'
             + '</div>'
-            + '<a class="btn turkuaz" href="/etiket/' + barkod + '" target="_blank">🖨️ Etiket Yazdır</a>'
-            + '<a class="btn mor" href="/liste">📦 Stok Listesine Git</a>'
-            + '<a class="btn mavi" href="/ekle">➕ Yeni Ürün Ekle</a>'
+            + '<a href="/etiket/' + barkod + '" target="_blank" class="okut-kart okut-mavi">'
+            + '<div class="okut-ikon">🖨️</div><div class="okut-metin"><div class="okut-baslik">Etiket Yazdır</div></div><div class="okut-ok">›</div></a>'
+            + '<a href="/liste" class="okut-kart okut-mor">'
+            + '<div class="okut-ikon">📦</div><div class="okut-metin"><div class="okut-baslik">Stok Listesine Git</div></div><div class="okut-ok">›</div></a>'
+            + '<a href="/ekle" class="okut-kart okut-yesil">'
+            + '<div class="okut-ikon">➕</div><div class="okut-metin"><div class="okut-baslik">Yeni Ürün Ekle</div></div><div class="okut-ok">›</div></a>'
         )
         return sayfa(icerik, "Ürün Kaydedildi")
 
     icerik = """
-    <h3>Ürün Bilgisi</h3>
+    <h2 style="margin-bottom:2px;">➕ Ürün Ekle</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">Yeni ürün bilgilerini gir</p>
 
     {% if on_dolu_barkod %}
-    <p class="hata" style="color:#2196F3;">📷 Okutulan barkod: {{on_dolu_barkod}} — bu ürün stokta yok, yeni ürün olarak ekleyin.</p>
+    <div class="sonuc-kart sonuc-yeni" style="margin-bottom:4px;">
+      📷 Okutulan barkod: <b>{{on_dolu_barkod}}</b> — bu ürün stokta yok, yeni ürün olarak ekleyin.
+    </div>
     {% endif %}
 
     <form method="post">
+    <div class="kart">
     <label>Barkod</label>
     <input name="barkod" value="{{on_dolu_barkod}}" placeholder="Boş bırak = otomatik barkod">
     <label>Ürün Adı</label>
     <input name="ad" placeholder="Ürün Adı" required>
+    </div>
+
+    <div class="kart">
     <label>Cins</label>
     <input name="cins" placeholder="Cins">
     <label>Ebat</label>
@@ -627,6 +832,9 @@ def ekle2():
     <input name="sinif" placeholder="Sınıf">
     <label>Renk</label>
     <input name="renk" placeholder="Renk">
+    </div>
+
+    <div class="kart">
     <label>Adet</label>
     <input name="adet" type="number" placeholder="Adet" required>
     <label>Depo</label>
@@ -648,38 +856,53 @@ def liste():
     con = db()
     try:
         with con.cursor() as cur:
-            cur.execute("SELECT * FROM urun")
+            cur.execute("SELECT * FROM urun ORDER BY ad")
             urunler = cur.fetchall()
     finally:
         con.close()
 
+    KRITIK_ESIK = 5
+    toplam_urun = len(urunler)
+    toplam_adet = sum(u[8] for u in urunler)
+    kritik_sayisi = sum(1 for u in urunler if u[8] <= KRITIK_ESIK)
+
     kartlar = ""
     for u in urunler:
+        kritik_mi = u[8] <= KRITIK_ESIK
+        ozellikler = " · ".join([x for x in [u[2], u[3], u[4], u[5], u[6], u[7]] if x])
         kartlar += f"""
-        <div class='kart' id="urun-{u[10]}">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;text-transform:none;font-size:14px;color:var(--text);">
-        <input type="checkbox" class="etiket-sec" value="{u[10]}" style="width:20px;height:20px;">
-        Etikete ekle
+        <div class='urun-kart {"urun-kritik" if kritik_mi else ""}' id="urun-{u[10]}">
+        <label class="etiket-sec-satir">
+        <input type="checkbox" class="etiket-sec" value="{u[10]}">
+        <span>Etikete ekle</span>
         </label>
-        <b>{u[1]}</b><br>
-        Cins: {u[2]}<br>
-        Ebat: {u[3]}<br>
-        Kalınlık: {u[4]}<br>
-        Yüzey: {u[5]}<br>
-        Sınıf: {u[6]}<br>
-        Renk: {u[7]}<br>
-        Adet: {u[8]}<br>
-        Depo: {u[9]}<br>
-        Barkod: {u[10]}<br>
-        <img src="/barkod/{u[10]}.png" width="180"><br>
-        <img src="/qr/{u[10]}.png" width="90"><br><br>
+        <div class="urun-ust">
+          <div class="urun-ad">{u[1]}</div>
+          <div class="urun-adet-rozet {'kritik' if kritik_mi else ''}">{u[8]} adet</div>
+        </div>
+        <div class="urun-ozellik">{ozellikler or '-'}</div>
+        <div class="urun-depo">🏭 {u[9]}</div>
+        <div class="urun-barkod">🔢 {u[10]}</div>
+        <div class="urun-gorseller">
+          <img src="/barkod/{u[10]}.png">
+          <img src="/qr/{u[10]}.png">
+        </div>
+        <div class="urun-aksiyonlar">
         <button class="btn-kucuk turkuaz" onclick="window.open('/etiket/{u[10]}','_blank')">🖨️ Etiket</button>
         <button class="btn-kucuk kirmizi" onclick="urunSil('{u[10]}')">🗑️ Sil</button>
+        </div>
         </div>
         """
 
     icerik = (
         "<h2>📦 STOK</h2>"
+        + f"""
+        <div class="ozet-satir" style="margin-bottom:14px;">
+          <div class="ozet-kutu"><div class="ozet-sayi">{toplam_urun}</div><div class="ozet-etiket">Ürün Çeşidi</div></div>
+          <div class="ozet-kutu"><div class="ozet-sayi">{toplam_adet}</div><div class="ozet-etiket">Toplam Adet</div></div>
+          <div class="ozet-kutu ozet-turuncu"><div class="ozet-sayi">{kritik_sayisi}</div><div class="ozet-etiket">Kritik Stok</div></div>
+        </div>
+        """
         + '<input class="arama" id="arama" placeholder="🔍 Ürün, barkod veya depo ara..." oninput="ara()">'
         + '<div style="display:flex;gap:8px;margin-bottom:14px;">'
         + '<button class="btn-kucuk mavi" style="flex:1;text-align:center;" onclick="tumunuSec()">☑️ Tümünü Seç</button>'
@@ -698,7 +921,7 @@ def liste():
         <script>
         function ara(){
           var q = document.getElementById('arama').value.toLocaleLowerCase('tr');
-          document.querySelectorAll('#liste .kart').forEach(function(k){
+          document.querySelectorAll('#liste .urun-kart').forEach(function(k){
             var metin = k.textContent.toLocaleLowerCase('tr');
             k.style.display = metin.indexOf(q) !== -1 ? '' : 'none';
           });
@@ -726,7 +949,7 @@ def liste():
           if(e.target.classList.contains('etiket-sec')) secimSayaciGuncelle();
         });
         function tumunuSec(){
-          document.querySelectorAll('#liste .kart').forEach(function(k){
+          document.querySelectorAll('#liste .urun-kart').forEach(function(k){
             if(k.style.display !== 'none'){
               var kutu = k.querySelector('.etiket-sec');
               if(kutu) kutu.checked = true;
@@ -769,28 +992,51 @@ def hareket_listesi():
 
     kartlar = ""
     for ad, barkod, tip, adet, kullanici, tarih, cins, sinif, yuzey, renk, ebat, depo in kayitlar:
+        ozellikler = " · ".join([x for x in [cins, sinif, yuzey, renk, ebat] if x])
+        giris_mi = tip == "giris"
         kartlar += f"""
-        <div class="kart">
-        📦 <b>{ad}</b><br>
-        🏷️ Cins: {cins or '-'} &nbsp; 🔖 Sınıf: {sinif or '-'} &nbsp; ✨ Yüzey: {yuzey or '-'}<br>
-        🎨 Renk: {renk or '-'} &nbsp; 📏 Ebat: {ebat or '-'} &nbsp; 🏭 Depo: {depo or '-'}<br>
-        🔢 {barkod}<br>
-        🔄 {tip.upper()} &nbsp; ➕/➖ {adet}<br>
-        👤 {kullanici} &nbsp; 🕒 {tarih}
+        <div class="hareket-kart {'hareket-giris' if giris_mi else 'hareket-cikis'}" data-tip="{tip}">
+          <div class="hareket-ikon">{'⬆️' if giris_mi else '⬇️'}</div>
+          <div class="hareket-govde">
+            <div class="hareket-ust">
+              <div class="hareket-ad">{ad}</div>
+              <div class="hareket-adet {'giris' if giris_mi else 'cikis'}">{'+' if giris_mi else '-'}{adet}</div>
+            </div>
+            <div class="hareket-detay">{ozellikler or '-'}{(' · 🏭 ' + depo) if depo else ''}</div>
+            <div class="hareket-alt">🔢 {barkod} &nbsp;·&nbsp; 👤 {kullanici} &nbsp;·&nbsp; 🕒 {tarih}</div>
+          </div>
         </div>
         """
 
     icerik = (
         "<h2>📊 TÜM HAREKETLER</h2>"
         + '<input class="arama" id="arama" placeholder="🔍 Ürün, barkod veya kullanıcı ara..." oninput="ara()">'
+        + """
+        <div class="filtre-satir">
+          <button class="filtre-cip aktif" data-filtre="hepsi" onclick="filtrele('hepsi', this)">Tümü</button>
+          <button class="filtre-cip" data-filtre="giris" onclick="filtrele('giris', this)">⬆️ Giriş</button>
+          <button class="filtre-cip" data-filtre="cikis" onclick="filtrele('cikis', this)">⬇️ Çıkış</button>
+        </div>
+        """
         + '<div id="hareketler">' + kartlar + '</div>'
         + """
         <script>
+        let aktifFiltre = 'hepsi';
         function ara(){
           var q = document.getElementById('arama').value.toLocaleLowerCase('tr');
-          document.querySelectorAll('#hareketler .kart').forEach(function(k){
-            var metin = k.textContent.toLocaleLowerCase('tr');
-            k.style.display = metin.indexOf(q) !== -1 ? '' : 'none';
+          uygula(q);
+        }
+        function filtrele(tip, btn){
+          aktifFiltre = tip;
+          document.querySelectorAll('.filtre-cip').forEach(c => c.classList.remove('aktif'));
+          btn.classList.add('aktif');
+          uygula(document.getElementById('arama').value.toLocaleLowerCase('tr'));
+        }
+        function uygula(q){
+          document.querySelectorAll('#hareketler .hareket-kart').forEach(function(k){
+            var metinUyar = k.textContent.toLocaleLowerCase('tr').indexOf(q) !== -1;
+            var tipUyar = aktifFiltre === 'hepsi' || k.dataset.tip === aktifFiltre;
+            k.style.display = (metinUyar && tipUyar) ? '' : 'none';
           });
         }
         </script>
