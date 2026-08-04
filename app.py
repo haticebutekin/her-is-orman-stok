@@ -507,6 +507,8 @@ def manifest():
     })
 
 
+
+
 @app.route("/qr_baglan")
 def qr_baglan():
     url = request.host_url
