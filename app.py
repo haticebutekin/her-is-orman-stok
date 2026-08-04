@@ -596,6 +596,10 @@ def liste():
     for u in urunler:
         kartlar += f"""
         <div class='kart' id="urun-{u[10]}">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;text-transform:none;font-size:14px;color:var(--text);">
+        <input type="checkbox" class="etiket-sec" value="{u[10]}" style="width:20px;height:20px;">
+        Etikete ekle
+        </label>
         <b>{u[1]}</b><br>
         Cins: {u[2]}<br>
         Ebat: {u[3]}<br>
@@ -616,8 +620,20 @@ def liste():
     icerik = (
         "<h2>📦 STOK</h2>"
         + '<input class="arama" id="arama" placeholder="🔍 Ürün, barkod veya depo ara..." oninput="ara()">'
+        + '<div style="display:flex;gap:8px;margin-bottom:14px;">'
+        + '<button class="btn-kucuk mavi" style="flex:1;text-align:center;" onclick="tumunuSec()">☑️ Tümünü Seç</button>'
+        + '<button class="btn-kucuk gri" style="flex:1;text-align:center;" onclick="secimiTemizle()">✖️ Temizle</button>'
+        + '</div>'
         + '<div id="liste">' + kartlar + '</div>'
         + """
+        <div id="alt-yazdir-bar" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:9999;
+             padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+             background:rgba(18,21,28,.92);backdrop-filter:blur(14px);border-top:1px solid rgba(255,255,255,.08);">
+          <button class="btn turkuaz" style="margin:0;max-width:520px;margin:0 auto;" onclick="secilenleriYazdir()">
+            🖨️ Seçilenleri Tek Sayfada Yazdır (<span id="secili-sayisi">0</span>)
+          </button>
+        </div>
+
         <script>
         function ara(){
           var q = document.getElementById('arama').value.toLocaleLowerCase('tr');
@@ -638,6 +654,33 @@ def liste():
                 alert('Silinemedi, tekrar dene.');
               }
             });
+        }
+        function secimSayaciGuncelle(){
+          var secililer = document.querySelectorAll('.etiket-sec:checked');
+          var bar = document.getElementById('alt-yazdir-bar');
+          document.getElementById('secili-sayisi').textContent = secililer.length;
+          bar.style.display = secililer.length > 0 ? 'block' : 'none';
+        }
+        document.getElementById('liste').addEventListener('change', function(e){
+          if(e.target.classList.contains('etiket-sec')) secimSayaciGuncelle();
+        });
+        function tumunuSec(){
+          document.querySelectorAll('#liste .kart').forEach(function(k){
+            if(k.style.display !== 'none'){
+              var kutu = k.querySelector('.etiket-sec');
+              if(kutu) kutu.checked = true;
+            }
+          });
+          secimSayaciGuncelle();
+        }
+        function secimiTemizle(){
+          document.querySelectorAll('.etiket-sec').forEach(k => k.checked = false);
+          secimSayaciGuncelle();
+        }
+        function secilenleriYazdir(){
+          var barkodlar = Array.from(document.querySelectorAll('.etiket-sec:checked')).map(k => k.value);
+          if(barkodlar.length === 0) return;
+          window.open('/etiketler?barkodlar=' + barkodlar.join(','), '_blank');
         }
         </script>
         """
@@ -926,7 +969,7 @@ def urun_sil(barkod):
     return jsonify({"ok": silindi})
 
 
-# ETİKET YAZDIRMA — muhasebeci + patron
+# ETİKET YAZDIRMA (tekli) — muhasebeci + patron
 @app.route("/etiket/<barkod>")
 @rol_gerekli("muhasebeci")
 def etiket(barkod):
@@ -987,6 +1030,118 @@ def etiket(barkod):
             <img class="qr" src="/qr/{barkod}.png">
         </div>
         <button class="yazdir-btn" onclick="window.print()">🖨️ Yazdır</button>
+    </body>
+    </html>
+    """
+    return html
+
+
+# ÇOKLU ETİKET YAZDIRMA — seçilen ürünlerin etiketlerini tek A4 sayfasına
+# ızgara halinde dizer (yazıcı kağıdı israf etmeden birden fazla etiket basmak için).
+# muhasebeci + patron
+@app.route("/etiketler")
+@rol_gerekli("muhasebeci")
+def etiketler():
+    barkod_param = request.args.get("barkodlar", "")
+    barkodlar = [b.strip() for b in barkod_param.split(",") if b.strip()]
+
+    if not barkodlar:
+        return sayfa('<p class="hata">❌ Etiket için ürün seçilmedi.</p><a class="btn gri" href="/liste">⬅ Stok Listesine Dön</a>', "Hata")
+
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,depo,barkod
+                FROM urun WHERE barkod = ANY(%s)
+            """, (barkodlar,))
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+
+    # Seçim sırasını korumak için barkodlara göre yeniden sırala
+    sirali = {s[8]: s for s in satirlar}
+    satirlar = [sirali[b] for b in barkodlar if b in sirali]
+
+    if not satirlar:
+        return sayfa('<p class="hata">❌ Seçilen ürünler bulunamadı.</p><a class="btn gri" href="/liste">⬅ Stok Listesine Dön</a>', "Hata")
+
+    etiket_html = ""
+    for ad, cins, ebat, kalinlik, yuzey, sinif, renk, depo, barkod in satirlar:
+        ozellikler = " · ".join([x for x in [cins, ebat, kalinlik, yuzey, sinif, renk] if x])
+        etiket_html += f"""
+        <div class="etiket">
+            <div class="ad">{ad}</div>
+            <div class="ozellik">{ozellikler}</div>
+            {'<div class="depo">🏭 ' + depo + '</div>' if depo else ''}
+            <img class="barkod" src="/barkod/{barkod}.png">
+            <img class="qr" src="/qr/{barkod}.png">
+        </div>
+        """
+
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="tr">
+    <head>
+    <meta charset="utf-8">
+    <title>Etiketler ({len(satirlar)} adet)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        @page {{ size: A4; margin: 8mm; }}
+        * {{ box-sizing: border-box; }}
+        body {{
+            font-family: Arial, sans-serif; margin:0; padding:0;
+            background:#e9e9e9; color:#000;
+        }}
+        .sayfa-ic {{
+            max-width: 794px; margin: 0 auto; padding: 16px;
+        }}
+        .ust-arac {{
+            display:flex; justify-content:center; gap:10px; margin-bottom:16px;
+        }}
+        .yazdir-btn, .geri-btn {{
+            padding:14px 24px; border:none; border-radius:10px;
+            font-size:16px; font-weight:700; cursor:pointer; text-decoration:none;
+            display:inline-block;
+        }}
+        .yazdir-btn {{ background:#2196F3; color:white; }}
+        .geri-btn {{ background:#555; color:white; }}
+        .izgara {{
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4mm;
+            background:white; padding:4mm; border-radius:6px;
+        }}
+        .etiket {{
+            border: 1px dashed #bbb;
+            padding: 4mm; text-align:center;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }}
+        .ad {{ font-size: 15px; font-weight:800; margin-bottom:2mm; line-height:1.2; }}
+        .ozellik {{ font-size: 10px; color:#333; margin-bottom:2mm; line-height:1.3; }}
+        .depo {{ font-size: 10px; color:#555; margin-bottom:2mm; }}
+        img.barkod {{ width: 100%; max-width: 65mm; }}
+        img.qr {{ width: 18mm; margin-top:2mm; }}
+        @media print {{
+            .ust-arac {{ display:none; }}
+            body {{ background:white; margin:0; }}
+            .sayfa-ic {{ max-width:none; padding:0; }}
+            .izgara {{ padding:0; }}
+            .etiket {{ border: none; }}
+        }}
+    </style>
+    </head>
+    <body>
+        <div class="sayfa-ic">
+            <div class="ust-arac">
+                <button class="yazdir-btn" onclick="window.print()">🖨️ Sayfayı Yazdır ({len(satirlar)} etiket)</button>
+                <a class="geri-btn" href="/liste">⬅ Listeye Dön</a>
+            </div>
+            <div class="izgara">
+                {etiket_html}
+            </div>
+        </div>
     </body>
     </html>
     """
