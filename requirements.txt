@@ -4,3 +4,4 @@ python-barcode
 pillow
 qrcode
 psycopg2-binary
+tzdata
