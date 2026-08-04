@@ -37,6 +37,7 @@ DEPOLAR = [
     "HELVACI YANI",
     "RÖTBALANSÇI YANI",
     "KESİMHANE",
+    "OFİS",
 ]
 
 # KULLANICI -> ROL
