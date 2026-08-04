@@ -94,6 +94,28 @@ def tablolari_olustur():
                     tarih TIMESTAMP
                 )
                 """)
+                # Bir ürüne birden fazla barkod tanımlanabilmesi için (örn. aynı
+                # ürün farklı tedarikçilerden farklı barkodla geliyorsa) ayrı bir
+                # eşleştirme tablosu. urun.barkod hâlâ "ana / etiket basılan"
+                # barkod olarak kalıyor; bu tablo ona ek olarak taranabilen
+                # tüm barkodları (ana barkod dahil) tutuyor.
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS urun_barkod(
+                    id SERIAL PRIMARY KEY,
+                    urun_id INTEGER REFERENCES urun(id) ON DELETE CASCADE,
+                    barkod TEXT UNIQUE
+                )
+                """)
+                # Var olan kurulumlarda urun.barkod içindeki barkodları
+                # urun_barkod tablosuna taşı (zaten varsa tekrar eklemez).
+                cur.execute("""
+                INSERT INTO urun_barkod (urun_id, barkod)
+                SELECT u.id, u.barkod FROM urun u
+                WHERE u.barkod IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM urun_barkod ub WHERE ub.barkod = u.barkod
+                )
+                """)
                 # Var olan kurulumlarda sütun DEFAULT CURRENT_TIMESTAMP ile
                 # gelmiş olabilir (UTC saatiyle) — kaldırıyoruz, çünkü tarihi
                 # artık her INSERT'te Türkiye saatiyle biz açıkça veriyoruz.
@@ -136,7 +158,7 @@ def barkod_uret():
         con = db()
         try:
             with con.cursor() as cur:
-                cur.execute("SELECT barkod FROM urun WHERE barkod=%s", (kod,))
+                cur.execute("SELECT barkod FROM urun_barkod WHERE barkod=%s", (kod,))
                 var = cur.fetchone()
         finally:
             con.close()
