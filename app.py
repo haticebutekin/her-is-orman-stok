@@ -849,6 +849,152 @@ def ekle2():
     return render_template_string(sayfa(icerik, "Ürün Ekle"), depolar=DEPOLAR, on_dolu_barkod=on_dolu_barkod)
 
 
+# DÜZENLE — mevcut ürünü güncelle (barkod dahil) — muhasebeci + patron
+@app.route("/duzenle/<eski_barkod>", methods=["GET", "POST"])
+@rol_gerekli("muhasebeci")
+def duzenle(eski_barkod):
+    if request.method == "POST":
+        ad = request.form.get("ad", "").strip()
+        if not ad:
+            return sayfa('<p class="hata">❌ Ürün adı boş olamaz.</p><a class="btn gri" href="/duzenle/' + eski_barkod + '">⬅ Geri Dön</a>', "Hata")
+
+        try:
+            adet = int(request.form.get("adet", "").strip())
+        except (TypeError, ValueError):
+            return sayfa('<p class="hata">❌ Adet sayısal olmalı.</p><a class="btn gri" href="/duzenle/' + eski_barkod + '">⬅ Geri Dön</a>', "Hata")
+
+        yeni_barkod = request.form.get("barkod", "").strip()
+        if not yeni_barkod:
+            yeni_barkod = eski_barkod
+
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    if yeni_barkod != eski_barkod:
+                        cur.execute("SELECT id FROM urun WHERE barkod=%s", (yeni_barkod,))
+                        if cur.fetchone():
+                            con.close()
+                            return sayfa(
+                                '<p class="hata">❌ Bu barkod zaten başka bir üründe kullanılıyor.</p>'
+                                '<a class="btn gri" href="/duzenle/' + eski_barkod + '">⬅ Geri Dön</a>',
+                                "Hata"
+                            )
+                    cur.execute("""
+                        UPDATE urun
+                        SET ad=%s, cins=%s, ebat=%s, kalinlik=%s, yuzey=%s, sinif=%s, renk=%s, adet=%s, depo=%s, barkod=%s
+                        WHERE barkod=%s
+                    """, (
+                        ad,
+                        request.form.get("cins", ""),
+                        request.form.get("ebat", ""),
+                        request.form.get("kalinlik", ""),
+                        request.form.get("yuzey", ""),
+                        request.form.get("sinif", ""),
+                        request.form.get("renk", ""),
+                        adet,
+                        request.form.get("depo", ""),
+                        yeni_barkod,
+                        eski_barkod,
+                    ))
+        finally:
+            con.close()
+
+        icerik = (
+            '<div style="text-align:center;font-size:52px;margin-bottom:4px;">✅</div>'
+            + '<h2 style="margin-top:0;">Ürün Güncellendi</h2>'
+            + '<p style="text-align:center;color:var(--muted);margin-top:-8px;"><b style="color:var(--text);">' + ad + '</b></p>'
+            + '<div class="kart" style="text-align:center;">'
+            + '<span class="rozet">Barkod</span><br><br>'
+            + '<b style="font-size:18px;letter-spacing:1px;">' + yeni_barkod + '</b><br><br>'
+            + '<img src="/barkod/' + yeni_barkod + '.png" width="260"><br><br>'
+            + '<img src="/qr/' + yeni_barkod + '.png" width="140">'
+            + '</div>'
+            + (
+                '<div class="sonuc-kart sonuc-yeni">📌 Barkod değişti. Üründe önceden yapıştırılmış eski etiket varsa, üzerinde artık eski barkod yazıyor olacak — yeni etiket basmayı unutma.</div>'
+                if yeni_barkod != eski_barkod else ''
+            )
+            + '<a href="/etiket/' + yeni_barkod + '" target="_blank" class="okut-kart okut-mavi">'
+            + '<div class="okut-ikon">🖨️</div><div class="okut-metin"><div class="okut-baslik">Etiket Yazdır</div></div><div class="okut-ok">›</div></a>'
+            + '<a href="/liste" class="okut-kart okut-mor">'
+            + '<div class="okut-ikon">📦</div><div class="okut-metin"><div class="okut-baslik">Stok Listesine Git</div></div><div class="okut-ok">›</div></a>'
+        )
+        return sayfa(icerik, "Ürün Güncellendi")
+
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod FROM urun WHERE barkod=%s", (eski_barkod,))
+            row = cur.fetchone()
+    finally:
+        con.close()
+
+    if not row:
+        return sayfa('<p class="hata">❌ Ürün bulunamadı.</p><a class="btn gri" href="/liste">⬅ Stok Listesine Dön</a>', "Hata")
+
+    ad, cins, ebat, kalinlik, yuzey, sinif, renk, adet, depo, barkod = row
+
+    icerik = """
+    <h2 style="margin-bottom:2px;">✏️ Ürün Düzenle</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">{{ad}}</p>
+
+    <div class="sonuc-kart sonuc-yeni">
+      📌 Ürün gerçek hayatta zaten üstünde barkod ile mi geldi? Aşağıdaki
+      <b>Barkod</b> alanına o barkodu yazıp kaydedersen, sistemdeki barkod
+      onunla değişir ve bundan sonra taradığında direkt bu ürünü bulur.
+    </div>
+
+    <form method="post">
+    <div class="kart">
+    <label>Barkod</label>
+    <input name="barkod" value="{{barkod}}">
+    <label>Ürün Adı</label>
+    <input name="ad" value="{{ad}}" placeholder="Ürün Adı" required>
+    </div>
+
+    <div class="kart">
+    <label>Cins</label>
+    <input name="cins" value="{{cins or ''}}" placeholder="Cins">
+    <label>Ebat</label>
+    <input name="ebat" value="{{ebat or ''}}" placeholder="Ebat">
+    <label>Kalınlık</label>
+    <input name="kalinlik" value="{{kalinlik or ''}}" placeholder="Kalınlık">
+    <label>Yüzey</label>
+    <select name="yuzey" required>
+        <option value="">Seçiniz</option>
+        <option value="HG" {{ 'selected' if yuzey=='HG' else '' }}>HG</option>
+        <option value="MAT" {{ 'selected' if yuzey=='MAT' else '' }}>MAT</option>
+    </select>
+    <label>Sınıf</label>
+    <input name="sinif" value="{{sinif or ''}}" placeholder="Sınıf">
+    <label>Renk</label>
+    <input name="renk" value="{{renk or ''}}" placeholder="Renk">
+    </div>
+
+    <div class="kart">
+    <label>Adet</label>
+    <input name="adet" type="number" value="{{adet}}" placeholder="Adet" required>
+    <label>Depo</label>
+    <select name="depo">
+    {% for d in depolar %}
+    <option {{ 'selected' if d==depo else '' }}>{{d}}</option>
+    {% endfor %}
+    </select>
+    <button class="btn mavi">Kaydet</button>
+    </div>
+    </form>
+
+    <p style="text-align:center;margin-top:10px;">
+    <a href="/liste" style="color:var(--muted);text-decoration:none;">⬅ Kaydetmeden Geri Dön</a>
+    </p>
+    """
+    return render_template_string(
+        sayfa(icerik, "Ürün Düzenle"),
+        ad=ad, cins=cins, ebat=ebat, kalinlik=kalinlik, yuzey=yuzey,
+        sinif=sinif, renk=renk, adet=adet, depo=depo, barkod=barkod, depolar=DEPOLAR
+    )
+
+
 # LİSTE — muhasebeci + patron
 @app.route("/liste")
 @rol_gerekli("muhasebeci")
@@ -888,6 +1034,7 @@ def liste():
           <img src="/qr/{u[10]}.png">
         </div>
         <div class="urun-aksiyonlar">
+        <button class="btn-kucuk mavi" onclick="window.location.href='/duzenle/{u[10]}'">✏️ Düzenle</button>
         <button class="btn-kucuk turkuaz" onclick="window.open('/etiket/{u[10]}','_blank')">🖨️ Etiket</button>
         <button class="btn-kucuk kirmizi" onclick="urunSil('{u[10]}')">🗑️ Sil</button>
         </div>
