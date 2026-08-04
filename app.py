@@ -111,6 +111,24 @@ def tr_simdi():
     return datetime.now(TR_TZ).replace(tzinfo=None)
 
 
+def bugunku_ozet(kullanici):
+    """Depocu ana ekranında göstermek için: bu kullanıcının bugün yaptığı
+    giriş ve çıkış sayısı."""
+    bugun = tr_simdi().date()
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT tip, COUNT(*) FROM hareket
+                WHERE kullanici=%s AND tarih::date=%s
+                GROUP BY tip
+            """, (kullanici, bugun))
+            satirlar = dict(cur.fetchall())
+    finally:
+        con.close()
+    return satirlar.get("giris", 0), satirlar.get("cikis", 0)
+
+
 def barkod_uret():
     while True:
         kod = str(random.randint(100000000000, 999999999999))
@@ -305,6 +323,34 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
   display:inline-block; padding:3px 10px; border-radius:999px; font-size:11.5px;
   font-weight:700; letter-spacing:.3px; background:rgba(33,150,243,.15); color:#64B5F6;
 }
+
+/* --- Depocu ana ekranı: bugünkü özet + okutma kartları --- */
+.ozet-satir { display:flex; gap:10px; margin: 4px 0 18px; }
+.ozet-kutu {
+  flex:1; border-radius: var(--radius); padding: 14px 10px; text-align:center;
+  border:1px solid var(--border);
+  background: linear-gradient(180deg, var(--card2), var(--card));
+}
+.ozet-sayi { font-size: 26px; font-weight:800; line-height:1.1; }
+.ozet-etiket { font-size:11.5px; color:var(--muted); margin-top:2px; text-transform:uppercase; letter-spacing:.3px; }
+.ozet-yesil .ozet-sayi { color:#64DD17; }
+.ozet-turuncu .ozet-sayi { color:#FF9800; }
+
+.okut-kart {
+  display:flex; align-items:center; gap:14px;
+  text-decoration:none; color:white; border-radius: var(--radius);
+  padding: 20px 18px; margin: 12px 0; border:1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0,0,0,.25);
+  transition: transform .12s ease, filter .15s ease;
+}
+.okut-kart:active { transform: scale(0.97); filter:brightness(0.92); }
+.okut-yesil { background: linear-gradient(135deg, rgba(0,200,83,.22), rgba(100,221,23,.10)); border-color: rgba(100,221,23,.35); }
+.okut-turuncu { background: linear-gradient(135deg, rgba(255,111,0,.22), rgba(255,152,0,.10)); border-color: rgba(255,152,0,.35); }
+.okut-ikon { font-size: 30px; width:46px; text-align:center; flex-shrink:0; }
+.okut-metin { flex:1; }
+.okut-baslik { font-size:17px; font-weight:700; }
+.okut-alt { font-size:12.5px; color: var(--muted); margin-top:2px; }
+.okut-ok { font-size:24px; color: var(--muted); }
 """
 
 UST_BAR = """
@@ -460,8 +506,23 @@ def index():
     # Role göre buton seti — patron ve muhasebeci tam yetkili
     butonlar = ""
     if rol in ("depocu", "muhasebeci", "patron"):
-        butonlar += '<a href="/kamera/giris" class="btn yesil">⬆ GİRİŞ OKUT</a>'
-        butonlar += '<a href="/kamera/cikis" class="btn turuncu">📷 ÇIKIŞ OKUT</a>'
+        giris_sayisi, cikis_sayisi = bugunku_ozet(kullanici)
+        butonlar += f"""
+        <div class="ozet-satir">
+          <div class="ozet-kutu ozet-yesil"><div class="ozet-sayi">{giris_sayisi}</div><div class="ozet-etiket">Bugün Giriş</div></div>
+          <div class="ozet-kutu ozet-turuncu"><div class="ozet-sayi">{cikis_sayisi}</div><div class="ozet-etiket">Bugün Çıkış</div></div>
+        </div>
+        <a href="/kamera/giris" class="okut-kart okut-yesil">
+          <div class="okut-ikon">⬆️</div>
+          <div class="okut-metin"><div class="okut-baslik">Giriş Okut</div><div class="okut-alt">Depoya gelen ürünü tara</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/kamera/cikis" class="okut-kart okut-turuncu">
+          <div class="okut-ikon">⬇️</div>
+          <div class="okut-metin"><div class="okut-baslik">Çıkış Okut</div><div class="okut-alt">Depodan çıkan ürünü tara</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        """
     if rol in ("muhasebeci", "patron"):
         butonlar += '<a href="/ekle" class="btn mavi">➕ ÜRÜN EKLE</a>'
         butonlar += '<a href="/liste" class="btn mor">📦 STOK LİSTESİ</a>'
@@ -1181,92 +1242,246 @@ def geri_al():
 
 
 # KAMERA (barkod okutma ekranı) — depocu + patron, kullanıcı artık oturumdan otomatik
+# Modern, telefon-öncelikli tasarım: giriş/çıkış tek ekranda anında değiştirilebilir,
+# fener açma, elle barkod girişi, son işlemi geri alma ve titreşimli/sesli geri bildirim içerir.
 @app.route("/kamera/<tip>")
 @rol_gerekli("depocu")
 def kamera(tip):
+    if tip not in ("giris", "cikis"):
+        tip = "giris"
     kullanici = session.get("kullanici", "Bilinmiyor")
 
     icerik = """
-    <h2>{{tip.upper()}} OKUT</h2>
-    <h3 class="alt">👤 {{kullanici}}</h3>
+    <style>
+    .mod-gecis {
+      display:flex; background:#12151c; border:1px solid var(--border);
+      border-radius:999px; padding:4px; margin-bottom:16px;
+    }
+    .mod-btn {
+      flex:1; text-align:center; padding:12px 8px; border-radius:999px;
+      font-weight:700; font-size:14.5px; cursor:pointer; border:none;
+      background:transparent; color:var(--muted); transition: all .18s ease;
+    }
+    .mod-btn.aktif-giris { background: linear-gradient(135deg,#00C853,#64DD17); color:#fff; }
+    .mod-btn.aktif-cikis { background: linear-gradient(135deg,#FF6F00,#FF9800); color:#fff; }
 
-    <button class="btn yesil" onclick="baslat()">Kamerayı Başlat</button>
+    .kamera-cerceve {
+      position:relative; border-radius:20px; overflow:hidden; margin-bottom:14px;
+      border:2px solid var(--border); background:#000;
+      box-shadow: 0 8px 28px rgba(0,0,0,.5);
+      aspect-ratio: 4/3;
+    }
+    .kamera-cerceve video { width:100%; height:100%; object-fit:cover; display:block; }
+    .kamera-ustkatman {
+      position:absolute; inset:0; pointer-events:none;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .tarama-kutu {
+      width:72%; height:42%; border:3px solid rgba(255,255,255,.85);
+      border-radius:14px; box-shadow: 0 0 0 999px rgba(0,0,0,.28);
+    }
+    .kamera-araclar {
+      position:absolute; top:10px; right:10px; display:flex; flex-direction:column; gap:8px;
+      pointer-events:auto;
+    }
+    .araç-btn {
+      width:42px; height:42px; border-radius:50%; border:none; cursor:pointer;
+      background:rgba(0,0,0,.5); color:white; font-size:19px;
+      display:flex; align-items:center; justify-content:center;
+      backdrop-filter: blur(6px);
+    }
+    .araç-btn.aktif { background: var(--accent); }
+    .kamera-baslat-alan { text-align:center; padding: 40px 10px; }
 
-    <div class="video-alan">
-    <video id="video" width="300" height="200"></video>
+    .sonuc-kart {
+      border-radius: var(--radius); padding:18px; margin: 4px 0 14px;
+      border:1px solid var(--border); background: linear-gradient(180deg, var(--card2), var(--card));
+      animation: belir .2s ease;
+    }
+    .sonuc-basari { border-color: rgba(100,221,23,.4); }
+    .sonuc-hata { border-color: rgba(255,23,68,.4); }
+    .sonuc-yeni { border-color: rgba(33,150,243,.4); }
+    .sonuc-ust { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    .sonuc-ikon { font-size:26px; }
+    .sonuc-ad { font-size:17px; font-weight:800; }
+    .sonuc-satirlar { font-size:13.5px; color:var(--muted); line-height:1.9; }
+    .sonuc-satirlar b { color: var(--text); font-weight:600; }
+
+    .geri-al-btn {
+      display:block; width:100%; text-align:center; padding:13px;
+      border-radius: var(--radius-sm); border:1px dashed var(--border);
+      background:transparent; color:var(--muted); font-weight:600; font-size:13.5px;
+      cursor:pointer; margin-top:2px;
+    }
+    .geri-al-btn:active { background: rgba(255,255,255,.05); }
+
+    .elle-giris-alan { margin-top:8px; }
+    .elle-giris-satir { display:flex; gap:8px; }
+    .elle-giris-satir input { margin:0; flex:1; }
+    .elle-giris-satir button { width:auto; margin:0; padding:0 18px; white-space:nowrap; }
+    </style>
+
+    <h3 class="alt" style="margin-bottom:2px;">👤 {{kullanici}}</h3>
+
+    <div class="mod-gecis">
+      <button type="button" id="btn-giris" class="mod-btn" onclick="modDegistir('giris')">⬆️ GİRİŞ</button>
+      <button type="button" id="btn-cikis" class="mod-btn" onclick="modDegistir('cikis')">⬇️ ÇIKIŞ</button>
     </div>
 
-    <h3 id="sonuc" style="text-align:left;"></h3>
+    <div class="kamera-cerceve" id="kamera-cerceve" style="display:none;">
+      <video id="video"></video>
+      <div class="kamera-ustkatman"><div class="tarama-kutu"></div></div>
+      <div class="kamera-araclar">
+        <button type="button" class="araç-btn" id="flash-btn" onclick="flashDegistir()" style="display:none;">💡</button>
+      </div>
+    </div>
+
+    <div class="kamera-baslat-alan" id="baslat-alan">
+      <button class="btn yesil" style="max-width:320px;margin:0 auto;" onclick="baslat()">📷 Kamerayı Başlat</button>
+    </div>
+
+    <div id="sonuc-alan"></div>
+
+    <div class="kart elle-giris-alan">
+      <label>Barkod okunmuyorsa elle gir</label>
+      <div class="elle-giris-satir">
+        <input type="text" id="elle-barkod" inputmode="numeric" placeholder="Barkod numarası">
+        <button class="btn mavi" style="width:auto;" onclick="elleGonder()">Ekle</button>
+      </div>
+    </div>
 
     <script src="https://unpkg.com/@zxing/library@latest"></script>
     <script>
     let codeReader;
     let kilit = false;
     let bipSes;
+    let aktifTip = "{{tip}}";
+    let flashAcik = false;
+    let sonIslem = null; // { barkod, tip } — geri al için
+
+    function modDegistir(yeniTip){
+        aktifTip = yeniTip;
+        document.getElementById('btn-giris').className = 'mod-btn' + (yeniTip === 'giris' ? ' aktif-giris' : '');
+        document.getElementById('btn-cikis').className = 'mod-btn' + (yeniTip === 'cikis' ? ' aktif-cikis' : '');
+        history.replaceState(null, '', '/kamera/' + yeniTip);
+    }
+    modDegistir(aktifTip);
 
     function baslat(){
         bipSes = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-        codeReader = new ZXing.BrowserMultiFormatReader();
+        document.getElementById('baslat-alan').style.display = 'none';
+        document.getElementById('kamera-cerceve').style.display = 'block';
 
+        codeReader = new ZXing.BrowserMultiFormatReader();
         codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
             if (result && !kilit) {
                 kilit = true;
-
-                let barkod = result.text;
-
-                bipSes.currentTime = 0;
-                bipSes.play().catch(e => console.log(e));
-
-                fetch("/hizli_islem", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({
-                        barkod: barkod,
-                        tip: "{{tip}}"
-                    })
-                })
-                .then(r => r.json())
-                .then(d => {
-                    if (d.ok) {
-                        document.body.style.background = "green";
-                        document.getElementById("sonuc").innerHTML =
-                            "✅ Barkod: " + barkod + "<br>" +
-                            "📦 Ürün: " + d.ad + "<br>" +
-                            "🏷️ Cins: " + (d.cins || "-") + "<br>" +
-                            "🔖 Sınıf: " + (d.sinif || "-") + "<br>" +
-                            "✨ Yüzey: " + (d.yuzey || "-") + "<br>" +
-                            "🎨 Renk: " + (d.renk || "-") + "<br>" +
-                            "📏 Ebat: " + (d.ebat || "-") + "<br>" +
-                            "🏭 Depo: " + (d.depo || "-") + "<br>" +
-                            "📦 Kalan: " + d.adet + "<br>" +
-                            "📊 Senin Toplam Çıkışın: " + d.toplam + "<br>" +
-                            "👤 Kullanıcı: {{kullanici}}";
-                    } else if (d.yeni) {
-                        document.body.style.background = "#2196F3";
-                        document.getElementById("sonuc").innerHTML =
-                            "🆕 Bu barkod stokta yok, yeni ürün ekleme sayfasına yönlendiriliyorsunuz...";
-                        setTimeout(() => {
-                            window.location.href = "/ekle?barkod=" + encodeURIComponent(barkod);
-                        }, 1200);
-                        return;
-                    } else {
-                        document.body.style.background = "red";
-                        document.getElementById("sonuc").innerHTML =
-                            "❌ Hata: " + (d.msg || "Bulunamadı");
-                    }
-
-                    setTimeout(() => { kilit = false; }, 2000);
-                });
+                isleGonder(result.text);
             }
-
             if (err && !(err instanceof ZXing.NotFoundException)) {
                 console.log(err);
+            }
+        });
+
+        setTimeout(fenerKontrolEt, 800);
+    }
+
+    function fenerKontrolEt(){
+        const video = document.getElementById('video');
+        const stream = video.srcObject;
+        if(!stream) return;
+        const track = stream.getVideoTracks()[0];
+        if(!track || !track.getCapabilities) return;
+        const yetenekler = track.getCapabilities();
+        if(yetenekler.torch){
+            document.getElementById('flash-btn').style.display = 'flex';
+        }
+    }
+
+    function flashDegistir(){
+        const video = document.getElementById('video');
+        const stream = video.srcObject;
+        if(!stream) return;
+        const track = stream.getVideoTracks()[0];
+        flashAcik = !flashAcik;
+        track.applyConstraints({ advanced: [{ torch: flashAcik }] }).catch(e => console.log(e));
+        document.getElementById('flash-btn').classList.toggle('aktif', flashAcik);
+    }
+
+    function elleGonder(){
+        const kutu = document.getElementById('elle-barkod');
+        const kod = kutu.value.trim();
+        if(!kod) return;
+        kutu.value = '';
+        isleGonder(kod);
+    }
+
+    function isleGonder(barkod){
+        if(bipSes){ bipSes.currentTime = 0; bipSes.play().catch(e => {}); }
+        if(navigator.vibrate) navigator.vibrate(70);
+
+        fetch("/hizli_islem", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ barkod: barkod, tip: aktifTip })
+        })
+        .then(r => r.json())
+        .then(d => sonucGoster(d, barkod))
+        .finally(() => { setTimeout(() => { kilit = false; }, 1200); });
+    }
+
+    function sonucGoster(d, barkod){
+        const alan = document.getElementById('sonuc-alan');
+
+        if (d.ok) {
+            sonIslem = { barkod: barkod, tip: aktifTip };
+            const baslikRengi = aktifTip === 'giris' ? '✅' : '📤';
+            alan.innerHTML = `
+              <div class="sonuc-kart sonuc-basari">
+                <div class="sonuc-ust"><span class="sonuc-ikon">${baslikRengi}</span><span class="sonuc-ad">${d.ad}</span></div>
+                <div class="sonuc-satirlar">
+                  🏷️ Cins: <b>${d.cins || '-'}</b> &nbsp; 🔖 Sınıf: <b>${d.sinif || '-'}</b><br>
+                  ✨ Yüzey: <b>${d.yuzey || '-'}</b> &nbsp; 🎨 Renk: <b>${d.renk || '-'}</b><br>
+                  📏 Ebat: <b>${d.ebat || '-'}</b> &nbsp; 🏭 Depo: <b>${d.depo || '-'}</b><br>
+                  📦 Kalan Stok: <b>${d.adet}</b> &nbsp; 📊 Bugünkü Toplam: <b>${d.toplam}</b>
+                </div>
+                <button class="geri-al-btn" onclick="geriAl()">↩️ Bu işlemi geri al</button>
+              </div>`;
+        } else if (d.yeni) {
+            alan.innerHTML = `
+              <div class="sonuc-kart sonuc-yeni">
+                <div class="sonuc-ust"><span class="sonuc-ikon">🆕</span><span class="sonuc-ad">Bu barkod stokta yok</span></div>
+                <div class="sonuc-satirlar">Yeni ürün ekleme sayfasına yönlendiriliyorsunuz...</div>
+              </div>`;
+            setTimeout(() => { window.location.href = "/ekle?barkod=" + encodeURIComponent(barkod); }, 1000);
+        } else {
+            if(navigator.vibrate) navigator.vibrate([60,60,60]);
+            alan.innerHTML = `
+              <div class="sonuc-kart sonuc-hata">
+                <div class="sonuc-ust"><span class="sonuc-ikon">❌</span><span class="sonuc-ad">${d.msg || 'Bulunamadı'}</span></div>
+              </div>`;
+        }
+    }
+
+    function geriAl(){
+        if(!sonIslem) return;
+        fetch("/geri_al", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(sonIslem)
+        })
+        .then(r => r.json())
+        .then(d => {
+            if(d.ok){
+                document.getElementById('sonuc-alan').innerHTML =
+                  '<div class="sonuc-kart"><div class="sonuc-ust"><span class="sonuc-ikon">↩️</span><span class="sonuc-ad">İşlem geri alındı</span></div></div>';
+                sonIslem = null;
             }
         });
     }
     </script>
     """
-    return render_template_string(sayfa(icerik, tip.upper() + " Okut"), tip=tip, kullanici=kullanici)
+    return render_template_string(sayfa(icerik, "Barkod Okut"), tip=tip, kullanici=kullanici)
 
 
 if __name__ == "__main__":
