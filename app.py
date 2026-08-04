@@ -4,10 +4,11 @@ from flask import Flask, request, redirect, render_template_string, jsonify, ses
 import psycopg2
 import os, random, io
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import barcode, qrcode
 from barcode.writer import ImageWriter
-import os
-print("DATABASE_URL:", os.getenv("DATABASE_URL"))
+
+TR_TZ = ZoneInfo("Europe/Istanbul")
 
 # ==================== VERİTABANI (Postgres) ====================
 # Render'da Postgres eklentisi oluşturunca sana bir "Internal Database URL"
@@ -89,15 +90,25 @@ def tablolari_olustur():
                     tip TEXT,
                     adet INTEGER,
                     kullanici TEXT,
-                    tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    tarih TIMESTAMP
                 )
                 """)
+                # Var olan kurulumlarda sütun DEFAULT CURRENT_TIMESTAMP ile
+                # gelmiş olabilir (UTC saatiyle) — kaldırıyoruz, çünkü tarihi
+                # artık her INSERT'te Türkiye saatiyle biz açıkça veriyoruz.
+                cur.execute("ALTER TABLE hareket ALTER COLUMN tarih DROP DEFAULT")
     finally:
         con.close()
 
 
 if DATABASE_URL:
     tablolari_olustur()
+
+
+def tr_simdi():
+    """Türkiye saatiyle (Europe/Istanbul) şu anki zamanı, saat dilimi
+    bilgisi olmadan (naive) döndürür — tarih sütununa böyle yazıyoruz."""
+    return datetime.now(TR_TZ).replace(tzinfo=None)
 
 
 def barkod_uret():
@@ -178,86 +189,122 @@ BASE_HEAD_EXTRA = """
 
 ORTAK_CSS = """
 :root {
-  --bg:#0f1115; --card:#181b21; --border:#262a33; --text:#f2f2f2; --muted:#9aa0a6;
-  --radius:14px;
+  --bg:#0b0d12; --bg2:#12151c; --card:#171a22; --card2:#1c202b;
+  --border:#262b38; --text:#f4f5f7; --muted:#8b93a3; --accent:#2196F3;
+  --radius:16px; --radius-sm:10px;
 }
 * { box-sizing: border-box; }
+html { scrollbar-color: #333 transparent; }
 body {
-  background: var(--bg); color: var(--text); margin:0; padding:0;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(33,150,243,.08), transparent 60%),
+    var(--bg);
+  color: var(--text); margin:0; padding:0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
 input, select, button, textarea { font-size: 16px; font-family: inherit; }
 a { color: inherit; }
+::selection { background: rgba(33,150,243,.35); }
 
 .topbar {
   position: fixed; top:0; left:0; right:0; z-index: 9999;
   height: 56px; padding-top: env(safe-area-inset-top);
   display:flex; align-items:center; justify-content:space-between;
   padding-left:12px; padding-right:12px;
-  background:#15181e; box-shadow:0 2px 10px rgba(0,0,0,.4);
+  background: rgba(18,21,28,.75); backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid rgba(255,255,255,.06);
 }
 .topbar-btn {
-  text-decoration:none; color:white; font-size:20px; padding:8px 12px;
-  border-radius:10px;
+  text-decoration:none; color:white; font-size:19px; padding:8px 12px;
+  border-radius:10px; transition: background .15s ease, transform .1s ease;
 }
-.topbar-btn:active { background:#22262f; }
-.topbar-title { font-weight:700; font-size:15px; color:#eee; }
+.topbar-btn:active { background:rgba(255,255,255,.08); transform: scale(0.94); }
+.topbar-title { font-weight:700; font-size:14.5px; color:#eee; letter-spacing:.2px; }
 
 .sayfa {
   max-width: 520px; margin: 0 auto;
-  padding: calc(56px + env(safe-area-inset-top) + 20px) 16px 50px;
+  padding: calc(56px + env(safe-area-inset-top) + 22px) 16px 60px;
+  animation: belir .25s ease;
 }
+@keyframes belir { from { opacity:0; transform: translateY(6px);} to { opacity:1; transform:none; } }
 
-h1, h2, h3 { text-align:center; }
-h3.alt { color: var(--muted); font-weight:normal; margin-top:-8px; }
+h1, h2, h3 { text-align:center; letter-spacing:-.01em; }
+h1 { font-size: 24px; }
+h3.alt { color: var(--muted); font-weight:500; margin-top:-6px; font-size:14px; }
 
 .btn {
-  display:block; width:100%; margin:12px 0; padding:18px;
-  font-size:18px; border-radius: var(--radius); text-decoration:none;
-  color:white; font-weight:700; text-align:center; border:none; cursor:pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  display:block; width:100%; margin:10px 0; padding:17px;
+  font-size:17px; border-radius: var(--radius); text-decoration:none;
+  color:white; font-weight:600; text-align:center; border:none; cursor:pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,.28);
+  transition: transform .1s ease, filter .15s ease, box-shadow .15s ease;
+  letter-spacing:.1px;
 }
-.btn:active { filter:brightness(0.9); }
+.btn:active { filter:brightness(0.88); transform: scale(0.985); box-shadow: 0 2px 8px rgba(0,0,0,.3); }
 .mavi   { background: linear-gradient(135deg, #2196F3, #00BCD4); }
 .yesil  { background: linear-gradient(135deg, #00C853, #64DD17); }
 .turuncu{ background: linear-gradient(135deg, #FF6F00, #FF9800); }
 .mor    { background: linear-gradient(135deg, #5E35B1, #7E57C2); }
 .kirmizi{ background: linear-gradient(135deg, #D50000, #FF1744); }
 .turkuaz{ background: linear-gradient(135deg, #00838F, #00BFA5); }
-.gri    { background: #333; }
+.gri    { background: linear-gradient(135deg, #3a3f4b, #2a2e38); }
+
+.btn-kucuk {
+  display:inline-block; padding:10px 16px; font-size:14px; font-weight:600;
+  border-radius: 10px; text-decoration:none; color:white; border:none; cursor:pointer;
+  transition: transform .1s ease, filter .15s ease;
+}
+.btn-kucuk:active { filter:brightness(0.85); transform: scale(0.96); }
 
 .kart {
-  background: var(--card); border:1px solid var(--border); border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--card2), var(--card));
+  border:1px solid var(--border); border-radius: var(--radius);
   padding:16px; margin:12px 0; text-align:left;
+  box-shadow: 0 2px 10px rgba(0,0,0,.18);
+  transition: border-color .15s ease;
 }
 
 input[type=text], input[type=number], input[type=password], select, textarea {
-  width:100%; padding:14px; margin:6px 0 14px; border-radius:10px;
-  border:1px solid var(--border); background:#1c1f26; color:white;
+  width:100%; padding:14px; margin:6px 0 14px; border-radius: var(--radius-sm);
+  border:1px solid var(--border); background:#12151c; color:white;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
-label { color: var(--muted); font-size:14px; }
+input:focus, select:focus, textarea:focus {
+  outline:none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(33,150,243,.18);
+}
+label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2px; text-transform:uppercase; }
 
 .arama {
-  width:100%; padding:14px; margin: 4px 0 16px; border-radius:12px;
-  border:1px solid var(--border); background:#1c1f26; color:white;
+  width:100%; padding:14px 16px; margin: 4px 0 16px; border-radius:999px;
+  border:1px solid var(--border); background:#12151c; color:white;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
+.arama:focus { outline:none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(33,150,243,.18); }
 
 .pin-input {
   font-size: 34px; text-align:center; width:200px; padding:12px;
-  border-radius:12px; border:1px solid var(--border); letter-spacing:10px;
-  background:#1c1f26; color:white; display:block; margin:20px auto;
+  border-radius:14px; border:1px solid var(--border); letter-spacing:10px;
+  background:#12151c; color:white; display:block; margin:20px auto;
 }
+.pin-input:focus { outline:none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(33,150,243,.18); }
 
 .video-alan { display:flex; justify-content:center; margin:16px 0; }
-.video-alan video { border-radius: var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.5); }
+.video-alan video { border-radius: var(--radius); box-shadow:0 8px 24px rgba(0,0,0,.5); }
 
 .qr-kutu { text-align:center; margin: 18px 0; }
-.qr-kutu img { border-radius:12px; background:white; padding:8px; }
-.qr-not { color: var(--muted); font-size:13px; text-align:center; margin-top:6px; }
+.qr-kutu img { border-radius:14px; background:white; padding:10px; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+.qr-not { color: var(--muted); font-size:13px; text-align:center; margin-top:8px; line-height:1.5; }
 
-.hata { color:#FF5252; font-weight:bold; text-align:center; }
-.basari { color:#00E676; font-weight:bold; text-align:center; }
+.hata { color:#FF6B6B; font-weight:600; text-align:center; }
+.basari { color:#2FE686; font-weight:600; text-align:center; }
+
+.rozet {
+  display:inline-block; padding:3px 10px; border-radius:999px; font-size:11.5px;
+  font-weight:700; letter-spacing:.3px; background:rgba(33,150,243,.15); color:#64B5F6;
+}
 """
 
 UST_BAR = """
@@ -471,9 +518,9 @@ def ekle2():
                         barkod,
                     ))
                     cur.execute("""
-                    INSERT INTO hareket (barkod, ad, tip, adet, kullanici)
-                    VALUES (%s, %s, 'giris', %s, %s)
-                    """, (barkod, ad, adet, session.get("kullanici", "Bilinmiyor")))
+                    INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
+                    VALUES (%s, %s, 'giris', %s, %s, %s)
+                    """, (barkod, ad, adet, session.get("kullanici", "Bilinmiyor"), tr_simdi()))
         finally:
             con.close()
 
@@ -547,7 +594,7 @@ def liste():
     kartlar = ""
     for u in urunler:
         kartlar += f"""
-        <div class='kart'>
+        <div class='kart' id="urun-{u[10]}">
         <b>{u[1]}</b><br>
         Cins: {u[2]}<br>
         Ebat: {u[3]}<br>
@@ -559,7 +606,8 @@ def liste():
         Depo: {u[9]}<br>
         Barkod: {u[10]}<br>
         <img src="/barkod/{u[10]}.png" width="180"><br>
-        <img src="/qr/{u[10]}.png" width="90">
+        <img src="/qr/{u[10]}.png" width="90"><br><br>
+        <button class="btn-kucuk kirmizi" onclick="urunSil('{u[10]}')">🗑️ Sil</button>
         </div>
         """
 
@@ -575,6 +623,19 @@ def liste():
             var metin = k.textContent.toLocaleLowerCase('tr');
             k.style.display = metin.indexOf(q) !== -1 ? '' : 'none';
           });
+        }
+        function urunSil(barkod){
+          if(!confirm('Bu ürünü silmek istediğine emin misin? Bu işlem geri alınamaz.')) return;
+          fetch('/sil/' + encodeURIComponent(barkod), { method: 'POST' })
+            .then(r => r.json())
+            .then(d => {
+              if(d.ok){
+                var el = document.getElementById('urun-' + barkod);
+                if(el) el.remove();
+              } else {
+                alert('Silinemedi, tekrar dene.');
+              }
+            });
         }
         </script>
         """
@@ -828,9 +889,9 @@ def hizli_islem():
 
                 cur.execute("UPDATE urun SET adet=%s WHERE id=%s", (adet, uid))
                 cur.execute("""
-                INSERT INTO hareket (barkod, ad, tip, adet, kullanici)
-                VALUES (%s, %s, %s, %s, %s)
-                """, (barkod, ad, tip, 1, kullanici))
+                INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """, (barkod, ad, tip, 1, kullanici, tr_simdi()))
 
                 cur.execute("""
                 SELECT SUM(adet) FROM hareket WHERE kullanici=%s AND tip='cikis'
@@ -846,6 +907,21 @@ def hizli_islem():
                 })
     finally:
         con.close()
+
+
+# ÜRÜN SİL — muhasebeci + patron
+@app.route("/sil/<barkod>", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def urun_sil(barkod):
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("DELETE FROM urun WHERE barkod=%s", (barkod,))
+                silindi = cur.rowcount > 0
+    finally:
+        con.close()
+    return jsonify({"ok": silindi})
 
 
 # GERİ AL — depocu + patron
