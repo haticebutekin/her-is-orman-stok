@@ -254,7 +254,7 @@ h3.alt { color: var(--muted); font-weight:500; margin-top:-6px; font-size:14px; 
 .btn-kucuk {
   display:inline-block; padding:10px 16px; font-size:14px; font-weight:600;
   border-radius: 10px; text-decoration:none; color:white; border:none; cursor:pointer;
-  transition: transform .1s ease, filter .15s ease;
+  transition: transform .1s ease, filter .15s ease; margin-right:8px; margin-top:4px;
 }
 .btn-kucuk:active { filter:brightness(0.85); transform: scale(0.96); }
 
@@ -532,6 +532,7 @@ def ekle2():
             + '<img src="/barkod/' + barkod + '.png" width="260"><br><br>'
             + '<img src="/qr/' + barkod + '.png" width="140">'
             + '</div>'
+            + '<a class="btn turkuaz" href="/etiket/' + barkod + '" target="_blank">🖨️ Etiket Yazdır</a>'
             + '<a class="btn mor" href="/liste">📦 Stok Listesine Git</a>'
             + '<a class="btn mavi" href="/ekle">➕ Yeni Ürün Ekle</a>'
         )
@@ -607,6 +608,7 @@ def liste():
         Barkod: {u[10]}<br>
         <img src="/barkod/{u[10]}.png" width="180"><br>
         <img src="/qr/{u[10]}.png" width="90"><br><br>
+        <button class="btn-kucuk turkuaz" onclick="window.open('/etiket/{u[10]}','_blank')">🖨️ Etiket</button>
         <button class="btn-kucuk kirmizi" onclick="urunSil('{u[10]}')">🗑️ Sil</button>
         </div>
         """
@@ -922,6 +924,73 @@ def urun_sil(barkod):
     finally:
         con.close()
     return jsonify({"ok": silindi})
+
+
+# ETİKET YAZDIRMA — muhasebeci + patron
+@app.route("/etiket/<barkod>")
+@rol_gerekli("muhasebeci")
+def etiket(barkod):
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,depo FROM urun WHERE barkod=%s", (barkod,))
+            row = cur.fetchone()
+    finally:
+        con.close()
+
+    if not row:
+        return sayfa('<p class="hata">❌ Ürün bulunamadı.</p><a class="btn gri" href="/liste">⬅ Geri Dön</a>', "Hata")
+
+    ad, cins, ebat, kalinlik, yuzey, sinif, renk, depo = row
+
+    ozellikler = " · ".join([x for x in [cins, ebat, kalinlik, yuzey, sinif, renk] if x])
+
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="tr">
+    <head>
+    <meta charset="utf-8">
+    <title>Etiket - {ad}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        @page {{ size: 80mm 50mm; margin: 3mm; }}
+        * {{ box-sizing: border-box; }}
+        body {{
+            font-family: Arial, sans-serif; margin:0; padding:0;
+            background:#fff; color:#000;
+        }}
+        .etiket {{
+            width: 74mm; padding: 4mm; text-align:center;
+        }}
+        .ad {{ font-size: 15px; font-weight:800; margin-bottom:2mm; line-height:1.2; }}
+        .ozellik {{ font-size: 10px; color:#333; margin-bottom:2mm; line-height:1.3; }}
+        .depo {{ font-size: 10px; color:#555; margin-bottom:2mm; }}
+        img.barkod {{ width: 100%; max-width: 65mm; }}
+        img.qr {{ width: 20mm; margin-top:2mm; }}
+        .yazdir-btn {{
+            display:block; margin: 6mm auto 0; padding:14px 24px;
+            background:#2196F3; color:white; border:none; border-radius:10px;
+            font-size:16px; font-weight:700; cursor:pointer;
+        }}
+        @media print {{
+            .yazdir-btn {{ display:none; }}
+            body {{ margin:0; }}
+        }}
+    </style>
+    </head>
+    <body>
+        <div class="etiket">
+            <div class="ad">{ad}</div>
+            <div class="ozellik">{ozellikler}</div>
+            {'<div class="depo">🏭 ' + depo + '</div>' if depo else ''}
+            <img class="barkod" src="/barkod/{barkod}.png">
+            <img class="qr" src="/qr/{barkod}.png">
+        </div>
+        <button class="yazdir-btn" onclick="window.print()">🖨️ Yazdır</button>
+    </body>
+    </html>
+    """
+    return html
 
 
 # GERİ AL — depocu + patron
