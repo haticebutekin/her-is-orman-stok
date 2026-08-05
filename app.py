@@ -2553,7 +2553,7 @@ def kamera(tip):
     {{siparis_bilgi_html|safe}}
 
     <div class="kamera-cerceve" id="kamera-cerceve" style="display:none;">
-      <video id="video"></video>
+      <video id="video" autoplay playsinline muted></video>
       <div class="kamera-ustkatman"><div class="tarama-kutu"></div></div>
       <div class="kamera-araclar">
         <button type="button" class="araç-btn" id="flash-btn" onclick="flashDegistir()" style="display:none;">💡</button>
