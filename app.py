@@ -833,11 +833,11 @@ def index():
         """
 
     icerik = (
-        "<h1>📦 STOK PANEL</h1>"
+        "<h1>📦 HER İŞ ORMAN ÜRÜNLERİ SİPARİŞ-STOK PANELİ</h1>"
         + '<h3 class="alt">👤 ' + kullanici + ' (' + rol + ')</h3>'
         + butonlar
     )
-    return sayfa(icerik, "Stok Panel")
+    return sayfa(icerik, "Her İş Orman Ürünleri Sipariş-Stok Paneli")
 
 
 @app.route("/ekle", methods=["GET", "POST"])
