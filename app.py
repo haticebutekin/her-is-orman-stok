@@ -1,8 +1,14 @@
 from functools import wraps
 
-from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file
+from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file, Response
 import psycopg2
-import os, random, io
+import os, random, io, json
+
+try:
+    from pywebpush import webpush, WebPushException
+    PUSH_AKTIF = True
+except ImportError:
+    PUSH_AKTIF = False
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import barcode, qrcode
@@ -12,6 +18,11 @@ TR_TZ = ZoneInfo("Europe/Istanbul")
 
 # ==================== VERİTABANI (Postgres) ====================
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
+# ==================== PUSH BİLDİRİM (VAPID) ====================
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "GnlhR4K1blYAg-Unc57v-tAIP-G7rfiQqetV1otak4Q")
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "BHVDYu-AltC6T-LUrITOY3toLuHEec99bDk5Uokzj5NrtK8fV2mJwctTmGDxE5ANtavoLlOod9_27Jrm-HgnJ1k")
+VAPID_CLAIMS_EMAIL = os.environ.get("VAPID_EMAIL", "mailto:admin@heris-stok.local")
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)) or ".", "static"))
 app.secret_key = os.environ.get("SECRET_KEY", "bu-anahtari-canliya-almadan-once-degistir")
@@ -781,6 +792,76 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Depo Stok Durumu</div><div class="okut-alt">Hangi depoda ne kadar var</div></div>
           <div class="okut-ok">›</div>
         </a>
+        <a href="javascript:void(0)" onclick="bildirimleriAc()" class="okut-kart okut-mor" id="bildirim-buton">
+          <div class="okut-ikon">🔔</div>
+          <div class="okut-metin"><div class="okut-baslik">Bildirimleri Aç</div><div class="okut-alt">Yeni sipariş gelince telefonuna bildirim gelsin</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <div id="siparis-banner" style="display:none;" class="uyari-kutu">
+          🔴 <span id="siparis-banner-metin"></span><br>
+          <a href="/kamera/cikis" style="color:#FFB74D;font-weight:700;text-decoration:underline;">Şimdi hazırla →</a>
+        </div>
+
+        <script>
+        function urlBase64ToUint8Array(base64String) {
+          const padding = '='.repeat((4 - base64String.length % 4) % 4);
+          const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+          const rawData = atob(base64);
+          const outputArray = new Uint8Array(rawData.length);
+          for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+          return outputArray;
+        }
+
+        async function bildirimleriAc(){
+          if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+            alert('Bu cihaz/tarayıcı bildirimi desteklemiyor. iPhone kullanıyorsan önce paylaş menüsünden "Ana Ekrana Ekle" ile uygulamayı kurman gerekiyor, sonra tekrar dene.');
+            return;
+          }
+          try {
+            const izin = await Notification.requestPermission();
+            if(izin !== 'granted'){ alert('Bildirim izni verilmedi.'); return; }
+            const reg = await navigator.serviceWorker.register('/service-worker.js');
+            const anahtarYaniti = await fetch('/vapid_public_key');
+            const anahtarVerisi = await anahtarYaniti.json();
+            if(!anahtarVerisi.aktif){
+              alert('Sunucuda push bildirim modülü henüz kurulmamış. Sunucu tarafında pywebpush paketinin yüklü olduğundan emin olunmalı.');
+              return;
+            }
+            const sub = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(anahtarVerisi.publicKey)
+            });
+            await fetch('/push_abone_ol', {
+              method: 'POST', headers: {'Content-Type':'application/json'},
+              body: JSON.stringify(sub)
+            });
+            const b = document.getElementById('bildirim-buton');
+            if(b) b.querySelector('.okut-baslik').textContent = '✅ Bildirimler Açık';
+          } catch(e) {
+            console.log(e);
+            alert('Bildirim açılamadı: ' + e.message);
+          }
+        }
+
+        let sonBilinenSiparisSayisi = null;
+        async function siparisKontrolEt(){
+          try {
+            const r = await fetch('/acik_siparis_sayisi');
+            const d = await r.json();
+            if(sonBilinenSiparisSayisi === null){ sonBilinenSiparisSayisi = d.acik; return; }
+            if(d.acik > sonBilinenSiparisSayisi){
+              const banner = document.getElementById('siparis-banner');
+              document.getElementById('siparis-banner-metin').textContent = 'Toplam ' + d.acik + ' açık sipariş var, yeni sipariş eklendi.';
+              banner.style.display = 'block';
+              if(navigator.vibrate) navigator.vibrate([100,50,100]);
+              try { new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg").play(); } catch(e){}
+            }
+            sonBilinenSiparisSayisi = d.acik;
+          } catch(e) {}
+        }
+        siparisKontrolEt();
+        setInterval(siparisKontrolEt, 20000);
+        </script>
         """
     if rol in ("muhasebeci", "patron"):
         butonlar += """
@@ -2070,6 +2151,135 @@ if DATABASE_URL:
     siparis_tablolarini_olustur()
 
 
+def push_tablosu_olustur():
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS push_abone(
+                    id SERIAL PRIMARY KEY,
+                    kullanici TEXT,
+                    endpoint TEXT UNIQUE,
+                    p256dh TEXT,
+                    auth TEXT,
+                    olusturulma TIMESTAMP
+                )
+                """)
+    finally:
+        con.close()
+
+
+if DATABASE_URL:
+    push_tablosu_olustur()
+
+
+def push_bildirim_gonder(baslik, govde, url="/"):
+    """Depocu rolündeki, bildirim izni vermiş tüm cihazlara push bildirimi yollar."""
+    if not PUSH_AKTIF or not DATABASE_URL:
+        return
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT id, endpoint, p256dh, auth FROM push_abone")
+            aboneler = cur.fetchall()
+    finally:
+        con.close()
+
+    silinecekler = []
+    for abone_id, endpoint, p256dh, auth in aboneler:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": endpoint,
+                    "keys": {"p256dh": p256dh, "auth": auth},
+                },
+                data=json.dumps({"title": baslik, "body": govde, "url": url}),
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": VAPID_CLAIMS_EMAIL},
+            )
+        except WebPushException:
+            silinecekler.append(abone_id)
+        except Exception:
+            pass
+
+    if silinecekler:
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    cur.execute("DELETE FROM push_abone WHERE id = ANY(%s)", (silinecekler,))
+        finally:
+            con.close()
+
+
+@app.route("/vapid_public_key")
+def vapid_public_key():
+    return jsonify({"publicKey": VAPID_PUBLIC_KEY, "aktif": PUSH_AKTIF})
+
+
+@app.route("/push_abone_ol", methods=["POST"])
+@rol_gerekli("depocu")
+def push_abone_ol():
+    data = request.get_json(silent=True) or {}
+    endpoint = data.get("endpoint")
+    keys = data.get("keys", {})
+    if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
+        return jsonify({"ok": False}), 400
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO push_abone (kullanici, endpoint, p256dh, auth, olusturulma)
+                    VALUES (%s,%s,%s,%s,%s)
+                    ON CONFLICT (endpoint) DO UPDATE
+                    SET kullanici=EXCLUDED.kullanici, p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, olusturulma=EXCLUDED.olusturulma
+                """, (session.get("kullanici", "Bilinmiyor"), endpoint, keys.get("p256dh"), keys.get("auth"), tr_simdi()))
+    finally:
+        con.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/acik_siparis_sayisi")
+@rol_gerekli("depocu")
+def acik_siparis_sayisi():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM siparis WHERE durum='acik'")
+            sayi = cur.fetchone()[0]
+    finally:
+        con.close()
+    return jsonify({"acik": sayi})
+
+
+@app.route("/service-worker.js")
+def service_worker():
+    js = """
+self.addEventListener('push', function(event) {
+  let data = {};
+  try { data = event.data.json(); } catch(e) { data = { title: 'HER-İŞ Stok Takip', body: event.data ? event.data.text() : '' }; }
+  const baslik = data.title || 'HER-İŞ Stok Takip';
+  const secenekler = {
+    body: data.body || '',
+    icon: '/static/icon-192.png',
+    badge: '/static/icon-192.png',
+    vibrate: [120, 60, 120],
+    data: { url: data.url || '/' }
+  };
+  event.waitUntil(self.registration.showNotification(baslik, secenekler));
+});
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(clients.openWindow(url));
+});
+"""
+    return Response(js, mimetype="application/javascript")
+
+
 @app.route("/urun_ara")
 @rol_gerekli("muhasebeci")
 def urun_ara():
@@ -2136,6 +2346,13 @@ def siparis_olustur():
                         """, (siparis_id, barkod, ad, adet))
         finally:
             con.close()
+
+        toplam_kalem_adet = sum(adet for _, _, adet in kalemler)
+        push_bildirim_gonder(
+            "🧾 Yeni Sipariş" + (f" — {musteri}" if musteri else ""),
+            f"{depo} için {len(kalemler)} çeşit ürün, {toplam_kalem_adet} adet hazırlanacak.",
+            url=f"/siparis/{siparis_id}",
+        )
 
         return redirect(f"/siparis/{siparis_id}")
 
