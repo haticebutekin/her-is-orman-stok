@@ -6,3 +6,4 @@ Pillow
 openpyxl
 xlwt
 pywebpush
+gunicorn
