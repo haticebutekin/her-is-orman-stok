@@ -528,8 +528,9 @@ UYGULAMA_ADI = "HER-İŞ ORMAN ÜRÜNLERİ STOK TAKİP SİSTEMİ"
 UST_BAR = f"""
 <div class="topbar">
   <a href="/" class="topbar-btn" title="Ana Sayfa">🏠</a>
-  <span class="topbar-title"><img src="{LOGO_URL}" class="topbar-logo" alt="logo">HER-İŞ STOK TAKİP</span>
+  <span class="topbar-title"><img src="{LOGO_URL}" class="topbar-logo" alt="logo">HER-İŞ ORMAN ÜRÜNLERİ SİPARİŞ-STOK TAKİP SİSTEMİ</span>
   <a href="/kullanici_degistir" class="topbar-btn" title="Kullanıcı Değiştir">🔁</a>
+  <img src="https://upload.wikimedia.org/wikipedia/commons/3/3f/Placeholder_view_vector.svg" width="40">
 </div>
 """
 
