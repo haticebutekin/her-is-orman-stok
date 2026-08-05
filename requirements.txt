@@ -1,7 +1,8 @@
-flask
-gunicorn
-python-barcode
-pillow
-qrcode
+Flask
 psycopg2-binary
-tzdata
+python-barcode
+qrcode
+Pillow
+openpyxl
+xlwt
+pywebpush
