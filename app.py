@@ -229,7 +229,8 @@ a { color: inherit; }
   border-radius:10px; transition: background .15s ease, transform .1s ease;
 }
 .topbar-btn:active { background:rgba(255,255,255,.08); transform: scale(0.94); }
-.topbar-title { font-weight:700; font-size:14.5px; color:#eee; letter-spacing:.2px; }
+.topbar-title { font-weight:700; font-size:14.5px; color:#eee; letter-spacing:.2px; display:flex; align-items:center; gap:7px; }
+.topbar-logo { height:26px; width:26px; border-radius:6px; object-fit:contain; background:white; padding:2px; }
 
 .sayfa {
   max-width: 520px; margin: 0 auto;
@@ -405,11 +406,12 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .urun-gorseller img:last-child { width:64px; }
 .urun-aksiyonlar { margin-top:10px; }
 
-.filtre-satir { display:flex; gap:8px; margin: 0 0 14px; }
+.filtre-satir { display:flex; gap:8px; margin: 0 0 14px; flex-wrap:wrap; }
 .filtre-cip {
   flex:1; text-align:center; padding:9px 6px; border-radius:999px;
   background:#12151c; border:1px solid var(--border); color:var(--muted);
   font-weight:700; font-size:13px; cursor:pointer; transition: all .15s ease;
+  min-width: 80px;
 }
 .filtre-cip.aktif { background: var(--accent); border-color: var(--accent); color:white; }
 .hareket-kart {
@@ -444,12 +446,89 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .on-izleme-satir:last-child { border-bottom:none; }
 .on-izleme-hata { color:#FF6B6B; font-size:12px; margin-top:2px; }
 .sablon-link { display:inline-block; margin-top:8px; font-size:13px; color:var(--accent); text-decoration:none; }
+
+/* --- Depo Özet --- */
+.depo-ozet-kart {
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  background: linear-gradient(180deg, var(--card2), var(--card));
+  border:1px solid var(--border); border-radius: var(--radius);
+  padding:14px 16px; margin:10px 0;
+}
+.depo-ozet-ad { font-size:14.5px; font-weight:700; }
+.depo-ozet-sayilar { display:flex; gap:14px; flex-shrink:0; }
+.depo-ozet-tekli { text-align:center; }
+.depo-ozet-tekli .sayi { font-size:17px; font-weight:800; color:#64B5F6; }
+.depo-ozet-tekli .etiket { font-size:10px; color:var(--muted); text-transform:uppercase; }
+
+/* --- Sipariş --- */
+.siparis-kart {
+  display:block; text-decoration:none; color:white;
+  background: linear-gradient(180deg, var(--card2), var(--card));
+  border:1px solid var(--border); border-radius: var(--radius);
+  padding:15px 17px; margin:10px 0;
+  box-shadow: 0 2px 10px rgba(0,0,0,.18);
+}
+.siparis-ust { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.siparis-no { font-size:16px; font-weight:800; }
+.siparis-durum {
+  padding:3px 10px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase;
+}
+.siparis-durum.acik { background: rgba(255,152,0,.18); color:#FFB74D; }
+.siparis-durum.tamamlandi { background: rgba(100,221,23,.15); color:#9CCC65; }
+.siparis-durum.iptal { background: rgba(255,23,68,.15); color:#FF6B6B; }
+.siparis-detay { font-size:13px; color:var(--muted); margin-top:6px; line-height:1.6; }
+.siparis-ilerleme-bar {
+  height:6px; border-radius:999px; background:#12151c; margin-top:10px; overflow:hidden;
+}
+.siparis-ilerleme-dolu { height:100%; background: linear-gradient(90deg, #2196F3, #00BCD4); }
+
+.kalem-satir {
+  display:flex; justify-content:space-between; align-items:center; gap:8px;
+  padding:10px 0; border-bottom:1px solid var(--border); font-size:14px;
+}
+.kalem-satir:last-child { border-bottom:none; }
+.kalem-ad { flex:1; }
+.kalem-miktar { font-weight:800; font-size:13.5px; flex-shrink:0; }
+.kalem-miktar.tam { color:#9CCC65; }
+.kalem-miktar.eksik { color:#FFB74D; }
+
+.urun-arama-kutu { position:relative; }
+.urun-arama-sonuc {
+  border:1px solid var(--border); border-radius: var(--radius-sm);
+  margin-top:-8px; margin-bottom:14px; max-height:260px; overflow-y:auto;
+  background:#12151c; display:none;
+}
+.urun-arama-oge {
+  padding:12px 14px; border-bottom:1px solid var(--border); cursor:pointer; font-size:13.5px;
+}
+.urun-arama-oge:last-child { border-bottom:none; }
+.urun-arama-oge:active { background: rgba(33,150,243,.15); }
+.urun-arama-oge .ad { font-weight:700; }
+.urun-arama-oge .detay { color:var(--muted); font-size:12px; margin-top:2px; }
+
+.sepet-satir {
+  display:flex; align-items:center; gap:8px;
+  background:#12151c; border:1px solid var(--border); border-radius: var(--radius-sm);
+  padding:10px 12px; margin-bottom:8px;
+}
+.sepet-ad { flex:1; font-size:13.5px; font-weight:600; }
+.sepet-adet-input { width:70px !important; margin:0 !important; padding:8px !important; text-align:center; }
+.sepet-sil { background:none; border:none; color:#FF6B6B; font-size:20px; cursor:pointer; padding:4px 8px; }
+
+.uyari-kutu {
+  border-radius: var(--radius); padding:14px 16px; margin: 10px 0;
+  background: rgba(255,152,0,.12); border:1px solid rgba(255,152,0,.35);
+  color:#FFB74D; font-size:13.5px; line-height:1.6;
+}
 """
 
-UST_BAR = """
+LOGO_URL = "/static/logo.png"
+UYGULAMA_ADI = "HER-İŞ ORMAN ÜRÜNLERİ STOK TAKİP SİSTEMİ"
+
+UST_BAR = f"""
 <div class="topbar">
   <a href="/" class="topbar-btn" title="Ana Sayfa">🏠</a>
-  <span class="topbar-title">📦 Stok Takip</span>
+  <span class="topbar-title"><img src="{LOGO_URL}" class="topbar-logo" alt="logo">HER-İŞ STOK TAKİP</span>
   <a href="/kullanici_degistir" class="topbar-btn" title="Kullanıcı Değiştir">🔁</a>
 </div>
 """
@@ -473,8 +552,8 @@ def sayfa(icerik, baslik="Stok Takip"):
 @app.route("/manifest.json")
 def manifest():
     return jsonify({
-        "name": "Stok Takip",
-        "short_name": "Stok Takip",
+        "name": UYGULAMA_ADI,
+        "short_name": "HER-İŞ Stok",
         "start_url": "/",
         "display": "standalone",
         "background_color": "#0f1115",
@@ -660,7 +739,8 @@ def index():
             """
 
         icerik = (
-            "<h1>👋 Kimsin?</h1>"
+            f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
+            + f'<h1 style="font-size:19px;line-height:1.35;margin-bottom:2px;">{UYGULAMA_ADI}</h1>'
             + '<h3 class="alt">Devam etmek için ismini seç</h3>'
             + secim_html
             + """
@@ -673,7 +753,7 @@ def index():
             </div>
             """
         )
-        return sayfa(icerik, "Giriş - Stok Takip")
+        return sayfa(icerik, "Giriş - " + UYGULAMA_ADI)
 
     butonlar = ""
     if rol in ("depocu", "muhasebeci", "patron"):
@@ -694,8 +774,28 @@ def index():
           <div class="okut-ok">›</div>
         </a>
         """
+    if rol in ("depocu",):
+        butonlar += """
+        <a href="/depo_stok" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">🏭</div>
+          <div class="okut-metin"><div class="okut-baslik">Depo Stok Durumu</div><div class="okut-alt">Hangi depoda ne kadar var</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        """
     if rol in ("muhasebeci", "patron"):
         butonlar += """
+        <div class="bolum-baslik">Sipariş</div>
+        <a href="/siparis_olustur" class="okut-kart okut-yesil">
+          <div class="okut-ikon">🧾</div>
+          <div class="okut-metin"><div class="okut-baslik">Yeni Sipariş Oluştur</div><div class="okut-alt">Depocuya hazırlatılacak ürünleri seç</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/siparisler" class="okut-kart okut-turuncu">
+          <div class="okut-ikon">📋</div>
+          <div class="okut-metin"><div class="okut-baslik">Siparişler</div><div class="okut-alt">Açık ve tamamlanan siparişler</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+
         <div class="bolum-baslik">İşlemler</div>
         <a href="/ekle" class="okut-kart okut-mavi">
           <div class="okut-ikon">➕</div>
@@ -710,6 +810,11 @@ def index():
         <a href="/liste" class="okut-kart okut-mor">
           <div class="okut-ikon">📦</div>
           <div class="okut-metin"><div class="okut-baslik">Stok Listesi</div><div class="okut-alt">Ürünleri görüntüle, etiket bas</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/depo_stok" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">🏭</div>
+          <div class="okut-metin"><div class="okut-baslik">Depo Stok Durumu</div><div class="okut-alt">Hangi depoda ne kadar ürün var</div></div>
           <div class="okut-ok">›</div>
         </a>
         <a href="/hareketler" class="okut-kart okut-kirmizi">
@@ -1187,10 +1292,15 @@ def duzenle(eski_barkod):
 @app.route("/liste")
 @rol_gerekli("muhasebeci")
 def liste():
+    depo_filtre = request.args.get("depo", "")
+
     con = db()
     try:
         with con.cursor() as cur:
-            cur.execute("SELECT * FROM urun ORDER BY ad")
+            if depo_filtre:
+                cur.execute("SELECT * FROM urun WHERE depo=%s ORDER BY ad", (depo_filtre,))
+            else:
+                cur.execute("SELECT * FROM urun ORDER BY ad")
             urunler = cur.fetchall()
     finally:
         con.close()
@@ -1199,6 +1309,13 @@ def liste():
     toplam_urun = len(urunler)
     toplam_adet = sum(u[8] for u in urunler)
     kritik_sayisi = sum(1 for u in urunler if u[8] <= KRITIK_ESIK)
+
+    filtre_html = '<div class="filtre-satir">'
+    filtre_html += f'<a href="/liste" class="filtre-cip {"aktif" if not depo_filtre else ""}" style="text-decoration:none;display:block;">Tümü</a>'
+    for d in DEPOLAR:
+        aktif = "aktif" if depo_filtre == d else ""
+        filtre_html += f'<a href="/liste?depo={d}" class="filtre-cip {aktif}" style="text-decoration:none;display:block;">{d.split(" ")[0]}</a>'
+    filtre_html += '</div>'
 
     kartlar = ""
     for u in urunler:
@@ -1238,6 +1355,8 @@ def liste():
           <div class="ozet-kutu ozet-turuncu"><div class="ozet-sayi">{kritik_sayisi}</div><div class="ozet-etiket">Kritik Stok</div></div>
         </div>
         """
+        + '<div style="text-align:right;margin:-6px 0 10px;"><a href="/depo_stok" style="color:var(--accent);text-decoration:none;font-size:12.5px;font-weight:600;">🏭 Depo Bazlı Özet →</a></div>'
+        + filtre_html
         + '<input class="arama" id="arama" placeholder="🔍 Ürün, barkod veya depo ara..." oninput="ara()">'
         + '<div style="display:flex;gap:8px;margin-bottom:14px;">'
         + '<button class="btn-kucuk mavi" style="flex:1;text-align:center;" onclick="tumunuSec()">☑️ Tümünü Seç</button>'
@@ -1318,6 +1437,52 @@ def liste():
         """
     )
     return sayfa(icerik, "Stok Listesi")
+
+
+@app.route("/depo_stok")
+@rol_gerekli("depocu", "muhasebeci", "patron")
+def depo_stok():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT depo, COUNT(*) AS cesit, COALESCE(SUM(adet),0) AS toplam
+                FROM urun GROUP BY depo
+            """)
+            satirlar = dict((r[0] or "Depo Belirtilmemiş", (r[1], r[2])) for r in cur.fetchall())
+    finally:
+        con.close()
+
+    genel_toplam = sum(v[1] for v in satirlar.values())
+    genel_cesit = sum(v[0] for v in satirlar.values())
+
+    kartlar = ""
+    sirali_depolar = list(DEPOLAR) + [d for d in satirlar if d not in DEPOLAR]
+    for d in sirali_depolar:
+        cesit, toplam = satirlar.get(d, (0, 0))
+        kartlar += f"""
+        <a href="/liste?depo={d}" class="depo-ozet-kart" style="text-decoration:none;color:white;">
+          <div class="depo-ozet-ad">🏭 {d}</div>
+          <div class="depo-ozet-sayilar">
+            <div class="depo-ozet-tekli"><div class="sayi">{cesit}</div><div class="etiket">Çeşit</div></div>
+            <div class="depo-ozet-tekli"><div class="sayi">{toplam}</div><div class="etiket">Adet</div></div>
+          </div>
+        </a>
+        """
+
+    icerik = (
+        "<h2>🏭 DEPO STOK DURUMU</h2>"
+        + f"""
+        <div class="ozet-satir" style="margin-bottom:6px;">
+          <div class="ozet-kutu"><div class="ozet-sayi">{len(sirali_depolar)}</div><div class="ozet-etiket">Depo</div></div>
+          <div class="ozet-kutu"><div class="ozet-sayi">{genel_cesit}</div><div class="ozet-etiket">Ürün Çeşidi</div></div>
+          <div class="ozet-kutu"><div class="ozet-sayi">{genel_toplam}</div><div class="ozet-etiket">Toplam Adet</div></div>
+        </div>
+        """
+        + '<p style="text-align:center;color:var(--muted);font-size:12.5px;margin-top:0;">Bir depoya dokunarak o depodaki ürünleri görebilirsin.</p>'
+        + kartlar
+    )
+    return sayfa(icerik, "Depo Stok Durumu")
 
 
 @app.route("/hareketler")
@@ -1563,7 +1728,9 @@ def hizli_islem():
     data = request.get_json()
     barkod = data.get("barkod")
     tip = data.get("tip")
+    siparis_id = data.get("siparis_id")
     kullanici = session.get("kullanici", "Bilinmiyor")
+    rol = session.get("rol")
 
     con = db()
     try:
@@ -1578,6 +1745,23 @@ def hizli_islem():
                     return jsonify({"ok": False, "msg": "Bu ürün sizin sattığınız ürünler arasında değil, çıkış yapılamaz"})
 
                 uid, ad, adet, cins, ebat, yuzey, sinif, renk, depo = row
+
+                # ---- Sipariş kontrolü: depocu, açık siparişte olmayan ürünü çıkış yapamaz ----
+                kalem_id = None
+                if tip == "cikis" and rol == "depocu":
+                    if not siparis_id:
+                        return jsonify({"ok": False, "msg": "Önce bir sipariş seçmelisin. Sipariş olmadan çıkış yapılamaz."})
+                    cur.execute("SELECT durum FROM siparis WHERE id=%s", (siparis_id,))
+                    sip = cur.fetchone()
+                    if not sip or sip[0] != 'acik':
+                        return jsonify({"ok": False, "msg": "Bu sipariş artık açık değil."})
+                    cur.execute("SELECT id, istenen, verilen FROM siparis_kalem WHERE siparis_id=%s AND barkod=%s", (siparis_id, barkod))
+                    kalem = cur.fetchone()
+                    if not kalem:
+                        return jsonify({"ok": False, "msg": "⚠️ YANLIŞ ÜRÜN! Bu ürün bu siparişte yok.", "yanlis_urun": True, "urun_adi": ad})
+                    kalem_id, istenen, verilen = kalem
+                    if verilen >= istenen:
+                        return jsonify({"ok": False, "msg": f"'{ad}' için istenen {istenen} adet zaten tamamlandı.", "tamamlandi_uyari": True})
 
                 if tip == "cikis" and adet <= 0:
                     return jsonify({"ok": False, "msg": "Stok yok"})
@@ -1595,6 +1779,16 @@ def hizli_islem():
                 VALUES (%s, %s, %s, %s, %s, %s)
                 """, (barkod, ad, tip, 1, kullanici, tr_simdi()))
 
+                siparis_ilerleme = None
+                if kalem_id:
+                    cur.execute("UPDATE siparis_kalem SET verilen = verilen + 1 WHERE id=%s", (kalem_id,))
+                    cur.execute("SELECT SUM(istenen), SUM(verilen) FROM siparis_kalem WHERE siparis_id=%s", (siparis_id,))
+                    top_ist, top_ver = cur.fetchone()
+                    siparis_ilerleme = {"istenen": top_ist, "verilen": top_ver}
+                    if top_ver >= top_ist:
+                        cur.execute("UPDATE siparis SET durum='tamamlandi' WHERE id=%s", (siparis_id,))
+                        siparis_ilerleme["tamamlandi"] = True
+
                 cur.execute("""
                 SELECT SUM(adet) FROM hareket WHERE kullanici=%s AND tip='cikis'
                 """, (kullanici,))
@@ -1605,7 +1799,7 @@ def hizli_islem():
                 return jsonify({
                     "ok": True, "ad": ad, "adet": adet, "toplam": toplam,
                     "cins": cins, "ebat": ebat, "yuzey": yuzey, "sinif": sinif,
-                    "renk": renk, "depo": depo,
+                    "renk": renk, "depo": depo, "siparis_ilerleme": siparis_ilerleme,
                 })
     finally:
         con.close()
@@ -1807,6 +2001,7 @@ def geri_al():
     data = request.get_json()
     barkod = data.get("barkod")
     tip = data.get("tip")
+    siparis_id = data.get("siparis_id")
 
     con = db()
     try:
@@ -1826,10 +2021,379 @@ def geri_al():
                     adet = 0
 
                 cur.execute("UPDATE urun SET adet=%s WHERE id=%s", (adet, uid))
+
+                if tip == "cikis" and siparis_id:
+                    cur.execute("""
+                        UPDATE siparis_kalem SET verilen = GREATEST(verilen - 1, 0)
+                        WHERE siparis_id=%s AND barkod=%s
+                    """, (siparis_id, barkod))
+                    cur.execute("UPDATE siparis SET durum='acik' WHERE id=%s AND durum='tamamlandi'", (siparis_id,))
     finally:
         con.close()
 
     return jsonify({"ok": True})
+
+
+# ============ SİPARİŞ SİSTEMİ ============
+
+def siparis_tablolarini_olustur():
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS siparis(
+                    id SERIAL PRIMARY KEY,
+                    musteri TEXT,
+                    depo TEXT,
+                    durum TEXT DEFAULT 'acik',
+                    olusturan TEXT,
+                    tarih TIMESTAMP,
+                    aciklama TEXT
+                )
+                """)
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS siparis_kalem(
+                    id SERIAL PRIMARY KEY,
+                    siparis_id INTEGER REFERENCES siparis(id) ON DELETE CASCADE,
+                    barkod TEXT,
+                    ad TEXT,
+                    istenen INTEGER,
+                    verilen INTEGER DEFAULT 0
+                )
+                """)
+    finally:
+        con.close()
+
+
+if DATABASE_URL:
+    siparis_tablolarini_olustur()
+
+
+@app.route("/urun_ara")
+@rol_gerekli("muhasebeci")
+def urun_ara():
+    q = request.args.get("q", "").strip()
+    if len(q) < 1:
+        return jsonify([])
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT ad, barkod, adet, depo, cins, ebat FROM urun
+                WHERE ad ILIKE %s OR barkod ILIKE %s
+                ORDER BY ad LIMIT 20
+            """, (f"%{q}%", f"%{q}%"))
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+    return jsonify([
+        {"ad": s[0], "barkod": s[1], "adet": s[2], "depo": s[3] or "", "cins": s[4] or "", "ebat": s[5] or ""}
+        for s in satirlar
+    ])
+
+
+@app.route("/siparis_olustur", methods=["GET", "POST"])
+@rol_gerekli("muhasebeci")
+def siparis_olustur():
+    if request.method == "POST":
+        musteri = request.form.get("musteri", "").strip()
+        depo = request.form.get("depo", "")
+        aciklama = request.form.get("aciklama", "").strip()
+        barkodlar = request.form.getlist("kalem_barkod")
+        adlar = request.form.getlist("kalem_ad")
+        adetler = request.form.getlist("kalem_adet")
+
+        kalemler = []
+        for b, a, adet_str in zip(barkodlar, adlar, adetler):
+            b = b.strip()
+            if not b:
+                continue
+            try:
+                adet = int(adet_str)
+            except (TypeError, ValueError):
+                adet = 0
+            if adet <= 0:
+                continue
+            kalemler.append((b, a, adet))
+
+        if not kalemler:
+            return sayfa('<p class="hata">❌ En az bir ürün ve adet girmelisin.</p><a class="btn gri" href="/siparis_olustur">⬅ Geri Dön</a>', "Hata")
+
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO siparis (musteri, depo, durum, olusturan, tarih, aciklama)
+                        VALUES (%s,%s,'acik',%s,%s,%s) RETURNING id
+                    """, (musteri, depo, session.get("kullanici", "Bilinmiyor"), tr_simdi(), aciklama))
+                    siparis_id = cur.fetchone()[0]
+                    for barkod, ad, adet in kalemler:
+                        cur.execute("""
+                            INSERT INTO siparis_kalem (siparis_id, barkod, ad, istenen, verilen)
+                            VALUES (%s,%s,%s,%s,0)
+                        """, (siparis_id, barkod, ad, adet))
+        finally:
+            con.close()
+
+        return redirect(f"/siparis/{siparis_id}")
+
+    icerik = """
+    <h2 style="margin-bottom:2px;">🧾 Yeni Sipariş Oluştur</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">
+    Depocuya hazırlatılacak ürünleri seç, depocu sadece bu listedeki ürünleri çıkış yapabilir.
+    </p>
+
+    <form method="post" id="siparis-form">
+    <div class="kart">
+    <label>Müşteri / Sipariş Adı (opsiyonel)</label>
+    <input name="musteri" placeholder="Örn: Ahmet Bey - Mutfak Dolabı">
+    <label>Depo</label>
+    <select name="depo" required>
+    """ + "".join(f'<option>{d}</option>' for d in DEPOLAR) + """
+    </select>
+    <label>Not (opsiyonel)</label>
+    <input name="aciklama" placeholder="Örn: Bugün teslim edilecek">
+    </div>
+
+    <div class="kart">
+    <label>Ürün Ara ve Ekle</label>
+    <div class="urun-arama-kutu">
+      <input type="text" id="urun-arama" class="arama" placeholder="🔍 Ürün adı veya barkod yaz..." autocomplete="off" oninput="urunAra()">
+      <div class="urun-arama-sonuc" id="urun-arama-sonuc"></div>
+    </div>
+    <div id="sepet"></div>
+    <p id="sepet-bos" style="color:var(--muted);font-size:13px;text-align:center;margin:10px 0;">Henüz ürün eklenmedi.</p>
+    </div>
+
+    <div id="gizli-alanlar"></div>
+    <button type="submit" class="btn yesil">✅ Siparişi Oluştur</button>
+    </form>
+
+    <script>
+    let sepet = {};
+    let aramaZamanlayici = null;
+
+    function urunAra(){
+      clearTimeout(aramaZamanlayici);
+      const q = document.getElementById('urun-arama').value.trim();
+      const kutu = document.getElementById('urun-arama-sonuc');
+      if(q.length < 1){ kutu.style.display='none'; kutu.innerHTML=''; return; }
+      aramaZamanlayici = setTimeout(() => {
+        fetch('/urun_ara?q=' + encodeURIComponent(q))
+          .then(r => r.json())
+          .then(sonuclar => {
+            if(sonuclar.length === 0){
+              kutu.innerHTML = '<div class="urun-arama-oge" style="color:var(--muted);">Ürün bulunamadı</div>';
+              kutu.style.display = 'block';
+              return;
+            }
+            kutu.innerHTML = sonuclar.map(u => `
+              <div class="urun-arama-oge" onclick='sepeteEkle(${JSON.stringify(JSON.stringify(u))})'>
+                <div class="ad">${u.ad}</div>
+                <div class="detay">🔢 ${u.barkod} · 📦 Stokta: ${u.adet} · 🏭 ${u.depo}</div>
+              </div>
+            `).join('');
+            kutu.style.display = 'block';
+          });
+      }, 250);
+    }
+
+    function sepeteEkle(uJson){
+      const u = JSON.parse(uJson);
+      if(!sepet[u.barkod]){
+        sepet[u.barkod] = { ad: u.ad, adet: 1, stok: u.adet };
+      } else {
+        sepet[u.barkod].adet += 1;
+      }
+      document.getElementById('urun-arama').value = '';
+      document.getElementById('urun-arama-sonuc').style.display = 'none';
+      sepetiCiz();
+    }
+
+    function sepettenSil(barkod){
+      delete sepet[barkod];
+      sepetiCiz();
+    }
+
+    function adetGuncelle(barkod, deger){
+      const adet = parseInt(deger);
+      if(sepet[barkod]) sepet[barkod].adet = isNaN(adet) ? 1 : Math.max(1, adet);
+    }
+
+    function sepetiCiz(){
+      const kapsayici = document.getElementById('sepet');
+      const bosMesaj = document.getElementById('sepet-bos');
+      const barkodlar = Object.keys(sepet);
+      bosMesaj.style.display = barkodlar.length === 0 ? 'block' : 'none';
+      kapsayici.innerHTML = barkodlar.map(b => `
+        <div class="sepet-satir">
+          <div class="sepet-ad">${sepet[b].ad}<br><span style="color:var(--muted);font-size:11px;">🔢 ${b} · Stokta ${sepet[b].stok}</span></div>
+          <input type="number" class="sepet-adet-input" min="1" value="${sepet[b].adet}" onchange="adetGuncelle('${b}', this.value)">
+          <button type="button" class="sepet-sil" onclick="sepettenSil('${b}')">✕</button>
+        </div>
+      `).join('');
+
+      const gizli = document.getElementById('gizli-alanlar');
+      gizli.innerHTML = barkodlar.map(b => `
+        <input type="hidden" name="kalem_barkod" value="${b}">
+        <input type="hidden" name="kalem_ad" value="${sepet[b].ad}">
+        <input type="hidden" name="kalem_adet" value="${sepet[b].adet}">
+      `).join('');
+    }
+
+    document.getElementById('siparis-form').addEventListener('submit', function(e){
+      if(Object.keys(sepet).length === 0){
+        e.preventDefault();
+        alert('Lütfen en az bir ürün ekle.');
+      }
+    });
+
+    document.addEventListener('click', function(e){
+      const kutu = document.getElementById('urun-arama-sonuc');
+      if(!kutu.contains(e.target) && e.target.id !== 'urun-arama'){
+        kutu.style.display = 'none';
+      }
+    });
+    </script>
+    """
+    return sayfa(icerik, "Yeni Sipariş")
+
+
+@app.route("/siparisler")
+@rol_gerekli("muhasebeci")
+def siparisler():
+    durum_filtre = request.args.get("durum", "acik")
+
+    con = db()
+    try:
+        with con.cursor() as cur:
+            if durum_filtre == "hepsi":
+                cur.execute("""
+                    SELECT s.id, s.musteri, s.depo, s.durum, s.olusturan, s.tarih,
+                           COALESCE(SUM(k.istenen),0), COALESCE(SUM(k.verilen),0)
+                    FROM siparis s LEFT JOIN siparis_kalem k ON k.siparis_id = s.id
+                    GROUP BY s.id ORDER BY s.id DESC
+                """)
+            else:
+                cur.execute("""
+                    SELECT s.id, s.musteri, s.depo, s.durum, s.olusturan, s.tarih,
+                           COALESCE(SUM(k.istenen),0), COALESCE(SUM(k.verilen),0)
+                    FROM siparis s LEFT JOIN siparis_kalem k ON k.siparis_id = s.id
+                    WHERE s.durum=%s GROUP BY s.id ORDER BY s.id DESC
+                """, (durum_filtre,))
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+
+    kartlar = ""
+    for sid, musteri, depo, durum, olusturan, tarih, istenen, verilen in satirlar:
+        yuzde = int((verilen / istenen) * 100) if istenen else 0
+        kartlar += f"""
+        <a href="/siparis/{sid}" class="siparis-kart">
+          <div class="siparis-ust">
+            <div class="siparis-no">🧾 Sipariş #{sid}{' — ' + musteri if musteri else ''}</div>
+            <div class="siparis-durum {durum}">{durum}</div>
+          </div>
+          <div class="siparis-detay">
+            🏭 {depo} &nbsp;·&nbsp; 👤 {olusturan} &nbsp;·&nbsp; 🕒 {tarih}<br>
+            📦 {verilen} / {istenen} adet hazırlandı
+          </div>
+          <div class="siparis-ilerleme-bar"><div class="siparis-ilerleme-dolu" style="width:{yuzde}%;"></div></div>
+        </a>
+        """
+
+    if not kartlar:
+        kartlar = '<p style="text-align:center;color:var(--muted);margin-top:24px;">Bu filtrede sipariş bulunamadı.</p>'
+
+    icerik = (
+        "<h2>📋 SİPARİŞLER</h2>"
+        + f"""
+        <div class="filtre-satir">
+          <a href="/siparisler?durum=acik" class="filtre-cip {'aktif' if durum_filtre=='acik' else ''}" style="text-decoration:none;display:block;">Açık</a>
+          <a href="/siparisler?durum=tamamlandi" class="filtre-cip {'aktif' if durum_filtre=='tamamlandi' else ''}" style="text-decoration:none;display:block;">Tamamlandı</a>
+          <a href="/siparisler?durum=hepsi" class="filtre-cip {'aktif' if durum_filtre=='hepsi' else ''}" style="text-decoration:none;display:block;">Tümü</a>
+        </div>
+        """
+        + '<a href="/siparis_olustur" class="okut-kart okut-yesil"><div class="okut-ikon">➕</div><div class="okut-metin"><div class="okut-baslik">Yeni Sipariş</div></div><div class="okut-ok">›</div></a>'
+        + kartlar
+    )
+    return sayfa(icerik, "Siparişler")
+
+
+@app.route("/siparis/<int:siparis_id>")
+@rol_gerekli("depocu", "muhasebeci", "patron")
+def siparis_detay(siparis_id):
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT id, musteri, depo, durum, olusturan, tarih, aciklama FROM siparis WHERE id=%s", (siparis_id,))
+            sip = cur.fetchone()
+            if not sip:
+                return sayfa('<p class="hata">❌ Sipariş bulunamadı.</p><a class="btn gri" href="/siparisler">⬅ Geri Dön</a>', "Hata")
+            cur.execute("SELECT ad, barkod, istenen, verilen FROM siparis_kalem WHERE siparis_id=%s ORDER BY id", (siparis_id,))
+            kalemler = cur.fetchall()
+    finally:
+        con.close()
+
+    _, musteri, depo, durum, olusturan, tarih, aciklama = sip
+
+    kalem_html = ""
+    for ad, barkod, istenen, verilen in kalemler:
+        tam = verilen >= istenen
+        kalem_html += f"""
+        <div class="kalem-satir">
+          <div class="kalem-ad">{ad}<br><span style="color:var(--muted);font-size:11.5px;">🔢 {barkod}</span></div>
+          <div class="kalem-miktar {'tam' if tam else 'eksik'}">{verilen} / {istenen}</div>
+        </div>
+        """
+
+    rol = session.get("rol")
+    aksiyon_html = ""
+    if rol == "depocu" and durum == "acik":
+        aksiyon_html = f'<a href="/kamera/cikis?siparis_id={siparis_id}" class="btn turuncu">⬇️ Bu Siparişi Okutarak Hazırla</a>'
+    if rol in ("muhasebeci", "patron") and durum == "acik":
+        aksiyon_html += f"""
+        <form method="post" action="/siparis_iptal/{siparis_id}" onsubmit="return confirm('Bu siparişi iptal etmek istediğine emin misin?');">
+          <button class="btn kirmizi" type="submit">🗑️ Siparişi İptal Et</button>
+        </form>
+        """
+
+    icerik = (
+        f"<h2>🧾 Sipariş #{siparis_id}</h2>"
+        + f'<h3 class="alt">{musteri or "—"}</h3>'
+        + f"""
+        <div class="kart">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span class="siparis-durum {durum}">{durum}</span>
+            <span style="color:var(--muted);font-size:12.5px;">🏭 {depo}</span>
+          </div>
+          <div style="color:var(--muted);font-size:12.5px;">👤 {olusturan} &nbsp;·&nbsp; 🕒 {tarih}</div>
+          {'<div style="color:var(--muted);font-size:13px;margin-top:8px;">📝 ' + aciklama + '</div>' if aciklama else ''}
+        </div>
+        <div class="kart" style="padding:6px 16px;">
+          <div class="bolum-baslik" style="margin:10px 0 2px;">Ürünler</div>
+          {kalem_html}
+        </div>
+        """
+        + aksiyon_html
+        + '<a href="/siparisler" class="okut-kart okut-mor"><div class="okut-ikon">📋</div><div class="okut-metin"><div class="okut-baslik">Tüm Siparişlere Dön</div></div><div class="okut-ok">›</div></a>'
+    )
+    return sayfa(icerik, f"Sipariş #{siparis_id}")
+
+
+@app.route("/siparis_iptal/<int:siparis_id>", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def siparis_iptal(siparis_id):
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("UPDATE siparis SET durum='iptal' WHERE id=%s", (siparis_id,))
+    finally:
+        con.close()
+    return redirect(f"/siparis/{siparis_id}")
 
 
 @app.route("/kamera/<tip>")
@@ -1838,6 +2402,75 @@ def kamera(tip):
     if tip not in ("giris", "cikis"):
         tip = "giris"
     kullanici = session.get("kullanici", "Bilinmiyor")
+    rol = session.get("rol")
+    siparis_id = request.args.get("siparis_id", "")
+
+    # Çıkış modunda depocu önce açık bir sipariş seçmeli (yanlış ürün çıkışını engellemek için)
+    if tip == "cikis" and rol == "depocu" and not siparis_id:
+        con = db()
+        try:
+            with con.cursor() as cur:
+                cur.execute("""
+                    SELECT s.id, s.musteri, s.depo, COALESCE(SUM(k.istenen),0), COALESCE(SUM(k.verilen),0)
+                    FROM siparis s LEFT JOIN siparis_kalem k ON k.siparis_id = s.id
+                    WHERE s.durum='acik' GROUP BY s.id ORDER BY s.id DESC
+                """)
+                acik_siparisler = cur.fetchall()
+        finally:
+            con.close()
+
+        kartlar = ""
+        for sid, musteri, depo, istenen, verilen in acik_siparisler:
+            yuzde = int((verilen / istenen) * 100) if istenen else 0
+            kartlar += f"""
+            <a href="/kamera/cikis?siparis_id={sid}" class="siparis-kart">
+              <div class="siparis-ust">
+                <div class="siparis-no">🧾 #{sid}{' — ' + musteri if musteri else ''}</div>
+                <div class="siparis-durum acik">açık</div>
+              </div>
+              <div class="siparis-detay">🏭 {depo} &nbsp;·&nbsp; 📦 {verilen} / {istenen} adet</div>
+              <div class="siparis-ilerleme-bar"><div class="siparis-ilerleme-dolu" style="width:{yuzde}%;"></div></div>
+            </a>
+            """
+
+        if not acik_siparisler:
+            kartlar = '<div class="uyari-kutu">⚠️ Şu anda size atanmış açık bir sipariş yok. Çıkış yapmadan önce muhasebeciden bir sipariş oluşturmasını iste.</div>'
+
+        icerik = (
+            "<h2>⬇️ Çıkış İçin Sipariş Seç</h2>"
+            + '<p style="text-align:center;color:var(--muted);margin-top:0;">Yanlış ürün verilmesini önlemek için önce hangi siparişi hazırladığını seç.</p>'
+            + kartlar
+        )
+        return sayfa(icerik, "Sipariş Seç")
+
+    siparis_bilgi_html = ""
+    if tip == "cikis" and siparis_id:
+        con = db()
+        try:
+            with con.cursor() as cur:
+                cur.execute("SELECT musteri, depo, durum FROM siparis WHERE id=%s", (siparis_id,))
+                sip = cur.fetchone()
+                cur.execute("SELECT ad, barkod, istenen, verilen FROM siparis_kalem WHERE siparis_id=%s ORDER BY id", (siparis_id,))
+                kalemler = cur.fetchall()
+        finally:
+            con.close()
+
+        if sip:
+            musteri, depo, durum = sip
+            kalem_satirlari = "".join(
+                f'<div class="kalem-satir"><div class="kalem-ad">{ad}</div><div class="kalem-miktar {"tam" if verilen>=istenen else "eksik"}">{verilen}/{istenen}</div></div>'
+                for ad, barkod, istenen, verilen in kalemler
+            )
+            siparis_bilgi_html = f"""
+            <div class="kart" style="padding:12px 16px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <b>🧾 Sipariş #{siparis_id}{' — ' + musteri if musteri else ''}</b>
+                <span class="siparis-durum {durum}">{durum}</span>
+              </div>
+              <div style="color:var(--muted);font-size:12px;margin:4px 0 8px;">🏭 {depo} — sadece bu listedeki ürünler okutulabilir</div>
+              {kalem_satirlari}
+            </div>
+            """
 
     icerik = """
     <style>
@@ -1889,6 +2522,7 @@ def kamera(tip):
     .sonuc-basari { border-color: rgba(100,221,23,.4); }
     .sonuc-hata { border-color: rgba(255,23,68,.4); }
     .sonuc-yeni { border-color: rgba(33,150,243,.4); }
+    .sonuc-yanlis { border-color: rgba(255,23,68,.6); background: linear-gradient(180deg, rgba(255,23,68,.14), var(--card)); }
     .sonuc-ust { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
     .sonuc-ikon { font-size:26px; }
     .sonuc-ad { font-size:17px; font-weight:800; }
@@ -1915,6 +2549,8 @@ def kamera(tip):
       <button type="button" id="btn-giris" class="mod-btn" onclick="modDegistir('giris')">⬆️ GİRİŞ</button>
       <button type="button" id="btn-cikis" class="mod-btn" onclick="modDegistir('cikis')">⬇️ ÇIKIŞ</button>
     </div>
+
+    {{siparis_bilgi_html|safe}}
 
     <div class="kamera-cerceve" id="kamera-cerceve" style="display:none;">
       <video id="video"></video>
@@ -1946,12 +2582,20 @@ def kamera(tip):
     let aktifTip = "{{tip}}";
     let flashAcik = false;
     let sonIslem = null;
+    let siparisId = {{ (siparis_id or 'null') }};
 
     function modDegistir(yeniTip){
         aktifTip = yeniTip;
         document.getElementById('btn-giris').className = 'mod-btn' + (yeniTip === 'giris' ? ' aktif-giris' : '');
         document.getElementById('btn-cikis').className = 'mod-btn' + (yeniTip === 'cikis' ? ' aktif-cikis' : '');
-        history.replaceState(null, '', '/kamera/' + yeniTip);
+        if(yeniTip === 'cikis' && !siparisId){
+            window.location.href = '/kamera/cikis';
+            return;
+        }
+        if(yeniTip === 'giris'){
+            window.location.href = '/kamera/giris';
+            return;
+        }
     }
     modDegistir(aktifTip);
 
@@ -2011,7 +2655,7 @@ def kamera(tip):
         fetch("/hizli_islem", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ barkod: barkod, tip: aktifTip })
+            body: JSON.stringify({ barkod: barkod, tip: aktifTip, siparis_id: siparisId })
         })
         .then(r => r.json())
         .then(d => sonucGoster(d, barkod))
@@ -2022,8 +2666,13 @@ def kamera(tip):
         const alan = document.getElementById('sonuc-alan');
 
         if (d.ok) {
-            sonIslem = { barkod: barkod, tip: aktifTip };
+            sonIslem = { barkod: barkod, tip: aktifTip, siparis_id: siparisId };
             const baslikRengi = aktifTip === 'giris' ? '✅' : '📤';
+            let siparisSatiri = '';
+            if(d.siparis_ilerleme){
+                siparisSatiri = `<br>🧾 Sipariş toplam: <b>${d.siparis_ilerleme.verilen} / ${d.siparis_ilerleme.istenen}</b>` +
+                    (d.siparis_ilerleme.tamamlandi ? ' — 🎉 Sipariş tamamlandı!' : '');
+            }
             alan.innerHTML = `
               <div class="sonuc-kart sonuc-basari">
                 <div class="sonuc-ust"><span class="sonuc-ikon">${baslikRengi}</span><span class="sonuc-ad">${d.ad}</span></div>
@@ -2031,7 +2680,7 @@ def kamera(tip):
                   🏷️ Cins: <b>${d.cins || '-'}</b> &nbsp; 🔖 Sınıf: <b>${d.sinif || '-'}</b><br>
                   ✨ Yüzey: <b>${d.yuzey || '-'}</b> &nbsp; 🎨 Renk: <b>${d.renk || '-'}</b><br>
                   📏 Ebat: <b>${d.ebat || '-'}</b> &nbsp; 🏭 Depo: <b>${d.depo || '-'}</b><br>
-                  📦 Kalan Stok: <b>${d.adet}</b> &nbsp; 📊 Bugünkü Toplam: <b>${d.toplam}</b>
+                  📦 Kalan Stok: <b>${d.adet}</b> &nbsp; 📊 Bugünkü Toplam: <b>${d.toplam}</b>${siparisSatiri}
                 </div>
                 <button class="geri-al-btn" onclick="geriAl()">↩️ Bu işlemi geri al</button>
               </div>`;
@@ -2042,6 +2691,13 @@ def kamera(tip):
                 <div class="sonuc-satirlar">Yeni ürün ekleme sayfasına yönlendiriliyorsunuz...</div>
               </div>`;
             setTimeout(() => { window.location.href = "/ekle?barkod=" + encodeURIComponent(barkod); }, 1000);
+        } else if (d.yanlis_urun) {
+            if(navigator.vibrate) navigator.vibrate([120,80,120,80,120]);
+            alan.innerHTML = `
+              <div class="sonuc-kart sonuc-yanlis">
+                <div class="sonuc-ust"><span class="sonuc-ikon">🚫</span><span class="sonuc-ad">${d.msg}</span></div>
+                <div class="sonuc-satirlar">"${d.urun_adi || ''}" bu siparişte listelenmiyor. Lütfen sipariş listesindeki ürünleri kontrol et.</div>
+              </div>`;
         } else {
             if(navigator.vibrate) navigator.vibrate([60,60,60]);
             alan.innerHTML = `
@@ -2069,7 +2725,12 @@ def kamera(tip):
     }
     </script>
     """
-    return render_template_string(sayfa(icerik, "Barkod Okut"), tip=tip, kullanici=kullanici)
+    return render_template_string(
+        sayfa(icerik, "Barkod Okut"),
+        tip=tip, kullanici=kullanici,
+        siparis_id=(int(siparis_id) if siparis_id else None),
+        siparis_bilgi_html=siparis_bilgi_html,
+    )
 
 
 if __name__ == "__main__":
