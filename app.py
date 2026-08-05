@@ -523,7 +523,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 """
 
 LOGO_URL = "/static/logo.png"
-UYGULAMA_ADI = "HER-İŞ ORMAN ÜRÜNLERİ SİPARİŞ-STOK TAKİP SİSTEMİ"
+UYGULAMA_ADI = "HER-İŞ ORMAN ÜRÜNLERİ STOK TAKİP SİSTEMİ"
 
 UST_BAR = f"""
 <div class="topbar">
@@ -536,7 +536,7 @@ UST_BAR = f"""
 HOME_BTN = UST_BAR
 
 
-def sayfa(icerik, baslik="Her İş Orman Ürünleri Sipraiş-Stok Takip Sistemi"):
+def sayfa(icerik, baslik="Her İş Orman Ürünleri Sipariş-Stok Takip Sistemi"):
     return (
         "<!DOCTYPE html><html lang=\"tr\"><head><meta charset=\"utf-8\">"
         + "<title>" + baslik + "</title>"
@@ -553,7 +553,7 @@ def sayfa(icerik, baslik="Her İş Orman Ürünleri Sipraiş-Stok Takip Sistemi"
 def manifest():
     return jsonify({
         "name": UYGULAMA_ADI,
-        "short_name": "HER-İŞ  Orman Üsünleri Sipariş-Stok Takip Sistemi",
+        "short_name": "Her İş Orman Ürünleri Sipariş-Stok Takip Sistemi",
         "start_url": "/",
         "display": "standalone",
         "background_color": "#0f1115",
@@ -832,12 +832,11 @@ def index():
         """
 
     icerik = (
-        "<h1>📦 HER İŞ ORMAN ÜRÜNLERİ SİPARİŞ-STOK PANELİ</h1>"
+        "<h1>📦 STOK PANEL</h1>"
         + '<h3 class="alt">👤 ' + kullanici + ' (' + rol + ')</h3>'
         + butonlar
     )
-    return sayfa(icerik, "Her İş Orman Ürünleri Sipariş-Stok Paneli
- ")
+    return sayfa(icerik, "Stok Panel")
 
 
 @app.route("/ekle", methods=["GET", "POST"])
@@ -1085,7 +1084,7 @@ def toplu_yukle():
                 + '<a class="btn gri" href="/toplu_yukle">⬅ Geri Dön</a>', "Hata")
 
         satir_html = "".join(
-            f'<div class="on-izleme-satir"><span>{ad}</span><span style="color:var(--muted);">{barkod} · {adet} adet</span></div>'
+            f'<div class="on-izleme-satir"><span>{ad}</span><span style="color:var(--muted);">{barkod} • {adet} adet</span></div>'
             for ad, barkod, adet in eklenenler
         )
         hata_html = ""
@@ -1136,8 +1135,8 @@ def toplu_yukle():
     <div class="kart">
       <b style="font-size:13.5px;">📋 Beklenen sütunlar:</b>
       <div style="color:var(--muted);font-size:13px;margin-top:6px;line-height:1.8;">
-        <b style="color:var(--text);">Ad</b> (zorunlu) · Cins · Ebat ·
-        <b style="color:var(--text);">Adet</b> (zorunlu) · Depo<br>
+        <b style="color:var(--text);">Ad</b> (zorunlu) • Cins • Ebat •
+        <b style="color:var(--text);">Adet</b> (zorunlu) • Depo<br>
         Barkod otomatik üretilir, Excel'e barkod yazmana gerek yok.
       </div>
     </div>
@@ -1321,7 +1320,7 @@ def liste():
     kartlar = ""
     for u in urunler:
         kritik_mi = u[8] <= KRITIK_ESIK
-        ozellikler = " · ".join([x for x in [u[2], u[3], u[4], u[5], u[6], u[7]] if x])
+        ozellikler = " • ".join([x for x in [u[2], u[3], u[4], u[5], u[6], u[7]] if x])
         kartlar += f"""
         <div class='urun-kart {"urun-kritik" if kritik_mi else ""}' id="urun-{u[10]}">
         <label class="etiket-sec-satir">
@@ -1505,7 +1504,7 @@ def hareket_listesi():
 
     kartlar = ""
     for ad, barkod, tip, adet, kullanici, tarih, cins, sinif, yuzey, renk, ebat, depo in kayitlar:
-        ozellikler = " · ".join([x for x in [cins, sinif, yuzey, renk, ebat] if x])
+        ozellikler = " • ".join([x for x in [cins, sinif, yuzey, renk, ebat] if x])
         giris_mi = tip == "giris"
         kartlar += f"""
         <div class="hareket-kart {'hareket-giris' if giris_mi else 'hareket-cikis'}" data-tip="{tip}">
@@ -1515,8 +1514,8 @@ def hareket_listesi():
               <div class="hareket-ad">{ad}</div>
               <div class="hareket-adet {'giris' if giris_mi else 'cikis'}">{'+' if giris_mi else '-'}{adet}</div>
             </div>
-            <div class="hareket-detay">{ozellikler or '-'}{(' · 🏭 ' + depo) if depo else ''}</div>
-            <div class="hareket-alt">🔢 {barkod} &nbsp;·&nbsp; 👤 {kullanici} &nbsp;·&nbsp; 🕒 {tarih}</div>
+            <div class="hareket-detay">{ozellikler or '-'}{(' • 🏭 ' + depo) if depo else ''}</div>
+            <div class="hareket-alt">🔢 {barkod} &nbsp;•&nbsp; 👤 {kullanici} &nbsp;•&nbsp; 🕒 {tarih}</div>
           </div>
         </div>
         """
@@ -1836,7 +1835,7 @@ def etiket(barkod):
 
     ad, cins, ebat, kalinlik, yuzey, sinif, renk, depo = row
 
-    ozellikler = " · ".join([x for x in [cins, ebat, kalinlik, yuzey, sinif, renk] if x])
+    ozellikler = " • ".join([x for x in [cins, ebat, kalinlik, yuzey, sinif, renk] if x])
 
     html = f"""
     <!DOCTYPE html>
@@ -1917,7 +1916,7 @@ def etiketler():
 
     etiket_html = ""
     for ad, cins, ebat, kalinlik, yuzey, sinif, renk, depo, barkod in satirlar:
-        ozellikler = " · ".join([x for x in [cins, ebat, kalinlik, yuzey, sinif, renk] if x])
+        ozellikler = " • ".join([x for x in [cins, ebat, kalinlik, yuzey, sinif, renk] if x])
         etiket_html += f"""
         <div class="etiket">
             <div class="ad">{ad}</div>
@@ -2193,7 +2192,7 @@ def siparis_olustur():
             kutu.innerHTML = sonuclar.map(u => `
               <div class="urun-arama-oge" onclick='sepeteEkle(${JSON.stringify(JSON.stringify(u))})'>
                 <div class="ad">${u.ad}</div>
-                <div class="detay">🔢 ${u.barkod} · 📦 Stokta: ${u.adet} · 🏭 ${u.depo}</div>
+                <div class="detay">🔢 ${u.barkod} • 📦 Stokta: ${u.adet} • 🏭 ${u.depo}</div>
               </div>
             `).join('');
             kutu.style.display = 'block';
@@ -2230,7 +2229,7 @@ def siparis_olustur():
       bosMesaj.style.display = barkodlar.length === 0 ? 'block' : 'none';
       kapsayici.innerHTML = barkodlar.map(b => `
         <div class="sepet-satir">
-          <div class="sepet-ad">${sepet[b].ad}<br><span style="color:var(--muted);font-size:11px;">🔢 ${b} · Stokta ${sepet[b].stok}</span></div>
+          <div class="sepet-ad">${sepet[b].ad}<br><span style="color:var(--muted);font-size:11px;">🔢 ${b} • Stokta ${sepet[b].stok}</span></div>
           <input type="number" class="sepet-adet-input" min="1" value="${sepet[b].adet}" onchange="adetGuncelle('${b}', this.value)">
           <button type="button" class="sepet-sil" onclick="sepettenSil('${b}')">✕</button>
         </div>
@@ -2298,7 +2297,7 @@ def siparisler():
             <div class="siparis-durum {durum}">{durum}</div>
           </div>
           <div class="siparis-detay">
-            🏭 {depo} &nbsp;·&nbsp; 👤 {olusturan} &nbsp;·&nbsp; 🕒 {tarih}<br>
+            🏭 {depo} &nbsp;•&nbsp; 👤 {olusturan} &nbsp;•&nbsp; 🕒 {tarih}<br>
             📦 {verilen} / {istenen} adet hazırlandı
           </div>
           <div class="siparis-ilerleme-bar"><div class="siparis-ilerleme-dolu" style="width:{yuzde}%;"></div></div>
@@ -2370,7 +2369,7 @@ def siparis_detay(siparis_id):
             <span class="siparis-durum {durum}">{durum}</span>
             <span style="color:var(--muted);font-size:12.5px;">🏭 {depo}</span>
           </div>
-          <div style="color:var(--muted);font-size:12.5px;">👤 {olusturan} &nbsp;·&nbsp; 🕒 {tarih}</div>
+          <div style="color:var(--muted);font-size:12.5px;">👤 {olusturan} &nbsp;•&nbsp; 🕒 {tarih}</div>
           {'<div style="color:var(--muted);font-size:13px;margin-top:8px;">📝 ' + aciklama + '</div>' if aciklama else ''}
         </div>
         <div class="kart" style="padding:6px 16px;">
@@ -2429,7 +2428,7 @@ def kamera(tip):
                 <div class="siparis-no">🧾 #{sid}{' — ' + musteri if musteri else ''}</div>
                 <div class="siparis-durum acik">açık</div>
               </div>
-              <div class="siparis-detay">🏭 {depo} &nbsp;·&nbsp; 📦 {verilen} / {istenen} adet</div>
+              <div class="siparis-detay">🏭 {depo} &nbsp;•&nbsp; 📦 {verilen} / {istenen} adet</div>
               <div class="siparis-ilerleme-bar"><div class="siparis-ilerleme-dolu" style="width:{yuzde}%;"></div></div>
             </a>
             """
