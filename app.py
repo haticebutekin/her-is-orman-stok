@@ -1535,7 +1535,15 @@ def rapor_csv():
             urunler = cur.fetchall()
     finally:
         con.close()
-    writer.writerows(urunler)
+
+    # Barkod hücresini ="..." formülü olarak yazıyoruz; aksi halde Excel
+    # 12 haneli barkodu sayı sanıp bilimsel gösterime çeviriyor
+    # (örn. 1,23457E+11) ve barkod okunmaz hale geliyor.
+    for satir in urunler:
+        satir = list(satir)
+        if satir[9]:
+            satir[9] = f'="{satir[9]}"'
+        writer.writerow(satir)
 
     output = io.BytesIO(si.getvalue().encode("utf-8-sig"))
     output.seek(0)
