@@ -11,18 +11,11 @@ from barcode.writer import ImageWriter
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
 # ==================== VERİTABANI (Postgres) ====================
-# Render'da Postgres eklentisi oluşturunca sana bir "Internal Database URL"
-# verir. Bunu bu servisin Environment sekmesinde DATABASE_URL adıyla ekle.
-# Örnek: postgres://kullanici:sifre@host/veritabani
-#
-# Not: Eğer bağlantı hatası alırsan (SSL required vb.) DATABASE_URL'in
-# sonuna "?sslmode=require" ekleyebilirsin.
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)) or ".", "static"))
 app.secret_key = os.environ.get("SECRET_KEY", "bu-anahtari-canliya-almadan-once-degistir")
 
-# STATIC FIX (sadece uygulama ikonları için kullanılıyor, artık ürün/barkod resmi için değil)
 if os.path.exists(app.static_folder) and not os.path.isdir(app.static_folder):
     os.remove(app.static_folder)
 if not os.path.exists(app.static_folder):
@@ -40,7 +33,6 @@ DEPOLAR = [
     "OFİS",
 ]
 
-# KULLANICI -> ROL
 ROLLER = {
     "Ramazan": "depocu",
     "Behiç": "depocu",
@@ -51,7 +43,6 @@ ROLLER = {
     "Ahmet": "patron",
 }
 
-# KULLANICI -> PIN (GEÇİCİ! Canlıya almadan önce bunları gerçek PIN'lerle değiştirin)
 PIN_KODLARI = {
     "Ramazan": "1111",
     "Behiç": "1111",
@@ -64,9 +55,6 @@ PIN_KODLARI = {
 
 
 def db():
-    """Her çağrıda yeni bir Postgres bağlantısı açar. 'with db() as con:' bloğu
-    bittiğinde otomatik commit/rollback yapılır ama bağlantıyı kapatmaz;
-    bu yüzden fonksiyonlar sonunda con.close() çağırıyoruz."""
     return psycopg2.connect(DATABASE_URL)
 
 
@@ -94,11 +82,6 @@ def tablolari_olustur():
                     tarih TIMESTAMP
                 )
                 """)
-                # Bir ürüne birden fazla barkod tanımlanabilmesi için (örn. aynı
-                # ürün farklı tedarikçilerden farklı barkodla geliyorsa) ayrı bir
-                # eşleştirme tablosu. urun.barkod hâlâ "ana / etiket basılan"
-                # barkod olarak kalıyor; bu tablo ona ek olarak taranabilen
-                # tüm barkodları (ana barkod dahil) tutuyor.
                 cur.execute("""
                 CREATE TABLE IF NOT EXISTS urun_barkod(
                     id SERIAL PRIMARY KEY,
@@ -106,8 +89,6 @@ def tablolari_olustur():
                     barkod TEXT UNIQUE
                 )
                 """)
-                # Var olan kurulumlarda urun.barkod içindeki barkodları
-                # urun_barkod tablosuna taşı (zaten varsa tekrar eklemez).
                 cur.execute("""
                 INSERT INTO urun_barkod (urun_id, barkod)
                 SELECT u.id, u.barkod FROM urun u
@@ -116,9 +97,6 @@ def tablolari_olustur():
                     SELECT 1 FROM urun_barkod ub WHERE ub.barkod = u.barkod
                 )
                 """)
-                # Var olan kurulumlarda sütun DEFAULT CURRENT_TIMESTAMP ile
-                # gelmiş olabilir (UTC saatiyle) — kaldırıyoruz, çünkü tarihi
-                # artık her INSERT'te Türkiye saatiyle biz açıkça veriyoruz.
                 cur.execute("ALTER TABLE hareket ALTER COLUMN tarih DROP DEFAULT")
     finally:
         con.close()
@@ -129,14 +107,10 @@ if DATABASE_URL:
 
 
 def tr_simdi():
-    """Türkiye saatiyle (Europe/Istanbul) şu anki zamanı, saat dilimi
-    bilgisi olmadan (naive) döndürür — tarih sütununa böyle yazıyoruz."""
     return datetime.now(TR_TZ).replace(tzinfo=None)
 
 
 def bugunku_ozet(kullanici):
-    """Depocu ana ekranında göstermek için: bu kullanıcının bugün yaptığı
-    giriş ve çıkış sayısı."""
     bugun = tr_simdi().date()
     con = db()
     try:
@@ -167,7 +141,6 @@ def barkod_uret():
 
 
 def barkod_png_bytes(kod):
-    """Barkod resmini diske yazmadan bellekte üretir."""
     CODE128 = barcode.get_barcode_class("code128")
     bio = io.BytesIO()
     CODE128(kod, writer=ImageWriter()).write(bio)
@@ -176,7 +149,6 @@ def barkod_png_bytes(kod):
 
 
 def qr_png_bytes(kod):
-    """QR resmini diske yazmadan bellekte üretir."""
     img = qrcode.make(kod)
     bio = io.BytesIO()
     img.save(bio, format="PNG")
@@ -185,9 +157,6 @@ def qr_png_bytes(kod):
 
 
 def ikon_uret():
-    """Uygulama ikonlarını (PWA / ana ekrana ekle için) bir kere üretir.
-    Bunlar kullanıcı verisi değil, sabit uygulama ikonu olduğu için static
-    klasöründe kalması sorun değil; her başlangıçta zaten yeniden üretiliyor."""
     try:
         from PIL import Image, ImageDraw
     except ImportError:
@@ -214,8 +183,6 @@ def ikon_uret():
 
 ikon_uret()
 
-
-# ==================== ORTAK TASARIM ====================
 
 BASE_HEAD_EXTRA = """
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -307,7 +274,7 @@ h3.alt { color: var(--muted); font-weight:500; margin-top:-6px; font-size:14px; 
   transition: border-color .15s ease;
 }
 
-input[type=text], input[type=number], input[type=password], select, textarea {
+input[type=text], input[type=number], input[type=password], input[type=file], select, textarea {
   width:100%; padding:14px; margin:6px 0 14px; border-radius: var(--radius-sm);
   border:1px solid var(--border); background:#12151c; color:white;
   transition: border-color .15s ease, box-shadow .15s ease;
@@ -347,7 +314,6 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
   font-weight:700; letter-spacing:.3px; background:rgba(33,150,243,.15); color:#64B5F6;
 }
 
-/* --- Depocu ana ekranı: bugünkü özet + okutma kartları --- */
 .ozet-satir { display:flex; gap:10px; margin: 4px 0 18px; }
 .ozet-kutu {
   flex:1; border-radius: var(--radius); padding: 14px 10px; text-align:center;
@@ -372,6 +338,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .okut-mavi { background: linear-gradient(135deg, rgba(33,150,243,.22), rgba(0,188,212,.10)); border-color: rgba(33,150,243,.35); }
 .okut-mor { background: linear-gradient(135deg, rgba(94,53,177,.28), rgba(126,87,194,.12)); border-color: rgba(126,87,194,.4); }
 .okut-kirmizi { background: linear-gradient(135deg, rgba(213,0,0,.22), rgba(255,23,68,.10)); border-color: rgba(255,23,68,.35); }
+.okut-turkuaz { background: linear-gradient(135deg, rgba(0,131,143,.28), rgba(0,191,165,.12)); border-color: rgba(0,191,165,.4); }
 .okut-ikon { font-size: 30px; width:46px; text-align:center; flex-shrink:0; }
 .okut-metin { flex:1; }
 .okut-baslik { font-size:17px; font-weight:700; }
@@ -411,7 +378,6 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .kisi-ad { font-size:16px; font-weight:700; }
 .kisi-rol { font-size:12px; color:var(--muted); margin-top:1px; }
 
-/* --- Stok listesi kartları --- */
 .ozet-kutu:not(.ozet-yesil):not(.ozet-turuncu) .ozet-sayi { color: #64B5F6; }
 .urun-kart {
   background: linear-gradient(180deg, var(--card2), var(--card));
@@ -439,7 +405,6 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .urun-gorseller img:last-child { width:64px; }
 .urun-aksiyonlar { margin-top:10px; }
 
-/* --- Hareketler zaman çizelgesi --- */
 .filtre-satir { display:flex; gap:8px; margin: 0 0 14px; }
 .filtre-cip {
   flex:1; text-align:center; padding:9px 6px; border-radius:999px;
@@ -464,6 +429,21 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .hareket-adet.cikis { color:#FFB74D; }
 .hareket-detay { font-size:12.5px; color:var(--muted); margin-top:3px; }
 .hareket-alt { font-size:11.5px; color:var(--muted); margin-top:5px; opacity:.85; }
+
+/* --- Toplu Excel Yükleme --- */
+.yukleme-alan {
+  border:2px dashed var(--border); border-radius: var(--radius);
+  padding: 28px 16px; text-align:center; margin: 14px 0;
+  background: linear-gradient(180deg, var(--card2), var(--card));
+}
+.yukleme-ikon { font-size:40px; margin-bottom:6px; }
+.on-izleme-satir {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:10px 14px; border-bottom:1px solid var(--border); font-size:13.5px;
+}
+.on-izleme-satir:last-child { border-bottom:none; }
+.on-izleme-hata { color:#FF6B6B; font-size:12px; margin-top:2px; }
+.sablon-link { display:inline-block; margin-top:8px; font-size:13px; color:var(--accent); text-decoration:none; }
 """
 
 UST_BAR = """
@@ -474,7 +454,6 @@ UST_BAR = """
 </div>
 """
 
-# Geriye dönük uyumluluk için eski isim korunuyor
 HOME_BTN = UST_BAR
 
 
@@ -507,8 +486,6 @@ def manifest():
     })
 
 
-
-
 @app.route("/qr_baglan")
 def qr_baglan():
     url = request.host_url
@@ -519,7 +496,6 @@ def qr_baglan():
     return send_file(bio, mimetype="image/png")
 
 
-# Barkod ve QR resimleri artık diske yazılmıyor; her istekte anlık üretiliyor.
 @app.route("/barkod/<kod>.png")
 def barkod_resim_endpoint(kod):
     return send_file(barkod_png_bytes(kod), mimetype="image/png")
@@ -531,7 +507,6 @@ def qr_resim_endpoint(kod):
 
 
 def rol_gerekli(*izinli_roller):
-    """Sadece belirtilen rollerin (ve her zaman patron + muhasebecinin) erişebileceği sayfalar için."""
     TAM_YETKILI = ("patron", "muhasebeci")
 
     def decorator(f):
@@ -553,7 +528,6 @@ def rol_gerekli(*izinli_roller):
     return decorator
 
 
-# KULLANICI SEÇ / PIN GİR
 @app.route("/pin_gir/<isim>", methods=["GET", "POST"])
 def pin_gir(isim):
     if isim not in ROLLER:
@@ -661,7 +635,6 @@ def kullanici_degistir():
     return redirect("/")
 
 
-# ANA
 @app.route("/")
 def index():
     kullanici = session.get("kullanici")
@@ -702,7 +675,6 @@ def index():
         )
         return sayfa(icerik, "Giriş - Stok Takip")
 
-    # Role göre buton seti — patron ve muhasebeci tam yetkili
     butonlar = ""
     if rol in ("depocu", "muhasebeci", "patron"):
         giris_sayisi, cikis_sayisi = bugunku_ozet(kullanici)
@@ -728,6 +700,11 @@ def index():
         <a href="/ekle" class="okut-kart okut-mavi">
           <div class="okut-ikon">➕</div>
           <div class="okut-metin"><div class="okut-baslik">Ürün Ekle</div><div class="okut-alt">Yeni ürün kaydı oluştur</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/toplu_yukle" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">📥</div>
+          <div class="okut-metin"><div class="okut-baslik">Excel'den Toplu Yükle</div><div class="okut-alt">Excel yükle → otomatik barkod → toplu etiket</div></div>
           <div class="okut-ok">›</div>
         </a>
         <a href="/liste" class="okut-kart okut-mor">
@@ -757,7 +734,6 @@ def index():
     return sayfa(icerik, "Stok Panel")
 
 
-# EKLE — depocu (giriş sırasında yeni ürün) + patron
 @app.route("/ekle", methods=["GET", "POST"])
 @rol_gerekli("depocu", "patron")
 def ekle2():
@@ -874,7 +850,195 @@ def ekle2():
     return render_template_string(sayfa(icerik, "Ürün Ekle"), depolar=DEPOLAR, on_dolu_barkod=on_dolu_barkod)
 
 
-# DÜZENLE — mevcut ürünü güncelle (barkod dahil) — muhasebeci + patron
+# ============ TOPLU EXCEL YÜKLEME ============
+# Excel şablonu: Ad | Cins | Ebat | Adet | Depo  (Barkod otomatik üretilir)
+TOPLU_SABLON_BASLIKLAR = ["Ad", "Cins", "Ebat", "Adet", "Depo"]
+
+
+@app.route("/toplu_sablon.xlsx")
+@rol_gerekli("muhasebeci")
+def toplu_sablon():
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Ürünler"
+    ws.append(TOPLU_SABLON_BASLIKLAR)
+    for c in ws[1]:
+        c.font = Font(name="Arial", bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="2196F3")
+    ws.append(["Örnek MDF Levha", "MDF", "210x280", 10, DEPOLAR[0]])
+    for col_cells in ws.columns:
+        uzunluk = max((len(str(c.value)) if c.value is not None else 0) for c in col_cells)
+        ws.column_dimensions[col_cells[0].column_letter].width = min(max(uzunluk + 2, 10), 40)
+
+    bio = io.BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    return send_file(
+        bio,
+        as_attachment=True,
+        download_name="toplu_urun_sablonu.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@app.route("/toplu_yukle", methods=["GET", "POST"])
+@rol_gerekli("muhasebeci")
+def toplu_yukle():
+    if request.method == "POST":
+        dosya = request.files.get("dosya")
+        if not dosya or dosya.filename == "":
+            return sayfa('<p class="hata">❌ Dosya seçilmedi.</p><a class="btn gri" href="/toplu_yukle">⬅ Geri Dön</a>', "Hata")
+
+        from openpyxl import load_workbook
+        try:
+            wb = load_workbook(dosya, data_only=True)
+        except Exception:
+            return sayfa('<p class="hata">❌ Dosya okunamadı. Geçerli bir .xlsx dosyası yükleyin.</p><a class="btn gri" href="/toplu_yukle">⬅ Geri Dön</a>', "Hata")
+
+        ws = wb.active
+        satirlar = list(ws.iter_rows(values_only=True))
+        if not satirlar:
+            return sayfa('<p class="hata">❌ Excel dosyası boş.</p><a class="btn gri" href="/toplu_yukle">⬅ Geri Dön</a>', "Hata")
+
+        baslik_satiri = [str(h).strip().lower() if h is not None else "" for h in satirlar[0]]
+
+        def sutun_bul(*adaylar):
+            for aday in adaylar:
+                if aday in baslik_satiri:
+                    return baslik_satiri.index(aday)
+            return None
+
+        idx_ad = sutun_bul("ad", "ürün adı", "urun adi", "ürün", "urun")
+        idx_cins = sutun_bul("cins")
+        idx_ebat = sutun_bul("ebat")
+        idx_adet = sutun_bul("adet")
+        idx_depo = sutun_bul("depo")
+
+        if idx_ad is None or idx_adet is None:
+            return sayfa(
+                '<p class="hata">❌ Excel\'de en az "Ad" ve "Adet" sütunları olmalı.</p>'
+                '<p style="text-align:center;color:var(--muted);font-size:13px;">Beklenen sütunlar: Ad, Cins, Ebat, Adet, Depo</p>'
+                '<a class="btn gri" href="/toplu_yukle">⬅ Geri Dön</a>', "Hata")
+
+        eklenenler = []
+        hatalar = []
+
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    for satir_no, satir in enumerate(satirlar[1:], start=2):
+                        if satir is None or all(h is None or str(h).strip() == "" for h in satir):
+                            continue
+
+                        def deger_al(idx):
+                            if idx is None or idx >= len(satir):
+                                return ""
+                            v = satir[idx]
+                            return str(v).strip() if v is not None else ""
+
+                        ad = deger_al(idx_ad)
+                        cins = deger_al(idx_cins)
+                        ebat = deger_al(idx_ebat)
+                        depo = deger_al(idx_depo)
+                        adet_ham = deger_al(idx_adet)
+
+                        if not ad:
+                            hatalar.append(f"Satır {satir_no}: Ürün adı boş, atlandı.")
+                            continue
+
+                        try:
+                            adet = int(float(adet_ham)) if adet_ham != "" else 0
+                        except (TypeError, ValueError):
+                            hatalar.append(f"Satır {satir_no}: '{ad}' — Adet sayısal değil, atlandı.")
+                            continue
+
+                        barkod = barkod_uret()
+
+                        cur.execute("""
+                        INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
+                        VALUES(%s,%s,%s,'', '', '', '', %s,%s,%s)
+                        """, (ad, cins, ebat, adet, depo, barkod))
+                        cur.execute("""
+                        INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
+                        VALUES (%s, %s, 'giris', %s, %s, %s)
+                        """, (barkod, ad, adet, session.get("kullanici", "Bilinmiyor"), tr_simdi()))
+
+                        eklenenler.append((ad, barkod, adet))
+        finally:
+            con.close()
+
+        if not eklenenler:
+            hata_html = "".join(f'<div class="on-izleme-hata">{h}</div>' for h in hatalar) or "<p>Eklenecek geçerli satır bulunamadı.</p>"
+            return sayfa(
+                '<p class="hata">❌ Hiçbir ürün eklenemedi.</p>'
+                + f'<div class="kart">{hata_html}</div>'
+                + '<a class="btn gri" href="/toplu_yukle">⬅ Geri Dön</a>', "Hata")
+
+        satir_html = "".join(
+            f'<div class="on-izleme-satir"><span>{ad}</span><span style="color:var(--muted);">{barkod} · {adet} adet</span></div>'
+            for ad, barkod, adet in eklenenler
+        )
+        hata_html = ""
+        if hatalar:
+            hata_html = '<div class="kart"><b style="color:#FFB74D;">⚠️ Atlanan satırlar</b>' \
+                        + "".join(f'<div class="on-izleme-hata">{h}</div>' for h in hatalar) + '</div>'
+
+        barkod_inputlari = "".join(f'<input type="hidden" name="barkod" value="{b}">' for _, b, _ in eklenenler)
+
+        icerik = (
+            '<div style="text-align:center;font-size:52px;margin-bottom:4px;">✅</div>'
+            + f'<h2 style="margin-top:0;">{len(eklenenler)} Ürün Eklendi</h2>'
+            + f'<div class="kart" style="padding:6px 16px;">{satir_html}</div>'
+            + hata_html
+            + f"""
+            <form method="post" action="/etiketler" target="_blank">
+              {barkod_inputlari}
+              <button class="btn turkuaz" type="submit">🖨️ {len(eklenenler)} Ürünün Etiketini Tek Sayfada Yazdır</button>
+            </form>
+            """
+            + '<a href="/liste" class="okut-kart okut-mor">'
+            + '<div class="okut-ikon">📦</div><div class="okut-metin"><div class="okut-baslik">Stok Listesine Git</div></div><div class="okut-ok">›</div></a>'
+            + '<a href="/toplu_yukle" class="okut-kart okut-turkuaz">'
+            + '<div class="okut-ikon">📥</div><div class="okut-metin"><div class="okut-baslik">Yeni Dosya Yükle</div></div><div class="okut-ok">›</div></a>'
+        )
+        return sayfa(icerik, "Toplu Yükleme Tamamlandı")
+
+    icerik = """
+    <h2 style="margin-bottom:2px;">📥 Excel'den Toplu Yükle</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">
+    Ad, Cins, Ebat, Adet, Depo sütunlu bir Excel (.xlsx) dosyası yükle —
+    her satır için otomatik barkod üretilir ve ürünler tek seferde eklenir.
+    </p>
+
+    <div class="kart" style="text-align:center;">
+      <a class="sablon-link" href="/toplu_sablon.xlsx">📄 Örnek Excel Şablonunu İndir</a>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+    <div class="yukleme-alan">
+      <div class="yukleme-ikon">📊</div>
+      <p style="margin:6px 0;color:var(--muted);font-size:14px;">.xlsx dosyanı seç</p>
+      <input type="file" name="dosya" accept=".xlsx" required>
+    </div>
+    <button class="btn turkuaz">Yükle ve Ürünleri Ekle</button>
+    </form>
+
+    <div class="kart">
+      <b style="font-size:13.5px;">📋 Beklenen sütunlar:</b>
+      <div style="color:var(--muted);font-size:13px;margin-top:6px;line-height:1.8;">
+        <b style="color:var(--text);">Ad</b> (zorunlu) · Cins · Ebat ·
+        <b style="color:var(--text);">Adet</b> (zorunlu) · Depo<br>
+        Barkod otomatik üretilir, Excel'e barkod yazmana gerek yok.
+      </div>
+    </div>
+    """
+    return sayfa(icerik, "Toplu Yükleme")
+
+
 @app.route("/duzenle/<eski_barkod>", methods=["GET", "POST"])
 @rol_gerekli("muhasebeci")
 def duzenle(eski_barkod):
@@ -1020,7 +1184,6 @@ def duzenle(eski_barkod):
     )
 
 
-# LİSTE — muhasebeci + patron
 @app.route("/liste")
 @rol_gerekli("muhasebeci")
 def liste():
@@ -1157,7 +1320,6 @@ def liste():
     return sayfa(icerik, "Stok Listesi")
 
 
-# HAREKETLER — muhasebeci + patron
 @app.route("/hareketler")
 @rol_gerekli("muhasebeci")
 def hareket_listesi():
@@ -1230,7 +1392,6 @@ def hareket_listesi():
     return sayfa(icerik, "Hareketler")
 
 
-# EXCEL RAPOR (XLSX — Excel 2007 ve üzeri) — muhasebeci + patron
 @app.route("/rapor/excel")
 @rol_gerekli("muhasebeci")
 def rapor_excel():
@@ -1239,7 +1400,6 @@ def rapor_excel():
 
     wb = Workbook()
 
-    # --- STOK SAYFASI ---
     ws1 = wb.active
     ws1.title = "Stok"
     basliklar1 = ["Ürün Adı", "Cins", "Ebat", "Kalınlık", "Yüzey", "Sınıf", "Renk", "Adet", "Depo", "Barkod"]
@@ -1264,7 +1424,6 @@ def rapor_excel():
         uzunluk = max((len(str(c.value)) if c.value is not None else 0) for c in col_cells)
         ws1.column_dimensions[col_cells[0].column_letter].width = min(max(uzunluk + 2, 10), 40)
 
-    # --- HAREKETLER SAYFASI ---
     ws2 = wb.create_sheet("Hareketler")
     basliklar2 = ["Ürün Adı", "Barkod", "İşlem", "Adet", "Kullanıcı", "Tarih"]
     ws2.append(basliklar2)
@@ -1301,7 +1460,6 @@ def rapor_excel():
     )
 
 
-# EXCEL 2003 RAPOR (XLS — eski binary format) — muhasebeci + patron
 @app.route("/rapor/xls")
 @rol_gerekli("muhasebeci")
 def rapor_xls():
@@ -1361,7 +1519,6 @@ def rapor_xls():
     )
 
 
-# CSV RAPOR (her Excel sürümünde sorunsuz açılır) — muhasebeci + patron
 @app.route("/rapor/csv")
 @rol_gerekli("muhasebeci")
 def rapor_csv():
@@ -1446,7 +1603,6 @@ def hizli_islem():
         con.close()
 
 
-# ÜRÜN SİL — muhasebeci + patron
 @app.route("/sil/<barkod>", methods=["POST"])
 @rol_gerekli("muhasebeci")
 def urun_sil(barkod):
@@ -1461,7 +1617,6 @@ def urun_sil(barkod):
     return jsonify({"ok": silindi})
 
 
-# ETİKET YAZDIRMA (tekli) — muhasebeci + patron
 @app.route("/etiket/<barkod>")
 @rol_gerekli("muhasebeci")
 def etiket(barkod):
@@ -1528,9 +1683,6 @@ def etiket(barkod):
     return html
 
 
-# ÇOKLU ETİKET YAZDIRMA — seçilen ürünlerin etiketlerini tek A4 sayfasına
-# ızgara halinde dizer (yazıcı kağıdı israf etmeden birden fazla etiket basmak için).
-# muhasebeci + patron
 @app.route("/etiketler", methods=["GET", "POST"])
 @rol_gerekli("muhasebeci")
 def etiketler():
@@ -1554,7 +1706,6 @@ def etiketler():
     finally:
         con.close()
 
-    # Seçim sırasını korumak için barkodlara göre yeniden sırala
     sirali = {s[8]: s for s in satirlar}
     satirlar = [sirali[b] for b in barkodlar if b in sirali]
 
@@ -1642,7 +1793,6 @@ def etiketler():
     return html
 
 
-# GERİ AL — depocu + patron
 @app.route("/geri_al", methods=["POST"])
 @rol_gerekli("depocu")
 def geri_al():
@@ -1674,9 +1824,6 @@ def geri_al():
     return jsonify({"ok": True})
 
 
-# KAMERA (barkod okutma ekranı) — depocu + patron, kullanıcı artık oturumdan otomatik
-# Modern, telefon-öncelikli tasarım: giriş/çıkış tek ekranda anında değiştirilebilir,
-# fener açma, elle barkod girişi, son işlemi geri alma ve titreşimli/sesli geri bildirim içerir.
 @app.route("/kamera/<tip>")
 @rol_gerekli("depocu")
 def kamera(tip):
@@ -1790,7 +1937,7 @@ def kamera(tip):
     let bipSes;
     let aktifTip = "{{tip}}";
     let flashAcik = false;
-    let sonIslem = null; // { barkod, tip } — geri al için
+    let sonIslem = null;
 
     function modDegistir(yeniTip){
         aktifTip = yeniTip;
