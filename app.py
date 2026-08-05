@@ -523,21 +523,20 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 """
 
 LOGO_URL = "/static/logo.png"
-UYGULAMA_ADI = "HER-İŞ ORMAN ÜRÜNLERİ STOK TAKİP SİSTEMİ"
+UYGULAMA_ADI = "HER-İŞ ORMAN ÜRÜNLERİ SİPARİŞ-STOK TAKİP SİSTEMİ"
 
 UST_BAR = f"""
 <div class="topbar">
   <a href="/" class="topbar-btn" title="Ana Sayfa">🏠</a>
   <span class="topbar-title"><img src="{LOGO_URL}" class="topbar-logo" alt="logo">HER-İŞ ORMAN ÜRÜNLERİ SİPARİŞ-STOK TAKİP SİSTEMİ</span>
   <a href="/kullanici_degistir" class="topbar-btn" title="Kullanıcı Değiştir">🔁</a>
-  <img src="https://upload.wikimedia.org/wikipedia/commons/3/3f/Placeholder_view_vector.svg" width="40">
- <div>
+</div>
 """
 
 HOME_BTN = UST_BAR
 
 
-def sayfa(icerik, baslik="Stok Takip"):
+def sayfa(icerik, baslik="Her İş Orman Ürünleri Sipraiş-Stok Takip Sistemi"):
     return (
         "<!DOCTYPE html><html lang=\"tr\"><head><meta charset=\"utf-8\">"
         + "<title>" + baslik + "</title>"
@@ -554,7 +553,7 @@ def sayfa(icerik, baslik="Stok Takip"):
 def manifest():
     return jsonify({
         "name": UYGULAMA_ADI,
-        "short_name": "HER-İŞ Stok",
+        "short_name": "HER-İŞ  Orman Üsünleri Sipariş-Stok Takip Sistemi",
         "start_url": "/",
         "display": "standalone",
         "background_color": "#0f1115",
@@ -837,7 +836,8 @@ def index():
         + '<h3 class="alt">👤 ' + kullanici + ' (' + rol + ')</h3>'
         + butonlar
     )
-    return sayfa(icerik, "Her İş Orman Ürünleri Sipariş-Stok Paneli")
+    return sayfa(icerik, "Her İş Orman Ürünleri Sipariş-Stok Paneli
+ ")
 
 
 @app.route("/ekle", methods=["GET", "POST"])
