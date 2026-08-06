@@ -1914,7 +1914,7 @@ def hizli_islem():
                 siparis_ilerleme = None
                 if kalem_id:
                     cur.execute("UPDATE siparis_kalem SET verilen = verilen + 1 WHERE id=%s", (kalem_id,))
-                     cur.execute("""
+                    cur.execute("""
                         INSERT INTO siparis_hareket (siparis_id, barkod, ad, adet, kullanici, tarih)
                         VALUES (%s,%s,%s,1,%s,%s)
                     """, (siparis_id, barkod, ad, kullanici, tr_simdi()))
