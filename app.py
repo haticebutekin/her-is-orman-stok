@@ -2652,9 +2652,9 @@ def siparis_detay(siparis_id):
     for kid, ad, barkod, istenen, verilen, cins, ebat, kalinlik, yuzey, sinif, renk in kalemler:
         tam = verilen >= istenen
         ozellikler = " · ".join([x for x in [cins, ebat, kalinlik, yuzey, sinif, renk] if x])
-    kimler_html = ""
+        kimler_html = ""
         for kullanici_ad, toplam_adet in kullanici_dagilimi.get(barkod, []):
-            kimler_html += f'<span class="rozet" style="margin-right:6px;margin-top:4px;display:inline-block;">👤 {kullanici_ad}: {toplam_adet}</span>'    
+            kimler_html += f'<span class="rozet" style="margin-right:6px;margin-top:4px;display:inline-block;">👤 {kullanici_ad}: {toplam_adet}</span>'
         iade_form = ""
         if verilen > 0:
             iade_form = f"""
