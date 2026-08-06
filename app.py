@@ -26,6 +26,38 @@ VAPID_CLAIMS_EMAIL = os.environ.get("VAPID_EMAIL", "mailto:admin@heris-stok.loca
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)) or ".", "static"))
 app.secret_key = os.environ.get("SECRET_KEY", "bu-anahtari-canliya-almadan-once-degistir")
+SITE_PAROLA = os.environ.get("SITE_PAROLA", "")  # Render'da ayarlanmazsa bu katman devre dışı kalır
+
+@app.before_request
+def site_girisi_kontrol():
+    if not SITE_PAROLA:
+        return
+    if request.endpoint in ("site_giris", "manifest", "qr_baglan", "service_worker"):
+        return
+    if request.path.startswith("/static/") or request.path.startswith("/barkod/") or request.path.startswith("/qr/"):
+        return
+    if not session.get("site_giris"):
+        return redirect("/site_giris")
+
+
+@app.route("/site_giris", methods=["GET", "POST"])
+def site_giris():
+    hata = None
+    if request.method == "POST":
+        if request.form.get("parola", "") == SITE_PAROLA:
+            session["site_giris"] = True
+            return redirect("/")
+        hata = "❌ Yanlış şifre"
+    icerik = f"""
+    <h2>🔒 Giriş</h2>
+    <p style="text-align:center;color:var(--muted);">Devam etmek için şifreyi gir</p>
+    {'<p class="hata">' + hata + '</p>' if hata else ''}
+    <form method="post">
+    <input type="password" name="parola" placeholder="Şifre" autofocus autocomplete="off">
+    <button class="btn mavi">Gir</button>
+    </form>
+    """
+    return sayfa(icerik, "Giriş")
 
 if os.path.exists(app.static_folder) and not os.path.isdir(app.static_folder):
     os.remove(app.static_folder)
@@ -54,16 +86,20 @@ ROLLER = {
     "Ahmet": "patron",
 }
 
-PIN_KODLARI = {
-    "Ramazan": "1111",
-    "Behiç": "1111",
-    "Orhan": "1111",
-    "Berke": "2222",
-    "İrem": "2222",
-    "Hatice": "2222",
-    "Ahmet": "2222",
-}
+def _pin_yukle():
+    varsayilan = {
+        "Ramazan": "1111", "Behiç": "2222", "Orhan": "3333",
+        "Berke": "4444", "İrem": "4444", "Hatice": "4444", "Ahmet": "4444",
+    }
+    ozel_json = os.environ.get("PIN_KODLARI_JSON", "")
+    if ozel_json:
+        try:
+            varsayilan.update(json.loads(ozel_json))
+        except Exception:
+            pass
+    return varsayilan
 
+PIN_KODLARI = _pin_yukle()
 
 def db():
     return psycopg2.connect(DATABASE_URL)
