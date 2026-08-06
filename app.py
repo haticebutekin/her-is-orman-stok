@@ -433,6 +433,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 }
 .hareket-kart.hareket-giris { border-left-color: #64DD17; }
 .hareket-kart.hareket-cikis { border-left-color: #FF9800; }
+.hareket-kart.hareket-iade { border-left-color: #B388FF; }
 .hareket-ikon { font-size:19px; flex-shrink:0; margin-top:1px; }
 .hareket-govde { flex:1; min-width:0; }
 .hareket-ust { display:flex; align-items:center; justify-content:space-between; gap:8px; }
@@ -1586,10 +1587,14 @@ def hareket_listesi():
     kartlar = ""
     for ad, barkod, tip, adet, kullanici, tarih, cins, sinif, yuzey, renk, ebat, depo in kayitlar:
         ozellikler = " · ".join([x for x in [cins, sinif, yuzey, renk, ebat] if x])
-        giris_mi = tip == "giris"
+       giris_mi = tip == "giris"
+        iade_mi = tip == "iade"
+        css_sinif = 'hareket-giris' if giris_mi else ('hareket-iade' if iade_mi else 'hareket-cikis')
+        ikon = '⬆️' if giris_mi else ('↩️' if iade_mi else '⬇️')
         kartlar += f"""
-        <div class="hareket-kart {'hareket-giris' if giris_mi else 'hareket-cikis'}" data-tip="{tip}">
-          <div class="hareket-ikon">{'⬆️' if giris_mi else '⬇️'}</div>
+        <div class="hareket-kart {css_sinif}" data-tip="{tip}">
+          <div class="hareket-ikon">{ikon}</div>
+          <button class="filtre-cip" data-filtre="iade" onclick="filtrele('iade', this)">↩️ İade</button>
           <div class="hareket-govde">
             <div class="hareket-ust">
               <div class="hareket-ad">{ad}</div>
@@ -2549,7 +2554,13 @@ def siparis_detay(siparis_id):
             sip = cur.fetchone()
             if not sip:
                 return sayfa('<p class="hata">❌ Sipariş bulunamadı.</p><a class="btn gri" href="/siparisler">⬅ Geri Dön</a>', "Hata")
-            cur.execute("SELECT ad, barkod, istenen, verilen FROM siparis_kalem WHERE siparis_id=%s ORDER BY id", (siparis_id,))
+            cur.execute("""
+                SELECT k.id, k.ad, k.barkod, k.istenen, k.verilen,
+                       u.cins, u.ebat, u.kalinlik, u.yuzey, u.sinif, u.renk
+                FROM siparis_kalem k
+                LEFT JOIN urun u ON u.barkod = k.barkod
+                WHERE k.siparis_id=%s ORDER BY k.id
+            """, (siparis_id,))
             kalemler = cur.fetchall()
     finally:
         con.close()
@@ -2557,19 +2568,33 @@ def siparis_detay(siparis_id):
     _, musteri, depo, durum, olusturan, tarih, aciklama = sip
 
     kalem_html = ""
-    for ad, barkod, istenen, verilen in kalemler:
+    for kid, ad, barkod, istenen, verilen, cins, ebat, kalinlik, yuzey, sinif, renk in kalemler:
         tam = verilen >= istenen
+        ozellikler = " · ".join([x for x in [cins, ebat, kalinlik, yuzey, sinif, renk] if x])
+        iade_form = ""
+        if verilen > 0:
+            iade_form = f"""
+            <form method="post" action="/kalem_iade/{kid}" style="display:flex;gap:6px;margin-top:6px;"
+                  onsubmit="return confirm('{verilen} adet verilmişti, iade alınsın mı?');">
+              <input type="number" name="miktar" min="1" max="{verilen}" value="1"
+                     style="margin:0;padding:8px;flex:1;">
+              <button type="submit" class="btn-kucuk kirmizi" style="margin:0;">↩️ İade Al</button>
+            </form>
+            """
         kalem_html += f"""
-        <div class="kalem-satir">
-          <div class="kalem-ad">{ad}<br><span style="color:var(--muted);font-size:11.5px;">🔢 {barkod}</span></div>
-          <div class="kalem-miktar {'tam' if tam else 'eksik'}">{verilen} / {istenen}</div>
+        <div class="kalem-satir" style="flex-direction:column;align-items:stretch;">
+          <div style="display:flex;justify-content:space-between;">
+            <div class="kalem-ad">{ad}<br><span style="color:var(--muted);font-size:11.5px;">🔢 {barkod}{(' · ' + ozellikler) if ozellikler else ''}</span></div>
+            <div class="kalem-miktar {'tam' if tam else 'eksik'}">{verilen} / {istenen}</div>
+          </div>
+          {iade_form}
         </div>
         """
 
     rol = session.get("rol")
-    aksiyon_html = ""
+    aksiyon_html = f'<a href="/siparis_fis/{siparis_id}" target="_blank" class="btn turkuaz">🧾 Fiş Olarak Yazdır</a>'
     if rol == "depocu" and durum == "acik":
-        aksiyon_html = f'<a href="/kamera/cikis?siparis_id={siparis_id}" class="btn turuncu">⬇️ Bu Siparişi Okutarak Hazırla</a>'
+        aksiyon_html += f'<a href="/kamera/cikis?siparis_id={siparis_id}" class="btn turuncu">⬇️ Bu Siparişi Okutarak Hazırla</a>'
     if rol in ("muhasebeci", "patron") and durum == "acik":
         aksiyon_html += f"""
         <form method="post" action="/siparis_iptal/{siparis_id}" onsubmit="return confirm('Bu siparişi iptal etmek istediğine emin misin?');">
@@ -2599,6 +2624,133 @@ def siparis_detay(siparis_id):
     )
     return sayfa(icerik, f"Sipariş #{siparis_id}")
 
+@app.route("/kalem_iade/<int:kalem_id>", methods=["POST"])
+@rol_gerekli("depocu", "muhasebeci", "patron")
+def kalem_iade(kalem_id):
+    try:
+        miktar = int(request.form.get("miktar", "1"))
+    except (TypeError, ValueError):
+        miktar = 1
+    if miktar < 1:
+        miktar = 1
+
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("SELECT siparis_id, barkod, ad, verilen FROM siparis_kalem WHERE id=%s", (kalem_id,))
+                row = cur.fetchone()
+                if not row:
+                    return redirect("/siparisler")
+                siparis_id, barkod, ad, verilen = row
+                miktar = min(miktar, verilen)  # verilenden fazlası iade edilemez
+
+                cur.execute("UPDATE siparis_kalem SET verilen = verilen - %s WHERE id=%s", (miktar, kalem_id))
+                cur.execute("UPDATE urun SET adet = adet + %s WHERE barkod=%s", (miktar, barkod))
+                cur.execute("""
+                    INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
+                    VALUES (%s, %s, 'iade', %s, %s, %s)
+                """, (barkod, ad, miktar, session.get("kullanici", "Bilinmiyor"), tr_simdi()))
+                # iade sonrası sipariş artık eksik hale geldiyse yeniden açık yap
+                cur.execute("UPDATE siparis SET durum='acik' WHERE id=%s AND durum='tamamlandi'", (siparis_id,))
+    finally:
+        con.close()
+
+    return redirect(f"/siparis/{siparis_id}")
+
+
+@app.route("/siparis_fis/<int:siparis_id>")
+@rol_gerekli("depocu", "muhasebeci", "patron")
+def siparis_fis(siparis_id):
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT id, musteri, depo, durum, olusturan, tarih, aciklama FROM siparis WHERE id=%s", (siparis_id,))
+            sip = cur.fetchone()
+            if not sip:
+                return sayfa('<p class="hata">❌ Sipariş bulunamadı.</p><a class="btn gri" href="/siparisler">⬅ Geri Dön</a>', "Hata")
+            cur.execute("""
+                SELECT k.ad, k.barkod, k.istenen, k.verilen,
+                       u.cins, u.ebat, u.kalinlik, u.yuzey, u.sinif, u.renk
+                FROM siparis_kalem k
+                LEFT JOIN urun u ON u.barkod = k.barkod
+                WHERE k.siparis_id=%s ORDER BY k.id
+            """, (siparis_id,))
+            kalemler = cur.fetchall()
+    finally:
+        con.close()
+
+    _, musteri, depo, durum, olusturan, tarih, aciklama = sip
+
+    satirlar = ""
+    toplam_istenen = 0
+    toplam_verilen = 0
+    for ad, barkod, istenen, verilen, cins, ebat, kalinlik, yuzey, sinif, renk in kalemler:
+        toplam_istenen += istenen
+        toplam_verilen += verilen
+        ozellikler = " / ".join([x for x in [cins, ebat, kalinlik, yuzey, sinif, renk] if x]) or "-"
+        satirlar += f"""
+        <tr>
+          <td>{ad}</td>
+          <td>{barkod}</td>
+          <td>{ozellikler}</td>
+          <td style="text-align:center;">{istenen}</td>
+          <td style="text-align:center;">{verilen}</td>
+        </tr>
+        """
+
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="tr">
+    <head>
+    <meta charset="utf-8">
+    <title>Sipariş Fişi #{siparis_id}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        @page {{ size: A4; margin: 12mm; }}
+        body {{ font-family: Arial, sans-serif; color:#111; margin:0; }}
+        .fis {{ max-width: 760px; margin: 0 auto; padding: 12px; }}
+        .fis-baslik {{ display:flex; align-items:center; gap:12px; border-bottom:2px solid #111; padding-bottom:10px; margin-bottom:14px; }}
+        .fis-baslik img {{ width:52px; height:52px; border-radius:8px; background:#fff; }}
+        .fis-baslik h1 {{ font-size:18px; margin:0; }}
+        .bilgi-satir {{ display:flex; justify-content:space-between; font-size:13px; color:#333; margin-bottom:14px; flex-wrap:wrap; gap:6px; }}
+        table {{ width:100%; border-collapse:collapse; font-size:12.5px; }}
+        th, td {{ border:1px solid #ccc; padding:7px 8px; text-align:left; }}
+        th {{ background:#f0f0f0; }}
+        .toplam-satir td {{ font-weight:800; background:#f7f7f7; }}
+        .yazdir-btn {{
+            display:block; margin: 18px auto 0; padding:14px 24px;
+            background:#2196F3; color:white; border:none; border-radius:10px;
+            font-size:16px; font-weight:700; cursor:pointer;
+        }}
+        @media print {{ .yazdir-btn {{ display:none; }} }}
+    </style>
+    </head>
+    <body>
+        <div class="fis">
+            <div class="fis-baslik">
+                <img src="{LOGO_URL}">
+                <h1>{UYGULAMA_ADI}<br><span style="font-weight:400;font-size:13px;">Sipariş Fişi #{siparis_id}</span></h1>
+            </div>
+            <div class="bilgi-satir">
+                <div><b>Müşteri:</b> {musteri or '-'}</div>
+                <div><b>Depo:</b> {depo}</div>
+                <div><b>Durum:</b> {durum}</div>
+                <div><b>Oluşturan:</b> {olusturan}</div>
+                <div><b>Tarih:</b> {tarih}</div>
+            </div>
+            {'<p style="font-size:13px;"><b>Not:</b> ' + aciklama + '</p>' if aciklama else ''}
+            <table>
+                <tr><th>Ürün</th><th>Barkod</th><th>Özellikler</th><th>İstenen</th><th>Verilen</th></tr>
+                {satirlar}
+                <tr class="toplam-satir"><td colspan="3">TOPLAM</td><td style="text-align:center;">{toplam_istenen}</td><td style="text-align:center;">{toplam_verilen}</td></tr>
+            </table>
+        </div>
+        <button class="yazdir-btn" onclick="window.print()">🖨️ Yazdır</button>
+    </body>
+    </html>
+    """
+    return html
 
 @app.route("/siparis_iptal/<int:siparis_id>", methods=["POST"])
 @rol_gerekli("muhasebeci")
@@ -2718,6 +2870,10 @@ def kamera(tip):
       width:72%; height:42%; border:3px solid rgba(255,255,255,.85);
       border-radius:14px; box-shadow: 0 0 0 999px rgba(0,0,0,.28);
     }
+    .tarama-kutu.basarili {
+      border-color: #64DD17; box-shadow: 0 0 0 999px rgba(0,0,0,.28), 0 0 24px 4px rgba(100,221,23,.6);
+      transition: all .15s ease;
+    }
     .kamera-araclar {
       position:absolute; top:10px; right:10px; display:flex; flex-direction:column; gap:8px;
       pointer-events:auto;
@@ -2774,6 +2930,7 @@ def kamera(tip):
       <div class="kamera-ustkatman"><div class="tarama-kutu"></div></div>
       <div class="kamera-araclar">
         <button type="button" class="araç-btn" id="flash-btn" onclick="flashDegistir()" style="display:none;">💡</button>
+        <button type="button" class="araç-btn" id="kamera-degistir-btn" onclick="kameraDegistir()" style="display:none;">🔄</button>
       </div>
     </div>
 
@@ -2792,160 +2949,251 @@ def kamera(tip):
     </div>
 
     <script src="https://unpkg.com/@zxing/library@latest"></script>
-    <script>
-    let codeReader;
-    let kilit = false;
-    let bipSes;
-    let aktifTip = "{{tip}}";
-    let flashAcik = false;
-    let sonIslem = null;
-    let siparisId = {{ (siparis_id or 'null') }};
+<script>
+let codeReader;
+let kilit = false;
+let bipSes;
+let aktifTip = "{{tip}}";
+let flashAcik = false;
+let sonIslem = null;
+let siparisId = {{ (siparis_id or 'null') }};
+let kameraListesi = [];
+let aktifKameraIndex = 0;
 
-    function arayuzuGuncelle(t){
-        document.getElementById('btn-giris').className = 'mod-btn' + (t === 'giris' ? ' aktif-giris' : '');
-        document.getElementById('btn-cikis').className = 'mod-btn' + (t === 'cikis' ? ' aktif-cikis' : '');
+function arayuzuGuncelle(t){
+    document.getElementById('btn-giris').className = 'mod-btn' + (t === 'giris' ? ' aktif-giris' : '');
+    document.getElementById('btn-cikis').className = 'mod-btn' + (t === 'cikis' ? ' aktif-cikis' : '');
+}
+function modDegistir(yeniTip){
+    if(yeniTip === aktifTip){ arayuzuGuncelle(yeniTip); return; }
+    window.location.href = '/kamera/' + yeniTip;
+}
+arayuzuGuncelle(aktifTip);
+
+function hintOlustur(){
+    const hints = new Map();
+    // Sadece üretilen barkod tiplerini arıyoruz (CODE_128) + QR.
+    // Format daraltmak taramayı belirgin şekilde hızlandırır.
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.QR_CODE,
+        ZXing.BarcodeFormat.EAN_13,
+    ]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    return hints;
+}
+
+async function baslat(){
+    bipSes = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+    document.getElementById('baslat-alan').style.display = 'none';
+    document.getElementById('kamera-cerceve').style.display = 'block';
+
+    codeReader = new ZXing.BrowserMultiFormatReader(hintOlustur());
+
+    try {
+        kameraListesi = await ZXing.BrowserMultiFormatReader.listVideoInputDevices();
+    } catch(e) { kameraListesi = []; }
+
+    // Arka kamerayı tercih et (isminde "back"/"arka"/"rear" geçen varsa onu seç)
+    aktifKameraIndex = kameraListesi.findIndex(k =>
+        /back|arka|rear|environment/i.test(k.label)
+    );
+    if(aktifKameraIndex === -1) aktifKameraIndex = kameraListesi.length - 1 >= 0 ? kameraListesi.length - 1 : 0;
+
+    if(kameraListesi.length > 1){
+        document.getElementById('kamera-degistir-btn').style.display = 'flex';
     }
-    function modDegistir(yeniTip){
-        if(yeniTip === aktifTip){
-            arayuzuGuncelle(yeniTip);
-            return;
+
+    kameraBaslat();
+}
+
+function kameraBaslat(){
+    if(codeReader) { try { codeReader.reset(); } catch(e){} }
+    codeReader = new ZXing.BrowserMultiFormatReader(hintOlustur());
+
+    const secilenId = kameraListesi.length ? kameraListesi[aktifKameraIndex].deviceId : null;
+
+    const kisitlar = {
+        video: secilenId
+            ? { deviceId: { exact: secilenId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+            : { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    };
+
+    codeReader.decodeFromConstraints(kisitlar, 'video', (result, err) => {
+        if (result && !kilit) {
+            kilit = true;
+            basariliGoruntu();
+            isleGonder(result.text);
         }
-        if(yeniTip === 'cikis'){
-            window.location.href = '/kamera/cikis';
-            return;
+        if (err && !(err instanceof ZXing.NotFoundException)) {
+            console.log(err);
         }
-        if(yeniTip === 'giris'){
-            window.location.href = '/kamera/giris';
-            return;
-        }
+    }).then(() => {
+        odakAyarla();
+        fenerKontrolEt();
+    }).catch(e => {
+        console.log(e);
+        document.getElementById('sonuc-alan').innerHTML = `
+          <div class="sonuc-kart sonuc-hata">
+            <div class="sonuc-ust"><span class="sonuc-ikon">📵</span><span class="sonuc-ad">Kamera açılamadı</span></div>
+            <div class="sonuc-satirlar">Tarayıcının kamera iznini kontrol et, ya da elle barkod gir.</div>
+          </div>`;
+    });
+}
+
+function odakAyarla(){
+    const video = document.getElementById('video');
+    const stream = video.srcObject;
+    if(!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if(!track || !track.getCapabilities) return;
+    const yetenekler = track.getCapabilities();
+    if(yetenekler.focusMode && yetenekler.focusMode.includes('continuous')){
+        track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(e => {});
     }
-    arayuzuGuncelle(aktifTip);
+}
 
-    function baslat(){
-        bipSes = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-        document.getElementById('baslat-alan').style.display = 'none';
-        document.getElementById('kamera-cerceve').style.display = 'block';
+function basariliGoruntu(){
+    const kutu = document.querySelector('.tarama-kutu');
+    if(!kutu) return;
+    kutu.classList.add('basarili');
+    setTimeout(() => kutu.classList.remove('basarili'), 500);
+}
 
-        codeReader = new ZXing.BrowserMultiFormatReader();
-        codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
-            if (result && !kilit) {
-                kilit = true;
-                isleGonder(result.text);
-            }
-            if (err && !(err instanceof ZXing.NotFoundException)) {
-                console.log(err);
-            }
-        });
+function kameraDegistir(){
+    if(kameraListesi.length < 2) return;
+    aktifKameraIndex = (aktifKameraIndex + 1) % kameraListesi.length;
+    document.getElementById('flash-btn').style.display = 'none';
+    flashAcik = false;
+    kameraBaslat();
+}
 
-        setTimeout(fenerKontrolEt, 800);
+function fenerKontrolEt(){
+    const video = document.getElementById('video');
+    const stream = video.srcObject;
+    if(!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if(!track || !track.getCapabilities) return;
+    const yetenekler = track.getCapabilities();
+    if(yetenekler.torch){
+        document.getElementById('flash-btn').style.display = 'flex';
     }
+}
 
-    function fenerKontrolEt(){
+function flashDegistir(){
+    const video = document.getElementById('video');
+    const stream = video.srcObject;
+    if(!stream) return;
+    const track = stream.getVideoTracks()[0];
+    flashAcik = !flashAcik;
+    track.applyConstraints({ advanced: [{ torch: flashAcik }] }).catch(e => console.log(e));
+    document.getElementById('flash-btn').classList.toggle('aktif', flashAcik);
+}
+
+// Tıklanan noktaya odaklanmayı dene (destekleyen cihazlarda)
+document.addEventListener('DOMContentLoaded', () => {
+    const cerceve = document.getElementById('kamera-cerceve');
+    if(!cerceve) return;
+    cerceve.addEventListener('click', (e) => {
         const video = document.getElementById('video');
         const stream = video.srcObject;
         if(!stream) return;
         const track = stream.getVideoTracks()[0];
         if(!track || !track.getCapabilities) return;
         const yetenekler = track.getCapabilities();
-        if(yetenekler.torch){
-            document.getElementById('flash-btn').style.display = 'flex';
+        if(!yetenekler.pointsOfInterest) return;
+        const rect = cerceve.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+        track.applyConstraints({ advanced: [{ pointsOfInterest: [{x, y}] }] }).catch(err => {});
+    });
+});
+
+function elleGonder(){
+    const kutu = document.getElementById('elle-barkod');
+    const kod = kutu.value.trim();
+    if(!kod) return;
+    kutu.value = '';
+    isleGonder(kod);
+}
+
+function isleGonder(barkod){
+    if(bipSes){ bipSes.currentTime = 0; bipSes.play().catch(e => {}); }
+    if(navigator.vibrate) navigator.vibrate(70);
+
+    fetch("/hizli_islem", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ barkod: barkod, tip: aktifTip, siparis_id: siparisId })
+    })
+    .then(r => r.json())
+    .then(d => sonucGoster(d, barkod))
+    .finally(() => { setTimeout(() => { kilit = false; }, 900); });
+}
+
+function sonucGoster(d, barkod){
+    const alan = document.getElementById('sonuc-alan');
+
+    if (d.ok) {
+        sonIslem = { barkod: barkod, tip: aktifTip, siparis_id: siparisId };
+        const baslikRengi = aktifTip === 'giris' ? '✅' : '📤';
+        let siparisSatiri = '';
+        if(d.siparis_ilerleme){
+            siparisSatiri = `<br>🧾 Sipariş toplam: <b>${d.siparis_ilerleme.verilen} / ${d.siparis_ilerleme.istenen}</b>` +
+                (d.siparis_ilerleme.tamamlandi ? ' — 🎉 Sipariş tamamlandı!' : '');
         }
+        alan.innerHTML = `
+          <div class="sonuc-kart sonuc-basari">
+            <div class="sonuc-ust"><span class="sonuc-ikon">${baslikRengi}</span><span class="sonuc-ad">${d.ad}</span></div>
+            <div class="sonuc-satirlar">
+              🏷️ Cins: <b>${d.cins || '-'}</b> &nbsp; 🔖 Sınıf: <b>${d.sinif || '-'}</b><br>
+              ✨ Yüzey: <b>${d.yuzey || '-'}</b> &nbsp; 🎨 Renk: <b>${d.renk || '-'}</b><br>
+              📏 Ebat: <b>${d.ebat || '-'}</b> &nbsp; 🏭 Depo: <b>${d.depo || '-'}</b><br>
+              📦 Kalan Stok: <b>${d.adet}</b> &nbsp; 📊 Bugünkü Toplam: <b>${d.toplam}</b>${siparisSatiri}
+            </div>
+            <button class="geri-al-btn" onclick="geriAl()">↩️ Bu işlemi geri al</button>
+          </div>`;
+    } else if (d.yeni) {
+        alan.innerHTML = `
+          <div class="sonuc-kart sonuc-yeni">
+            <div class="sonuc-ust"><span class="sonuc-ikon">🆕</span><span class="sonuc-ad">Bu barkod stokta yok</span></div>
+            <div class="sonuc-satirlar">Yeni ürün ekleme sayfasına yönlendiriliyorsunuz...</div>
+          </div>`;
+        setTimeout(() => { window.location.href = "/ekle?barkod=" + encodeURIComponent(barkod); }, 1000);
+    } else if (d.yanlis_urun) {
+        if(navigator.vibrate) navigator.vibrate([120,80,120,80,120]);
+        alan.innerHTML = `
+          <div class="sonuc-kart sonuc-yanlis">
+            <div class="sonuc-ust"><span class="sonuc-ikon">🚫</span><span class="sonuc-ad">${d.msg}</span></div>
+            <div class="sonuc-satirlar">"${d.urun_adi || ''}" bu siparişte listelenmiyor. Lütfen sipariş listesindeki ürünleri kontrol et.</div>
+          </div>`;
+    } else {
+        if(navigator.vibrate) navigator.vibrate([60,60,60]);
+        alan.innerHTML = `
+          <div class="sonuc-kart sonuc-hata">
+            <div class="sonuc-ust"><span class="sonuc-ikon">❌</span><span class="sonuc-ad">${d.msg || 'Bulunamadı'}</span></div>
+          </div>`;
     }
+}
 
-    function flashDegistir(){
-        const video = document.getElementById('video');
-        const stream = video.srcObject;
-        if(!stream) return;
-        const track = stream.getVideoTracks()[0];
-        flashAcik = !flashAcik;
-        track.applyConstraints({ advanced: [{ torch: flashAcik }] }).catch(e => console.log(e));
-        document.getElementById('flash-btn').classList.toggle('aktif', flashAcik);
-    }
-
-    function elleGonder(){
-        const kutu = document.getElementById('elle-barkod');
-        const kod = kutu.value.trim();
-        if(!kod) return;
-        kutu.value = '';
-        isleGonder(kod);
-    }
-
-    function isleGonder(barkod){
-        if(bipSes){ bipSes.currentTime = 0; bipSes.play().catch(e => {}); }
-        if(navigator.vibrate) navigator.vibrate(70);
-
-        fetch("/hizli_islem", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ barkod: barkod, tip: aktifTip, siparis_id: siparisId })
-        })
-        .then(r => r.json())
-        .then(d => sonucGoster(d, barkod))
-        .finally(() => { setTimeout(() => { kilit = false; }, 1200); });
-    }
-
-    function sonucGoster(d, barkod){
-        const alan = document.getElementById('sonuc-alan');
-
-        if (d.ok) {
-            sonIslem = { barkod: barkod, tip: aktifTip, siparis_id: siparisId };
-            const baslikRengi = aktifTip === 'giris' ? '✅' : '📤';
-            let siparisSatiri = '';
-            if(d.siparis_ilerleme){
-                siparisSatiri = `<br>🧾 Sipariş toplam: <b>${d.siparis_ilerleme.verilen} / ${d.siparis_ilerleme.istenen}</b>` +
-                    (d.siparis_ilerleme.tamamlandi ? ' — 🎉 Sipariş tamamlandı!' : '');
-            }
-            alan.innerHTML = `
-              <div class="sonuc-kart sonuc-basari">
-                <div class="sonuc-ust"><span class="sonuc-ikon">${baslikRengi}</span><span class="sonuc-ad">${d.ad}</span></div>
-                <div class="sonuc-satirlar">
-                  🏷️ Cins: <b>${d.cins || '-'}</b> &nbsp; 🔖 Sınıf: <b>${d.sinif || '-'}</b><br>
-                  ✨ Yüzey: <b>${d.yuzey || '-'}</b> &nbsp; 🎨 Renk: <b>${d.renk || '-'}</b><br>
-                  📏 Ebat: <b>${d.ebat || '-'}</b> &nbsp; 🏭 Depo: <b>${d.depo || '-'}</b><br>
-                  📦 Kalan Stok: <b>${d.adet}</b> &nbsp; 📊 Bugünkü Toplam: <b>${d.toplam}</b>${siparisSatiri}
-                </div>
-                <button class="geri-al-btn" onclick="geriAl()">↩️ Bu işlemi geri al</button>
-              </div>`;
-        } else if (d.yeni) {
-            alan.innerHTML = `
-              <div class="sonuc-kart sonuc-yeni">
-                <div class="sonuc-ust"><span class="sonuc-ikon">🆕</span><span class="sonuc-ad">Bu barkod stokta yok</span></div>
-                <div class="sonuc-satirlar">Yeni ürün ekleme sayfasına yönlendiriliyorsunuz...</div>
-              </div>`;
-            setTimeout(() => { window.location.href = "/ekle?barkod=" + encodeURIComponent(barkod); }, 1000);
-        } else if (d.yanlis_urun) {
-            if(navigator.vibrate) navigator.vibrate([120,80,120,80,120]);
-            alan.innerHTML = `
-              <div class="sonuc-kart sonuc-yanlis">
-                <div class="sonuc-ust"><span class="sonuc-ikon">🚫</span><span class="sonuc-ad">${d.msg}</span></div>
-                <div class="sonuc-satirlar">"${d.urun_adi || ''}" bu siparişte listelenmiyor. Lütfen sipariş listesindeki ürünleri kontrol et.</div>
-              </div>`;
-        } else {
-            if(navigator.vibrate) navigator.vibrate([60,60,60]);
-            alan.innerHTML = `
-              <div class="sonuc-kart sonuc-hata">
-                <div class="sonuc-ust"><span class="sonuc-ikon">❌</span><span class="sonuc-ad">${d.msg || 'Bulunamadı'}</span></div>
-              </div>`;
+function geriAl(){
+    if(!sonIslem) return;
+    fetch("/geri_al", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(sonIslem)
+    })
+    .then(r => r.json())
+    .then(d => {
+        if(d.ok){
+            document.getElementById('sonuc-alan').innerHTML =
+              '<div class="sonuc-kart"><div class="sonuc-ust"><span class="sonuc-ikon">↩️</span><span class="sonuc-ad">İşlem geri alındı</span></div></div>';
+            sonIslem = null;
         }
-    }
-
-    function geriAl(){
-        if(!sonIslem) return;
-        fetch("/geri_al", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify(sonIslem)
-        })
-        .then(r => r.json())
-        .then(d => {
-            if(d.ok){
-                document.getElementById('sonuc-alan').innerHTML =
-                  '<div class="sonuc-kart"><div class="sonuc-ust"><span class="sonuc-ikon">↩️</span><span class="sonuc-ad">İşlem geri alındı</span></div></div>';
-                sonIslem = null;
-            }
-        });
-    }
-    </script>
+    });
+}
+</script>
+  
     """
     return render_template_string(
         sayfa(icerik, "Barkod Okut"),
