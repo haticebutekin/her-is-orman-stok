@@ -152,9 +152,18 @@ def barkod_uret():
 
 
 def barkod_png_bytes(kod):
+    from barcode.writer import ImageWriter
     CODE128 = barcode.get_barcode_class("code128")
+    yazici_ayarlari = {
+        "module_width": 0.32,   # her çizginin kalınlığı (mm) — çok ince olursa termal kafa net basamıyor
+        "module_height": 12.0,  # barkod yüksekliği (mm)
+        "quiet_zone": 4.0,      # barkodun sağ/solundaki beyaz boşluk (mm) — taramada kritik
+        "font_size": 8,
+        "text_distance": 3.0,
+        "write_text": True,
+    }
     bio = io.BytesIO()
-    CODE128(kod, writer=ImageWriter()).write(bio)
+    CODE128(kod, writer=ImageWriter()).write(bio, options=yazici_ayarlari)
     bio.seek(0)
     return bio
 
