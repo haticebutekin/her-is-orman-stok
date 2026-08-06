@@ -441,6 +441,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .hareket-adet { font-size:13.5px; font-weight:800; flex-shrink:0; }
 .hareket-adet.giris { color:#9CCC65; }
 .hareket-adet.cikis { color:#FFB74D; }
+.hareket-adet.iade { color:#B388FF; }
 .hareket-detay { font-size:12.5px; color:var(--muted); margin-top:3px; }
 .hareket-alt { font-size:11.5px; color:var(--muted); margin-top:5px; opacity:.85; }
 
@@ -1587,18 +1588,17 @@ def hareket_listesi():
     kartlar = ""
     for ad, barkod, tip, adet, kullanici, tarih, cins, sinif, yuzey, renk, ebat, depo in kayitlar:
         ozellikler = " · ".join([x for x in [cins, sinif, yuzey, renk, ebat] if x])
-       giris_mi = tip == "giris"
+        giris_mi = tip == "giris"
         iade_mi = tip == "iade"
         css_sinif = 'hareket-giris' if giris_mi else ('hareket-iade' if iade_mi else 'hareket-cikis')
         ikon = '⬆️' if giris_mi else ('↩️' if iade_mi else '⬇️')
         kartlar += f"""
         <div class="hareket-kart {css_sinif}" data-tip="{tip}">
           <div class="hareket-ikon">{ikon}</div>
-          <button class="filtre-cip" data-filtre="iade" onclick="filtrele('iade', this)">↩️ İade</button>
           <div class="hareket-govde">
             <div class="hareket-ust">
               <div class="hareket-ad">{ad}</div>
-              <div class="hareket-adet {'giris' if giris_mi else 'cikis'}">{'+' if giris_mi else '-'}{adet}</div>
+              <div class="hareket-adet {'giris' if giris_mi else ('iade' if iade_mi else 'cikis')}">{'+' if (giris_mi or iade_mi) else '-'}{adet}</div>
             </div>
             <div class="hareket-detay">{ozellikler or '-'}{(' · 🏭 ' + depo) if depo else ''}</div>
             <div class="hareket-alt">🔢 {barkod} &nbsp;·&nbsp; 👤 {kullanici} &nbsp;·&nbsp; 🕒 {tarih}</div>
@@ -1614,6 +1614,7 @@ def hareket_listesi():
           <button class="filtre-cip aktif" data-filtre="hepsi" onclick="filtrele('hepsi', this)">Tümü</button>
           <button class="filtre-cip" data-filtre="giris" onclick="filtrele('giris', this)">⬆️ Giriş</button>
           <button class="filtre-cip" data-filtre="cikis" onclick="filtrele('cikis', this)">⬇️ Çıkış</button>
+          <button class="filtre-cip" data-filtre="iade" onclick="filtrele('iade', this)">↩️ İade</button>
         </div>
         """
         + '<div id="hareketler">' + kartlar + '</div>'
@@ -1641,7 +1642,7 @@ def hareket_listesi():
         """
     )
     return sayfa(icerik, "Hareketler")
-
+   
 
 @app.route("/rapor/excel")
 @rol_gerekli("muhasebeci")
