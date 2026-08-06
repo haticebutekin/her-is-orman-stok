@@ -3212,6 +3212,9 @@ function geriAl(){
         siparis_bilgi_html=siparis_bilgi_html,
     )
 
+@app.route("/ping")
+def ping():
+    return "ok"
 
 if __name__ == "__main__":
     app.run(debug=True)
