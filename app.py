@@ -2,7 +2,7 @@ from functools import wraps
 
 from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file, Response
 import psycopg2
-import os, random, io, json
+import os, random, io, json, threading
 
 try:
     from pywebpush import webpush, WebPushException
@@ -12,6 +12,10 @@ except ImportError:
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import barcode, qrcode
+# ==================== BARKOD/QR RESİM CACHE (RAM, ücretsiz) ====================
+_BARKOD_CACHE = {}
+_QR_CACHE = {}
+_CACHE_KILIT = threading.Lock()   # aşağıda import threading eklemen gerekiyor
 from barcode.writer import ImageWriter
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
@@ -632,15 +636,27 @@ def qr_baglan():
     bio.seek(0)
     return send_file(bio, mimetype="image/png")
 
-
 @app.route("/barkod/<kod>.png")
 def barkod_resim_endpoint(kod):
-    return send_file(barkod_png_bytes(kod), mimetype="image/png")
+    with _CACHE_KILIT:
+        veri = _BARKOD_CACHE.get(kod)
+    if veri is None:
+        veri = barkod_png_bytes(kod).getvalue()
+        with _CACHE_KILIT:
+            _BARKOD_CACHE[kod] = veri
+    return send_file(io.BytesIO(veri), mimetype="image/png")
 
 
 @app.route("/qr/<kod>.png")
 def qr_resim_endpoint(kod):
-    return send_file(qr_png_bytes(kod), mimetype="image/png")
+    with _CACHE_KILIT:
+        veri = _QR_CACHE.get(kod)
+    if veri is None:
+        veri = qr_png_bytes(kod).getvalue()
+        with _CACHE_KILIT:
+            _QR_CACHE[kod] = veri
+    return send_file(io.BytesIO(veri), mimetype="image/png")
+
 
 
 def rol_gerekli(*izinli_roller):
