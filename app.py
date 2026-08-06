@@ -1914,6 +1914,10 @@ def hizli_islem():
                 siparis_ilerleme = None
                 if kalem_id:
                     cur.execute("UPDATE siparis_kalem SET verilen = verilen + 1 WHERE id=%s", (kalem_id,))
+                     cur.execute("""
+                        INSERT INTO siparis_hareket (siparis_id, barkod, ad, adet, kullanici, tarih)
+                        VALUES (%s,%s,%s,1,%s,%s)
+                    """, (siparis_id, barkod, ad, kullanici, tr_simdi()))
                     cur.execute("SELECT SUM(istenen), SUM(verilen) FROM siparis_kalem WHERE siparis_id=%s", (siparis_id,))
                     top_ist, top_ver = cur.fetchone()
                     siparis_ilerleme = {"istenen": top_ist, "verilen": top_ver}
@@ -2200,7 +2204,28 @@ def siparis_tablolarini_olustur():
 
 if DATABASE_URL:
     siparis_tablolarini_olustur()
+def siparis_hareket_tablosu_olustur():
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS siparis_hareket(
+                    id SERIAL PRIMARY KEY,
+                    siparis_id INTEGER REFERENCES siparis(id) ON DELETE CASCADE,
+                    barkod TEXT,
+                    ad TEXT,
+                    adet INTEGER,
+                    kullanici TEXT,
+                    tarih TIMESTAMP
+                )
+                """)
+    finally:
+        con.close()
 
+
+if DATABASE_URL:
+    siparis_hareket_tablosu_olustur()
 
 def push_tablosu_olustur():
     con = db()
@@ -2608,6 +2633,16 @@ def siparis_detay(siparis_id):
                 WHERE k.siparis_id=%s ORDER BY k.id
             """, (siparis_id,))
             kalemler = cur.fetchall()
+
+            cur.execute("""
+                SELECT barkod, kullanici, SUM(adet)
+                FROM siparis_hareket
+                WHERE siparis_id=%s
+                GROUP BY barkod, kullanici
+            """, (siparis_id,))
+            kullanici_dagilimi = {}
+            for barkod, kullanici, toplam in cur.fetchall():
+                kullanici_dagilimi.setdefault(barkod, []).append((kullanici, toplam))
     finally:
         con.close()
 
@@ -2617,6 +2652,9 @@ def siparis_detay(siparis_id):
     for kid, ad, barkod, istenen, verilen, cins, ebat, kalinlik, yuzey, sinif, renk in kalemler:
         tam = verilen >= istenen
         ozellikler = " · ".join([x for x in [cins, ebat, kalinlik, yuzey, sinif, renk] if x])
+    kimler_html = ""
+        for kullanici_ad, toplam_adet in kullanici_dagilimi.get(barkod, []):
+            kimler_html += f'<span class="rozet" style="margin-right:6px;margin-top:4px;display:inline-block;">👤 {kullanici_ad}: {toplam_adet}</span>'    
         iade_form = ""
         if verilen > 0:
             iade_form = f"""
@@ -2633,6 +2671,7 @@ def siparis_detay(siparis_id):
             <div class="kalem-ad">{ad}<br><span style="color:var(--muted);font-size:11.5px;">🔢 {barkod}{(' · ' + ozellikler) if ozellikler else ''}</span></div>
             <div class="kalem-miktar {'tam' if tam else 'eksik'}">{verilen} / {istenen}</div>
           </div>
+          {'<div style="margin-top:6px;">' + kimler_html + '</div>' if kimler_html else ''}
           {iade_form}
         </div>
         """
