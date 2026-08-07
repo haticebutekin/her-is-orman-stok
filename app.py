@@ -825,6 +825,11 @@ def index():
             renk = ROL_RENK.get(ROLLER[isim], "kisi-mavi")
             secim_html += f"""
             <a href="/pin_gir/{isim}" class="kisi-kart">
+            <a href="/transfer" class="okut-kart okut-mavi">
+          <div class="okut-ikon">🔁</div>
+          <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
+          <div class="okut-ok">›</div>
+        </a>
               <div class="kisi-avatar {renk}">{bas_harf}</div>
               <div class="kisi-metin">
                 <div class="kisi-ad">{isim}</div>
@@ -1649,7 +1654,158 @@ def depo_stok():
     )
     return sayfa(icerik, "Depo Stok Durumu")
 
+@app.route("/transfer", methods=["GET", "POST"])
+@rol_gerekli("depocu", "muhasebeci", "patron")
+def transfer():
+    if request.method == "POST":
+        barkod = request.form.get("barkod", "").strip()
+        hedef_depo = request.form.get("hedef_depo", "")
+        try:
+            miktar = int(request.form.get("miktar", "0"))
+        except (TypeError, ValueError):
+            miktar = 0
 
+        if not barkod or not hedef_depo or miktar <= 0:
+            return sayfa('<p class="hata">❌ Barkod, hedef depo ve miktar girilmeli.</p><a class="btn gri" href="/transfer">⬅ Geri Dön</a>', "Hata")
+
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    cur.execute("SELECT id, ad, adet, depo FROM urun WHERE barkod=%s", (barkod,))
+                    row = cur.fetchone()
+                    if not row:
+                        con.close()
+                        return sayfa('<p class="hata">❌ Ürün bulunamadı.</p><a class="btn gri" href="/transfer">⬅ Geri Dön</a>', "Hata")
+
+                    uid, ad, mevcut_adet, kaynak_depo = row
+
+                    if kaynak_depo == hedef_depo:
+                        con.close()
+                        return sayfa('<p class="hata">❌ Kaynak ve hedef depo aynı olamaz.</p><a class="btn gri" href="/transfer">⬅ Geri Dön</a>', "Hata")
+
+                    if miktar > mevcut_adet:
+                        con.close()
+                        return sayfa(f'<p class="hata">❌ Yetersiz stok. {kaynak_depo} deposunda sadece {mevcut_adet} adet var.</p><a class="btn gri" href="/transfer">⬅ Geri Dön</a>', "Hata")
+
+                    kalan = mevcut_adet - miktar
+                    kullanici = session.get("kullanici", "Bilinmiyor")
+                    simdi = tr_simdi()
+
+                    if kalan == 0:
+                        # Kaynaktaki kayıt tamamen boşaldı, direkt depoyu güncelle
+                        cur.execute("UPDATE urun SET depo=%s, adet=%s WHERE id=%s", (hedef_depo, miktar, uid))
+                    else:
+                        # Kaynakta miktarı düş
+                        cur.execute("UPDATE urun SET adet=%s WHERE id=%s", (kalan, uid))
+                        # Hedef depoda aynı barkodlu kayıt var mı bak
+                        cur.execute("SELECT id, adet FROM urun WHERE barkod=%s AND depo=%s", (barkod, hedef_depo))
+                        hedef_satir = cur.fetchone()
+                        if hedef_satir:
+                            hedef_id, hedef_adet = hedef_satir
+                            cur.execute("UPDATE urun SET adet=%s WHERE id=%s", (hedef_adet + miktar, hedef_id))
+                        else:
+                            cur.execute("""
+                                SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,barkod FROM urun WHERE id=%s
+                            """, (uid,))
+                            u = cur.fetchone()
+                            yeni_barkod = barkod_uret()
+                            cur.execute("""
+                                INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
+                                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            """, (u[0], u[1], u[2], u[3], u[4], u[5], u[6], miktar, hedef_depo, yeni_barkod))
+
+                    cur.execute("""
+                        INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
+                        VALUES (%s, %s, 'cikis', %s, %s, %s)
+                    """, (barkod, ad, miktar, kullanici, simdi))
+                    cur.execute("""
+                        INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
+                        VALUES (%s, %s, 'giris', %s, %s, %s)
+                    """, (barkod, ad, miktar, kullanici, simdi))
+        finally:
+            con.close()
+
+        icerik = (
+            '<div style="text-align:center;font-size:52px;margin-bottom:4px;">✅</div>'
+            + '<h2 style="margin-top:0;">Transfer Tamamlandı</h2>'
+            + f'<p style="text-align:center;color:var(--muted);"><b style="color:var(--text);">{ad}</b><br>{kaynak_depo} → {hedef_depo}<br>{miktar} adet</p>'
+            + '<a href="/depo_stok" class="okut-kart okut-turkuaz"><div class="okut-ikon">🏭</div><div class="okut-metin"><div class="okut-baslik">Depo Stok Durumu</div></div><div class="okut-ok">›</div></a>'
+            + '<a href="/transfer" class="okut-kart okut-mavi"><div class="okut-ikon">🔁</div><div class="okut-metin"><div class="okut-baslik">Yeni Transfer</div></div><div class="okut-ok">›</div></a>'
+        )
+        return sayfa(icerik, "Transfer Tamamlandı")
+
+    icerik = """
+    <h2 style="margin-bottom:2px;">🔁 Depolar Arası Transfer</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">Bir ürünü bir depodan diğerine taşı</p>
+
+    <div class="kart">
+    <label>Ürün Ara (barkod veya isim)</label>
+    <div class="urun-arama-kutu">
+      <input type="text" id="urun-arama" class="arama" placeholder="🔍 Ürün adı veya barkod yaz..." autocomplete="off" oninput="urunAra()">
+      <div class="urun-arama-sonuc" id="urun-arama-sonuc"></div>
+    </div>
+    <div id="secili-urun-alan"></div>
+    </div>
+
+    <form method="post" id="transfer-form" style="display:none;" >
+    <input type="hidden" name="barkod" id="form-barkod">
+    <div class="kart">
+    <label>Hedef Depo</label>
+    <select name="hedef_depo" required>
+    """ + "".join(f'<option>{d}</option>' for d in DEPOLAR) + """
+    </select>
+    <label>Miktar</label>
+    <input type="number" name="miktar" min="1" required>
+    <button type="submit" class="btn turuncu">Transferi Onayla</button>
+    </div>
+    </form>
+
+    <script>
+    let aramaZamanlayici = null;
+    function urunAra(){
+      clearTimeout(aramaZamanlayici);
+      const q = document.getElementById('urun-arama').value.trim();
+      const kutu = document.getElementById('urun-arama-sonuc');
+      if(q.length < 1){ kutu.style.display='none'; kutu.innerHTML=''; return; }
+      aramaZamanlayici = setTimeout(() => {
+        fetch('/urun_ara?q=' + encodeURIComponent(q))
+          .then(r => r.json())
+          .then(sonuclar => {
+            if(sonuclar.length === 0){
+              kutu.innerHTML = '<div class="urun-arama-oge" style="color:var(--muted);">Ürün bulunamadı</div>';
+              kutu.style.display = 'block';
+              return;
+            }
+            kutu.innerHTML = sonuclar.map(u => `
+              <div class="urun-arama-oge" onclick='urunSec(${JSON.stringify(JSON.stringify(u))})'>
+                <div class="ad">${u.ad}</div>
+                <div class="detay">🔢 ${u.barkod} · 📦 Stokta: ${u.adet} · 🏭 ${u.depo}</div>
+              </div>
+            `).join('');
+            kutu.style.display = 'block';
+          });
+      }, 250);
+    }
+    function urunSec(uJson){
+      const u = JSON.parse(uJson);
+      document.getElementById('urun-arama-sonuc').style.display = 'none';
+      document.getElementById('urun-arama').value = u.ad;
+      document.getElementById('form-barkod').value = u.barkod;
+      document.getElementById('secili-urun-alan').innerHTML =
+        `<div class="sonuc-kart sonuc-yeni" style="margin-top:8px;">📦 <b>${u.ad}</b><br>🏭 Kaynak Depo: ${u.depo} · Stok: ${u.adet}</div>`;
+      document.getElementById('transfer-form').style.display = 'block';
+    }
+    document.addEventListener('click', function(e){
+      const kutu = document.getElementById('urun-arama-sonuc');
+      if(!kutu.contains(e.target) && e.target.id !== 'urun-arama'){
+        kutu.style.display = 'none';
+      }
+    });
+    </script>
+    """
+    return sayfa(icerik, "Depolar Arası Transfer")
+    
 @app.route("/hareketler")
 @rol_gerekli("muhasebeci")
 def hareket_listesi():
@@ -2412,7 +2568,7 @@ self.addEventListener('notificationclick', function(event) {
 
 
 @app.route("/urun_ara")
-@rol_gerekli("muhasebeci")
+@rol_gerekli("depocu","muhasebeci")
 def urun_ara():
     q = request.args.get("q", "").strip()
     if len(q) < 1:
