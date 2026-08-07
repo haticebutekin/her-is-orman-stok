@@ -1010,7 +1010,7 @@ if rol in ("depocu", "muhasebeci", "patron"):
         </div>
         """
 
-icerik = (
+    icerik = (
         "<h1>📦 STOK PANEL</h1>"
         + '<h3 class="alt">👤 ' + kullanici + ' (' + rol + ')</h3>'
         + butonlar
