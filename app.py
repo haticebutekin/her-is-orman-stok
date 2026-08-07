@@ -153,6 +153,9 @@ def tablolari_olustur():
                 )
                 """)
                 cur.execute("""
+                ALTER TABLE urun ADD COLUMN IF NOT EXISTS min_stok INTEGER DEFAULT 5
+                """)
+                cur.execute("""
                 CREATE TABLE IF NOT EXISTS urun_barkod(
                     id SERIAL PRIMARY KEY,
                     urun_id INTEGER REFERENCES urun(id) ON DELETE CASCADE,
@@ -1940,6 +1943,8 @@ def hizli_islem():
                     adet = 0
 
                 cur.execute("UPDATE urun SET adet=%s WHERE id=%s", (adet, uid))
+                if tip == "cikis":
+                    kritik_stok_kontrol(barkod, ad, adet, depo)
                 cur.execute("""
                 INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
                 VALUES (%s, %s, %s, %s, %s, %s)
@@ -2282,6 +2287,22 @@ def push_tablosu_olustur():
 
 if DATABASE_URL:
     push_tablosu_olustur()
+
+def kritik_stok_kontrol(barkod, ad, yeni_adet, depo):
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT min_stok FROM urun WHERE barkod=%s", (barkod,))
+            row = cur.fetchone()
+    finally:
+        con.close()
+    esik = row[0] if row and row[0] is not None else 5
+    if yeni_adet <= esik:
+        push_bildirim_gonder(
+            "⚠️ Kritik Stok",
+            f"{ad} — {depo}: sadece {yeni_adet} adet kaldı (eşik: {esik}).",
+            url="/liste"
+        )    
 
 
 def push_bildirim_gonder(baslik, govde, url="/"):
