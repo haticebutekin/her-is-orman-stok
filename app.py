@@ -819,11 +819,7 @@ def index():
         ROL_ETIKET = {"depocu": "Depocu", "muhasebeci": "Muhasebeci", "patron": "Patron"}
         ROL_RENK = {"depocu": "kisi-yesil", "muhasebeci": "kisi-mavi", "patron": "kisi-mor"}
         secim_html = ""
-        for isim in ROLLER:
-            bas_harf = isim[0].upper()
-            rol_adi = ROL_ETIKET.get(ROLLER[isim], "")
-            renk = ROL_RENK.get(ROLLER[isim], "kisi-mavi")
-            secim_html = ""
+        
 for isim in ROLLER:
     bas_harf = isim[0].upper()
     rol_adi = ROL_ETIKET.get(ROLLER[isim], "")
@@ -838,7 +834,6 @@ for isim in ROLLER:
       <div class="okut-ok">›</div>
     </a>
     """
-
            icerik = (
             "<h1>👋 Kimsin?</h1>"
             + '<h3 class="alt">Devam etmek için ismini seç</h3>'
