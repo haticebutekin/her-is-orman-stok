@@ -839,37 +839,69 @@ for isim in ROLLER:
     </a>
     """
 
-    icerik = (
-    f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
-    + f'<h1 style="font-size:19px;line-height:1.35;margin-bottom:2px;">{UYGULAMA_ADI}</h1>'
-    + '<h3 class="alt">Devam etmek için ismini seç</h3>'
-    + secim_html
-    + """
-    <div class="kart qr-kutu">
-      <p style="margin-top:0;">📱 Bu siteyi telefonundan hızlı açmak için QR'ı okut:</p>
-      <img src="/qr_baglan" width="170" height="170">
-      <p class="qr-not">Açıldıktan sonra tarayıcı menüsünden
-      "Ana Ekrana Ekle" seçersen, ikonu telefonuna normal bir
-      uygulama gibi kurabilirsin.</p>
-    </div>
-    """
-)
+           icerik = (
+            "<h1>👋 Kimsin?</h1>"
+            + '<h3 class="alt">Devam etmek için ismini seç</h3>'
+            + secim_html
+            + """
+            <div class="kart qr-kutu">
+              <p style="margin-top:0;">📱 Bu siteyi telefonundan hızlı açmak için QR'ı okut:</p>
+              <img src="/qr_baglan" width="170" height="170">
+              <p class="qr-not">Açıldıktan sonra tarayıcı menüsünden
+              "Ana Ekrana Ekle" seçersen, ikonu telefonuna normal bir
+              uygulama gibi kurabilirsin.</p>
+            </div>
+            """
+        )
+        return sayfa(icerik, "Giriş - Stok Takip")
 
-butonlar = ""
-
-if rol in ("depocu", "muhasebeci", "patron"):
-    giris_sayisi, cikis_sayisi = bugunku_ozet(kullanici)
-
-    butonlar += f"""
-    <div class="ozet-satir">
-        <div class="kart">
-            <b>{giris_sayisi}</b><br>Bugün Giriş
+    # Role göre buton seti — patron ve muhasebeci tam yetkili
+    butonlar = ""
+    if rol in ("depocu", "muhasebeci", "patron"):
+        giris_sayisi, cikis_sayisi = bugunku_ozet(kullanici)
+        butonlar += f"""
+        <div class="ozet-satir">
+          <div class="ozet-kutu ozet-yesil"><div class="ozet-sayi">{giris_sayisi}</div><div class="ozet-etiket">Bugün Giriş</div></div>
+          <div class="ozet-kutu ozet-turuncu"><div class="ozet-sayi">{cikis_sayisi}</div><div class="ozet-etiket">Bugün Çıkış</div></div>
         </div>
-        <div class="kart">
-            <b>{cikis_sayisi}</b><br>Bugün Çıkış
+        <a href="/kamera/giris" class="okut-kart okut-yesil">
+          <div class="okut-ikon">⬆️</div>
+          <div class="okut-metin"><div class="okut-baslik">Giriş Okut</div><div class="okut-alt">Depoya gelen ürünü tara</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/kamera/cikis" class="okut-kart okut-turuncu">
+          <div class="okut-ikon">⬇️</div>
+          <div class="okut-metin"><div class="okut-baslik">Çıkış Okut</div><div class="okut-alt">Depodan çıkan ürünü tara</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        """
+    if rol in ("muhasebeci", "patron"):
+        butonlar += """
+        <div class="bolum-baslik">İşlemler</div>
+        <a href="/ekle" class="okut-kart okut-mavi">
+          <div class="okut-ikon">➕</div>
+          <div class="okut-metin"><div class="okut-baslik">Ürün Ekle</div><div class="okut-alt">Yeni ürün kaydı oluştur</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/liste" class="okut-kart okut-mor">
+          <div class="okut-ikon">📦</div>
+          <div class="okut-metin"><div class="okut-baslik">Stok Listesi</div><div class="okut-alt">Ürünleri görüntüle, etiket bas</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/hareketler" class="okut-kart okut-kirmizi">
+          <div class="okut-ikon">📊</div>
+          <div class="okut-metin"><div class="okut-baslik">Hareketler</div><div class="okut-alt">Tüm giriş/çıkış geçmişi</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+
+        <div class="bolum-baslik">Raporlar</div>
+        <div class="rapor-satir">
+          <a href="/rapor/excel" class="rapor-pil">📥 XLSX</a>
+          <a href="/rapor/xls" class="rapor-pil">📥 XLS</a>
+          <a href="/rapor/csv" class="rapor-pil">📥 CSV</a>
         </div>
-    </div>
-    """
+        """
+
 
     icerik = (
         f'<div style="text-align:center;">'
