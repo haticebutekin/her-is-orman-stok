@@ -839,22 +839,23 @@ for isim in ROLLER:
     </a>
     """
 
-        icerik = (
-            f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
-            + f'<h1 style="font-size:19px;line-height:1.35;margin-bottom:2px;">{UYGULAMA_ADI}</h1>'
-            + '<h3 class="alt">Devam etmek için ismini seç</h3>'
-            + secim_html
-            + """
-            <div class="kart qr-kutu">
-              <p style="margin-top:0;">📱 Bu siteyi telefonundan hızlı açmak için QR'ı okut:</p>
-              <img src="/qr_baglan" width="170" height="170">
-              <p class="qr-not">Açıldıktan sonra tarayıcı menüsünden
-              "Ana Ekrana Ekle" seçersen, ikonu telefonuna normal bir
-              uygulama gibi kurabilirsin.</p>
-            </div>
-            """
-        )
-        return sayfa(icerik, "Giriş - " + UYGULAMA_ADI)
+   icerik = (
+    f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
+    + f'<h1 style="font-size:19px;line-height:1.35;margin-bottom:2px;">{UYGULAMA_ADI}</h1>'
+    + '<h3 class="alt">Devam etmek için ismini seç</h3>'
+    + secim_html
+    + """
+    <div class="kart qr-kutu">
+      <p style="margin-top:0;">📱 Bu siteyi telefonundan hızlı açmak için QR'ı okut:</p>
+      <img src="/qr_baglan" width="170" height="170">
+      <p class="qr-not">Açıldıktan sonra tarayıcı menüsünden
+      "Ana Ekrana Ekle" seçersen, ikonu telefonuna normal bir
+      uygulama gibi kurabilirsin.</p>
+    </div>
+    """
+)
+
+return sayfa(icerik, "Giriş - " + UYGULAMA_ADI)    
 
    butonlar = ""
 
