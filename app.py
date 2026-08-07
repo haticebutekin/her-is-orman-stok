@@ -839,12 +839,12 @@ for isim in ROLLER:
     </a>
     """
 
-   icerik = (
-        f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
-        + f'<h1 style="font-size:19px;line-height:1.35;margin-bottom:2px;">{UYGULAMA_ADI}</h1>'
-        + '<h3 class="alt">Devam etmek için ismini seç</h3>'
-        + secim_html
-        + """
+    icerik = (
+    f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
+    + f'<h1 style="font-size:19px;line-height:1.35;margin-bottom:2px;">{UYGULAMA_ADI}</h1>'
+    + '<h3 class="alt">Devam etmek için ismini seç</h3>'
+    + secim_html
+    + """
     <div class="kart qr-kutu">
       <p style="margin-top:0;">📱 Bu siteyi telefonundan hızlı açmak için QR'ı okut:</p>
       <img src="/qr_baglan" width="170" height="170">
@@ -853,22 +853,16 @@ for isim in ROLLER:
       uygulama gibi kurabilirsin.</p>
     </div>
     """
-    )
+)
 
-    return sayfa(icerik, "Giriş - " + UYGULAMA_ADI)    
+butonlar = ""
 
- def giris_sayfasi():
-    butonlar = ""
+if rol in ("depocu", "muhasebeci", "patron"):
+    giris_sayisi, cikis_sayisi = bugunku_ozet(kullanici)
 
-    if rol in ("depocu", "muhasebeci", "patron"):
-        giris_sayisi, cikis_sayisi = bugunku_ozet(kullanici)
-
-        butonlar += f"""
-        <div class="ozet-satir">
-            <span>Giriş: {giris_sayisi}</span>
-            <span>Çıkış: {cikis_sayisi}</span>
-        </div>
-        """
+    butonlar += f"""
+    <div class="ozet-satir">
+    """
 
     icerik = (
         f'<div style="text-align:center;">'
