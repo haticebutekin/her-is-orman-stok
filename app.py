@@ -856,11 +856,13 @@ for isim in ROLLER:
         )
         return sayfa(icerik, "Giriş - " + UYGULAMA_ADI)
 
-    butonlar = ""
-    if rol in ("depocu", "muhasebeci", "patron"):
+   butonlar = ""
+
+if rol in ("depocu", "muhasebeci", "patron"):
     giris_sayisi, cikis_sayisi = bugunku_ozet(kullanici)
     butonlar += f"""
     <div class="ozet-satir">
+    """
       <div class="ozet-kutu ozet-yesil"><div class="ozet-sayi">{giris_sayisi}</div><div class="ozet-etiket">Bugün Giriş</div></div>
       <div class="ozet-kutu ozet-turuncu"><div class="ozet-sayi">{cikis_sayisi}</div><div class="ozet-etiket">Bugün Çıkış</div></div>
     </div>
