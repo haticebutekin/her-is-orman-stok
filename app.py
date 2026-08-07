@@ -861,8 +861,10 @@ if rol in ("depocu", "muhasebeci", "patron"):
     giris_sayisi, cikis_sayisi = bugunku_ozet(kullanici)
 
     butonlar += f"""
-    <div class="ozet-satir">
-    """
+<div class="ozet">
+    {giris_sayisi} Bugün Giriş
+</div>
+"""
 
     icerik = (
         f'<div style="text-align:center;">'
