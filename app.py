@@ -819,23 +819,24 @@ def index():
         ROL_ETIKET = {"depocu": "Depocu", "muhasebeci": "Muhasebeci", "patron": "Patron"}
         ROL_RENK = {"depocu": "kisi-yesil", "muhasebeci": "kisi-mavi", "patron": "kisi-mor"}
         secim_html = ""
-        
-for isim in ROLLER:
-    bas_harf = isim[0].upper()
-    rol_adi = ROL_ETIKET.get(ROLLER[isim], "")
-    renk = ROL_RENK.get(ROLLER[isim], "kisi-mavi")
-    secim_html += f"""
-    <a href="/pin_gir/{isim}" class="kisi-kart">
-      <div class="kisi-avatar {renk}">{bas_harf}</div>
-      <div class="kisi-metin">
-        <div class="kisi-ad">{isim}</div>
-        <div class="kisi-rol">{rol_adi}</div>
-      </div>
-      <div class="okut-ok">›</div>
-    </a>
-    """
-           icerik = (
-            "<h1>👋 Kimsin?</h1>"
+        for isim in ROLLER:
+            bas_harf = isim[0].upper()
+            rol_adi = ROL_ETIKET.get(ROLLER[isim], "")
+            renk = ROL_RENK.get(ROLLER[isim], "kisi-mavi")
+            secim_html += f"""
+            <a href="/pin_gir/{isim}" class="kisi-kart">
+              <div class="kisi-avatar {renk}">{bas_harf}</div>
+              <div class="kisi-metin">
+                <div class="kisi-ad">{isim}</div>
+                <div class="kisi-rol">{rol_adi}</div>
+              </div>
+              <div class="okut-ok">›</div>
+            </a>
+            """
+
+        icerik = (
+            f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
+            + f'<h1 style="font-size:19px;line-height:1.35;margin-bottom:2px;">{UYGULAMA_ADI}</h1>'
             + '<h3 class="alt">Devam etmek için ismini seç</h3>'
             + secim_html
             + """
@@ -848,9 +849,8 @@ for isim in ROLLER:
             </div>
             """
         )
-        return sayfa(icerik, "Giriş - Stok Takip")
+        return sayfa(icerik, "Giriş - " + UYGULAMA_ADI)
 
-    # Role göre buton seti — patron ve muhasebeci tam yetkili
     butonlar = ""
     if rol in ("depocu", "muhasebeci", "patron"):
         giris_sayisi, cikis_sayisi = bugunku_ozet(kullanici)
@@ -870,62 +870,6 @@ for isim in ROLLER:
           <div class="okut-ok">›</div>
         </a>
         """
-    if rol in ("muhasebeci", "patron"):
-        butonlar += """
-        <div class="bolum-baslik">İşlemler</div>
-        <a href="/ekle" class="okut-kart okut-mavi">
-          <div class="okut-ikon">➕</div>
-          <div class="okut-metin"><div class="okut-baslik">Ürün Ekle</div><div class="okut-alt">Yeni ürün kaydı oluştur</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <a href="/liste" class="okut-kart okut-mor">
-          <div class="okut-ikon">📦</div>
-          <div class="okut-metin"><div class="okut-baslik">Stok Listesi</div><div class="okut-alt">Ürünleri görüntüle, etiket bas</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <a href="/hareketler" class="okut-kart okut-kirmizi">
-          <div class="okut-ikon">📊</div>
-          <div class="okut-metin"><div class="okut-baslik">Hareketler</div><div class="okut-alt">Tüm giriş/çıkış geçmişi</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-
-        <div class="bolum-baslik">Raporlar</div>
-        <div class="rapor-satir">
-          <a href="/rapor/excel" class="rapor-pil">📥 XLSX</a>
-          <a href="/rapor/xls" class="rapor-pil">📥 XLS</a>
-          <a href="/rapor/csv" class="rapor-pil">📥 CSV</a>
-        </div>
-        """
-
-
-    icerik = (
-        f'<div style="text-align:center;">'
-        f'<img src="{LOGO_URL}" style="width:110px;">'
-        f'</div>'
-        + butonlar
-    )
-
-    return sayfa(icerik, "Giriş")
-    
-      <div class="ozet-kutu ozet-yesil"><div class="ozet-sayi">{giris_sayisi}</div><div class="ozet-etiket">Bugün Giriş</div></div>
-      <div class="ozet-kutu ozet-turuncu"><div class="ozet-sayi">{cikis_sayisi}</div><div class="ozet-etiket">Bugün Çıkış</div></div>
-    </div>
-    <a href="/kamera/giris" class="okut-kart okut-yesil">
-      <div class="okut-ikon">⬆️</div>
-      <div class="okut-metin"><div class="okut-baslik">Giriş Okut</div><div class="okut-alt">Depoya gelen ürünü tara</div></div>
-      <div class="okut-ok">›</div>
-    </a>
-    <a href="/kamera/cikis" class="okut-kart okut-turuncu">
-      <div class="okut-ikon">⬇️</div>
-      <div class="okut-metin"><div class="okut-baslik">Çıkış Okut</div><div class="okut-alt">Depodan çıkan ürünü tara</div></div>
-      <div class="okut-ok">›</div>
-    </a>
-    <a href="/transfer" class="okut-kart okut-mavi">
-      <div class="okut-ikon">🔁</div>
-      <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
-      <div class="okut-ok">›</div>
-    </a>
-    """
     if rol in ("depocu",):
         butonlar += """
         <a href="/depo_stok" class="okut-kart okut-turkuaz">
@@ -933,76 +877,6 @@ for isim in ROLLER:
           <div class="okut-metin"><div class="okut-baslik">Depo Stok Durumu</div><div class="okut-alt">Hangi depoda ne kadar var</div></div>
           <div class="okut-ok">›</div>
         </a>
-        <a href="javascript:void(0)" onclick="bildirimleriAc()" class="okut-kart okut-mor" id="bildirim-buton">
-          <div class="okut-ikon">🔔</div>
-          <div class="okut-metin"><div class="okut-baslik">Bildirimleri Aç</div><div class="okut-alt">Yeni sipariş gelince telefonuna bildirim gelsin</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <div id="siparis-banner" style="display:none;" class="uyari-kutu">
-          🔴 <span id="siparis-banner-metin"></span><br>
-          <a href="/kamera/cikis" style="color:#FFB74D;font-weight:700;text-decoration:underline;">Şimdi hazırla →</a>
-        </div>
-
-        <script>
-        function urlBase64ToUint8Array(base64String) {
-          const padding = '='.repeat((4 - base64String.length % 4) % 4);
-          const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-          const rawData = atob(base64);
-          const outputArray = new Uint8Array(rawData.length);
-          for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
-          return outputArray;
-        }
-
-        async function bildirimleriAc(){
-          if(!('serviceWorker' in navigator) || !('PushManager' in window)){
-            alert('Bu cihaz/tarayıcı bildirimi desteklemiyor. iPhone kullanıyorsan önce paylaş menüsünden "Ana Ekrana Ekle" ile uygulamayı kurman gerekiyor, sonra tekrar dene.');
-            return;
-          }
-          try {
-            const izin = await Notification.requestPermission();
-            if(izin !== 'granted'){ alert('Bildirim izni verilmedi.'); return; }
-            const reg = await navigator.serviceWorker.register('/service-worker.js');
-            const anahtarYaniti = await fetch('/vapid_public_key');
-            const anahtarVerisi = await anahtarYaniti.json();
-            if(!anahtarVerisi.aktif){
-              alert('Sunucuda push bildirim modülü henüz kurulmamış. Sunucu tarafında pywebpush paketinin yüklü olduğundan emin olunmalı.');
-              return;
-            }
-            const sub = await reg.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: urlBase64ToUint8Array(anahtarVerisi.publicKey)
-            });
-            await fetch('/push_abone_ol', {
-              method: 'POST', headers: {'Content-Type':'application/json'},
-              body: JSON.stringify(sub)
-            });
-            const b = document.getElementById('bildirim-buton');
-            if(b) b.querySelector('.okut-baslik').textContent = '✅ Bildirimler Açık';
-          } catch(e) {
-            console.log(e);
-            alert('Bildirim açılamadı: ' + e.message);
-          }
-        }
-
-        let sonBilinenSiparisSayisi = null;
-        async function siparisKontrolEt(){
-          try {
-            const r = await fetch('/acik_siparis_sayisi');
-            const d = await r.json();
-            if(sonBilinenSiparisSayisi === null){ sonBilinenSiparisSayisi = d.acik; return; }
-            if(d.acik > sonBilinenSiparisSayisi){
-              const banner = document.getElementById('siparis-banner');
-              document.getElementById('siparis-banner-metin').textContent = 'Toplam ' + d.acik + ' açık sipariş var, yeni sipariş eklendi.';
-              banner.style.display = 'block';
-              if(navigator.vibrate) navigator.vibrate([100,50,100]);
-              try { new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg").play(); } catch(e){}
-            }
-            sonBilinenSiparisSayisi = d.acik;
-          } catch(e) {}
-        }
-        siparisKontrolEt();
-        setInterval(siparisKontrolEt, 20000);
-        </script>
         """
     if rol in ("muhasebeci", "patron"):
         butonlar += """
@@ -1052,6 +926,8 @@ for isim in ROLLER:
           <a href="/rapor/csv" class="rapor-pil">📥 CSV</a>
         </div>
         """
+
+
 
     icerik = (
         "<h1>📦 STOK PANEL</h1>"
