@@ -1434,7 +1434,7 @@ def duzenle(eski_barkod):
 
 
 @app.route("/liste")
-@rol_gerekli("muhasebeci")
+@rol_gerekli("depocu","muhasebeci")
 def liste():
     depo_filtre = request.args.get("depo", "")
 
