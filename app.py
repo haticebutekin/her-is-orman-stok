@@ -90,6 +90,25 @@ ROLLER = {
     "Ahmet": "patron",
 }
 
+def bugunku_ozet(kullanici):
+    bugun = tr_simdi().date()
+    try:
+        con = db()
+        try:
+            with con.cursor() as cur:
+                cur.execute("""
+                    SELECT tip, COUNT(*) FROM hareket
+                    WHERE kullanici=%s AND tarih::date=%s
+                    GROUP BY tip
+                """, (kullanici, bugun))
+                satirlar = dict(cur.fetchall())
+        finally:
+            con.close()
+        return satirlar.get("giris", 0), satirlar.get("cikis", 0)
+    except Exception:
+        traceback.print_exc()
+        return 0, 0
+
 def _pin_yukle():
     varsayilan = {
         "Ramazan": "1111", "Behiç": "2222", "Orhan": "3333",
@@ -183,7 +202,7 @@ def barkod_uret():
         con = db()
         try:
             with con.cursor() as cur:
-                cur.execute("SELECT barkod FROM urun_barkod WHERE barkod=%s", (kod,))
+                cur.execute("SELECT 1 FROM urun WHERE barkod=%s", (kod,))
                 var = cur.fetchone()
         finally:
             con.close()
@@ -1482,14 +1501,13 @@ def liste():
           <img src="/barkod/{u[10]}.png">
           <img src="/qr/{u[10]}.png">
         </div>
-        <div class="urun-aksiyonlar">
+       <div class="urun-aksiyonlar">
         <button class="btn-kucuk mavi" onclick="window.location.href='/duzenle/{u[10]}'">✏️ Düzenle</button>
         <button class="btn-kucuk turkuaz" onclick="window.open('/etiket/{u[10]}','_blank')">🖨️ Etiket</button>
         <button class="btn-kucuk kirmizi" onclick="urunSil('{u[10]}')">🗑️ Sil</button>
         </div>
         </div>
         """
-
     icerik = (
         "<h2>📦 STOK</h2>"
         + f"""
@@ -3306,6 +3324,23 @@ function geriAl(){
 @app.route("/ping")
 def ping():
     return "ok"
+import traceback
 
+@app.errorhandler(500)
+def sunucu_hatasi(e):
+    hata_metni = traceback.format_exc()
+    print("=== SUNUCU HATASI ===")
+    print(hata_metni)
+    print("======================")
+    icerik = f"""
+    <h2>⚠️ Bir Şeyler Ters Gitti</h2>
+    <p style="text-align:center;color:var(--muted);">
+    İşlem tamamlanamadı. Lütfen tekrar dene, sorun devam ederse
+    yöneticine haber ver.
+    </p>
+    <a class="btn mavi" href="/">🏠 Ana Sayfaya Dön</a>
+    {'<pre style="font-size:10px;color:#FF6B6B;white-space:pre-wrap;overflow-x:auto;">' + hata_metni + '</pre>' if session.get("rol") == "patron" else ''}
+    """
+    return sayfa(icerik, "Hata"), 500
 if __name__ == "__main__":
     app.run(debug=True)
