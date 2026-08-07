@@ -11,10 +11,9 @@ except ImportError:
     PUSH_AKTIF = False
 from datetime import datetime
 from zoneinfo import ZoneInfo
-import barcode, qrcode
-# ==================== BARKOD/QR RESİM CACHE (RAM, ücretsiz) ====================
+import barcode, 
+# ==================== BARKOD/ RESİM CACHE (RAM, ücretsiz) ====================
 _BARKOD_CACHE = {}
-_QR_CACHE = {}
 _CACHE_KILIT = threading.Lock()   # aşağıda import threading eklemen gerekiyor
 from barcode.writer import ImageWriter
 
@@ -36,7 +35,7 @@ SITE_PAROLA = os.environ.get("SITE_PAROLA", "")  # Render'da ayarlanmazsa bu kat
 def site_girisi_kontrol():
     if not SITE_PAROLA:
         return
-    if request.endpoint in ("site_giris", "manifest", "qr_baglan", "service_worker"):
+    if request.endpoint in ("site_giris", "manifest", "service_worker"):
         return
     if request.path.startswith("/static/") or request.path.startswith("/barkod/") or request.path.startswith("/qr/"):
         return
@@ -230,14 +229,6 @@ def barkod_png_bytes(kod):
     return bio
 
 
-def qr_png_bytes(kod):
-    img = qrcode.make(kod)
-    bio = io.BytesIO()
-    img.save(bio, format="PNG")
-    bio.seek(0)
-    return bio
-
-
 def ikon_uret():
     try:
         from PIL import Image, ImageDraw
@@ -385,9 +376,6 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .video-alan { display:flex; justify-content:center; margin:16px 0; }
 .video-alan video { border-radius: var(--radius); box-shadow:0 8px 24px rgba(0,0,0,.5); }
 
-.qr-kutu { text-align:center; margin: 18px 0; }
-.qr-kutu img { border-radius:14px; background:white; padding:10px; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
-.qr-not { color: var(--muted); font-size:13px; text-align:center; margin-top:8px; line-height:1.5; }
 
 .hata { color:#FF6B6B; font-weight:600; text-align:center; }
 .basari { color:#2FE686; font-weight:600; text-align:center; }
@@ -990,7 +978,7 @@ def ekle2():
             + '<span class="rozet">Barkod</span><br><br>'
             + '<b style="font-size:18px;letter-spacing:1px;">' + barkod + '</b><br><br>'
             + '<img src="/barkod/' + barkod + '.png" width="260"><br><br>'
-            + '<img src="/qr/' + barkod + '.png" width="140">'
+            + '<img src="/' + barkod + '.png" width="140">'
             + '</div>'
             + '<a href="/etiket/' + barkod + '" target="_blank" class="okut-kart okut-mavi">'
             + '<div class="okut-ikon">🖨️</div><div class="okut-metin"><div class="okut-baslik">Etiket Yazdır</div></div><div class="okut-ok">›</div></a>'
@@ -1300,7 +1288,7 @@ def duzenle(eski_barkod):
             + '<span class="rozet">Barkod</span><br><br>'
             + '<b style="font-size:18px;letter-spacing:1px;">' + yeni_barkod + '</b><br><br>'
             + '<img src="/barkod/' + yeni_barkod + '.png" width="260"><br><br>'
-            + '<img src="/qr/' + yeni_barkod + '.png" width="140">'
+            + '<img src="/' + yeni_barkod + '.png" width="140">'
             + '</div>'
             + (
                 '<div class="sonuc-kart sonuc-yeni">📌 Barkod değişti. Üründe önceden yapıştırılmış eski etiket varsa, üzerinde artık eski barkod yazıyor olacak — yeni etiket basmayı unutma.</div>'
@@ -1434,7 +1422,6 @@ def liste():
         <div class="urun-barkod">🔢 {u[10]}</div>
         <div class="urun-gorseller">
           <img src="/barkod/{u[10]}.png">
-          <img src="/qr/{u[10]}.png">
         </div>
        <div class="urun-aksiyonlar">
         <button class="btn-kucuk mavi" onclick="window.location.href='/duzenle/{u[10]}'">✏️ Düzenle</button>
@@ -2116,7 +2103,6 @@ def etiket(barkod):
         .ozellik {{ font-size: 7.5px; color:#333; margin-bottom:1mm; line-height:1.25; }}
         .depo {{ font-size: 7.5px; color:#555; margin-bottom:1mm; }}
         img.barkod {{ width: 100%; max-width: 34mm; }}
-        img.qr {{ width: 13mm; margin-top:1mm; }}
         .yazdir-btn {{
             display:block; margin: 6mm auto 0; padding:14px 24px;
             background:#2196F3; color:white; border:none; border-radius:10px;
@@ -2134,7 +2120,6 @@ def etiket(barkod):
             <div class="ozellik">{ozellikler}</div>
             {'<div class="depo">🏭 ' + depo + '</div>' if depo else ''}
             <img class="barkod" src="/barkod/{barkod}.png">
-            <img class="qr" src="/qr/{barkod}.png">
         </div>
         <button class="yazdir-btn" onclick="window.print()">🖨️ Yazdır</button>
     </body>
@@ -2181,7 +2166,6 @@ def etiketler():
             <div class="ozellik">{ozellikler}</div>
             {'<div class="depo">🏭 ' + depo + '</div>' if depo else ''}
             <img class="barkod" src="/barkod/{barkod}.png">
-            <img class="qr" src="/qr/{barkod}.png">
         </div>
         """
 
@@ -2228,7 +2212,6 @@ def etiketler():
         .ozellik {{ font-size: 7.5px; color:#333; margin-bottom:1mm; line-height:1.25; }}
         .depo {{ font-size: 7.5px; color:#555; margin-bottom:1mm; }}
         img.barkod {{ width: 100%; max-width: 34mm; }}
-        img.qr {{ width: 13mm; margin-top:1mm; }}
         @media print {{
             .ust-arac {{ display:none; }}
             body {{ background:white; margin:0; }}
@@ -3195,7 +3178,6 @@ arayuzuGuncelle(aktifTip);
 
 function hintOlustur(){
     const hints = new Map();
-    // Sadece üretilen barkod tiplerini arıyoruz (CODE_128) + QR.
     // Format daraltmak taramayı belirgin şekilde hızlandırır.
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
         ZXing.BarcodeFormat.CODE_128,
