@@ -823,21 +823,21 @@ def index():
             bas_harf = isim[0].upper()
             rol_adi = ROL_ETIKET.get(ROLLER[isim], "")
             renk = ROL_RENK.get(ROLLER[isim], "kisi-mavi")
-            secim_html += f"""
-            <a href="/pin_gir/{isim}" class="kisi-kart">
-            <a href="/transfer" class="okut-kart okut-mavi">
-          <div class="okut-ikon">🔁</div>
-          <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-              <div class="kisi-avatar {renk}">{bas_harf}</div>
-              <div class="kisi-metin">
-                <div class="kisi-ad">{isim}</div>
-                <div class="kisi-rol">{rol_adi}</div>
-              </div>
-              <div class="okut-ok">›</div>
-            </a>
-            """
+            secim_html = ""
+for isim in ROLLER:
+    bas_harf = isim[0].upper()
+    rol_adi = ROL_ETIKET.get(ROLLER[isim], "")
+    renk = ROL_RENK.get(ROLLER[isim], "kisi-mavi")
+    secim_html += f"""
+    <a href="/pin_gir/{isim}" class="kisi-kart">
+      <div class="kisi-avatar {renk}">{bas_harf}</div>
+      <div class="kisi-metin">
+        <div class="kisi-ad">{isim}</div>
+        <div class="kisi-rol">{rol_adi}</div>
+      </div>
+      <div class="okut-ok">›</div>
+    </a>
+    """
 
         icerik = (
             f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
@@ -858,23 +858,28 @@ def index():
 
     butonlar = ""
     if rol in ("depocu", "muhasebeci", "patron"):
-        giris_sayisi, cikis_sayisi = bugunku_ozet(kullanici)
-        butonlar += f"""
-        <div class="ozet-satir">
-          <div class="ozet-kutu ozet-yesil"><div class="ozet-sayi">{giris_sayisi}</div><div class="ozet-etiket">Bugün Giriş</div></div>
-          <div class="ozet-kutu ozet-turuncu"><div class="ozet-sayi">{cikis_sayisi}</div><div class="ozet-etiket">Bugün Çıkış</div></div>
-        </div>
-        <a href="/kamera/giris" class="okut-kart okut-yesil">
-          <div class="okut-ikon">⬆️</div>
-          <div class="okut-metin"><div class="okut-baslik">Giriş Okut</div><div class="okut-alt">Depoya gelen ürünü tara</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <a href="/kamera/cikis" class="okut-kart okut-turuncu">
-          <div class="okut-ikon">⬇️</div>
-          <div class="okut-metin"><div class="okut-baslik">Çıkış Okut</div><div class="okut-alt">Depodan çıkan ürünü tara</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        """
+    giris_sayisi, cikis_sayisi = bugunku_ozet(kullanici)
+    butonlar += f"""
+    <div class="ozet-satir">
+      <div class="ozet-kutu ozet-yesil"><div class="ozet-sayi">{giris_sayisi}</div><div class="ozet-etiket">Bugün Giriş</div></div>
+      <div class="ozet-kutu ozet-turuncu"><div class="ozet-sayi">{cikis_sayisi}</div><div class="ozet-etiket">Bugün Çıkış</div></div>
+    </div>
+    <a href="/kamera/giris" class="okut-kart okut-yesil">
+      <div class="okut-ikon">⬆️</div>
+      <div class="okut-metin"><div class="okut-baslik">Giriş Okut</div><div class="okut-alt">Depoya gelen ürünü tara</div></div>
+      <div class="okut-ok">›</div>
+    </a>
+    <a href="/kamera/cikis" class="okut-kart okut-turuncu">
+      <div class="okut-ikon">⬇️</div>
+      <div class="okut-metin"><div class="okut-baslik">Çıkış Okut</div><div class="okut-alt">Depodan çıkan ürünü tara</div></div>
+      <div class="okut-ok">›</div>
+    </a>
+    <a href="/transfer" class="okut-kart okut-mavi">
+      <div class="okut-ikon">🔁</div>
+      <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
+      <div class="okut-ok">›</div>
+    </a>
+    """
     if rol in ("depocu",):
         butonlar += """
         <a href="/depo_stok" class="okut-kart okut-turkuaz">
