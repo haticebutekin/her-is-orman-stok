@@ -657,17 +657,6 @@ def barkod_resim_endpoint(kod):
     return send_file(io.BytesIO(veri), mimetype="image/png")
 
 
-@app.route("/qr/<kod>.png")
-def qr_resim_endpoint(kod):
-    with _CACHE_KILIT:
-        veri = _QR_CACHE.get(kod)
-    if veri is None:
-        veri = qr_png_bytes(kod).getvalue()
-        with _CACHE_KILIT:
-            _QR_CACHE[kod] = veri
-    return send_file(io.BytesIO(veri), mimetype="image/png")
-
-
 
 def rol_gerekli(*izinli_roller):
     TAM_YETKILI = ("patron", "muhasebeci")
@@ -828,10 +817,6 @@ def index():
             + '<h3 class="alt">Devam etmek için ismini seç</h3>'
             + secim_html
             + """
-            <div class="kart qr-kutu">
-              <p style="margin-top:0;">📱 Bu siteyi telefonundan hızlı açmak için QR'ı okut:</p>
-              <img src="/qr_baglan" width="170" height="170">
-              <p class="qr-not">Açıldıktan sonra tarayıcı menüsünden
               "Ana Ekrana Ekle" seçersen, ikonu telefonuna normal bir
               uygulama gibi kurabilirsin.</p>
             </div>
@@ -978,7 +963,6 @@ def ekle2():
             + '<span class="rozet">Barkod</span><br><br>'
             + '<b style="font-size:18px;letter-spacing:1px;">' + barkod + '</b><br><br>'
             + '<img src="/barkod/' + barkod + '.png" width="260"><br><br>'
-            + '<img src="/qr/' + barkod + '.png" width="140">'
             + '</div>'
             + '<a href="/etiket/' + barkod + '" target="_blank" class="okut-kart okut-mavi">'
             + '<div class="okut-ikon">🖨️</div><div class="okut-metin"><div class="okut-baslik">Etiket Yazdır</div></div><div class="okut-ok">›</div></a>'
@@ -1288,7 +1272,6 @@ def duzenle(eski_barkod):
             + '<span class="rozet">Barkod</span><br><br>'
             + '<b style="font-size:18px;letter-spacing:1px;">' + yeni_barkod + '</b><br><br>'
             + '<img src="/barkod/' + yeni_barkod + '.png" width="260"><br><br>'
-            + '<img src="/qr/' + yeni_barkod + '.png" width="140">'
             + '</div>'
             + (
                 '<div class="sonuc-kart sonuc-yeni">📌 Barkod değişti. Üründe önceden yapıştırılmış eski etiket varsa, üzerinde artık eski barkod yazıyor olacak — yeni etiket basmayı unutma.</div>'
@@ -1422,7 +1405,6 @@ def liste():
         <div class="urun-barkod">🔢 {u[10]}</div>
         <div class="urun-gorseller">
           <img src="/barkod/{u[10]}.png">
-          <img src="/qr/{u[10]}.png">
         </div>
        <div class="urun-aksiyonlar">
         <button class="btn-kucuk mavi" onclick="window.location.href='/duzenle/{u[10]}'">✏️ Düzenle</button>
@@ -2104,7 +2086,6 @@ def etiket(barkod):
         .ozellik {{ font-size: 7.5px; color:#333; margin-bottom:1mm; line-height:1.25; }}
         .depo {{ font-size: 7.5px; color:#555; margin-bottom:1mm; }}
         img.barkod {{ width: 100%; max-width: 34mm; }}
-        img.qr {{ width: 13mm; margin-top:1mm; }}
         .yazdir-btn {{
             display:block; margin: 6mm auto 0; padding:14px 24px;
             background:#2196F3; color:white; border:none; border-radius:10px;
@@ -2122,7 +2103,6 @@ def etiket(barkod):
             <div class="ozellik">{ozellikler}</div>
             {'<div class="depo">🏭 ' + depo + '</div>' if depo else ''}
             <img class="barkod" src="/barkod/{barkod}.png">
-            <img class="qr" src="/qr/{barkod}.png">
         </div>
         <button class="yazdir-btn" onclick="window.print()">🖨️ Yazdır</button>
     </body>
@@ -2169,7 +2149,6 @@ def etiketler():
             <div class="ozellik">{ozellikler}</div>
             {'<div class="depo">🏭 ' + depo + '</div>' if depo else ''}
             <img class="barkod" src="/barkod/{barkod}.png">
-            <img class="qr" src="/qr/{barkod}.png">
         </div>
         """
 
@@ -2216,7 +2195,6 @@ def etiketler():
         .ozellik {{ font-size: 7.5px; color:#333; margin-bottom:1mm; line-height:1.25; }}
         .depo {{ font-size: 7.5px; color:#555; margin-bottom:1mm; }}
         img.barkod {{ width: 100%; max-width: 34mm; }}
-        img.qr {{ width: 13mm; margin-top:1mm; }}
         @media print {{
             .ust-arac {{ display:none; }}
             body {{ background:white; margin:0; }}
@@ -3183,11 +3161,10 @@ arayuzuGuncelle(aktifTip);
 
 function hintOlustur(){
     const hints = new Map();
-    // Sadece üretilen barkod tiplerini arıyoruz (CODE_128) + QR.
+    // Sadece üretilen barkod tiplerini arıyoruz (CODE_128) 
     // Format daraltmak taramayı belirgin şekilde hızlandırır.
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
         ZXing.BarcodeFormat.CODE_128,
-        ZXing.BarcodeFormat.QR_CODE,
         ZXing.BarcodeFormat.EAN_13,
     ]);
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
