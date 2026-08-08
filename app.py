@@ -229,14 +229,6 @@ def barkod_png_bytes(kod):
     return bio
 
 
-def qr_png_bytes(kod):
-    img = qrcode.make(kod)
-    bio = io.BytesIO()
-    img.save(bio, format="PNG")
-    bio.seek(0)
-    return bio
-
-
 def ikon_uret():
     try:
         from PIL import Image, ImageDraw
@@ -384,9 +376,6 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .video-alan { display:flex; justify-content:center; margin:16px 0; }
 .video-alan video { border-radius: var(--radius); box-shadow:0 8px 24px rgba(0,0,0,.5); }
 
-.qr-kutu { text-align:center; margin: 18px 0; }
-.qr-kutu img { border-radius:14px; background:white; padding:10px; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
-.qr-not { color: var(--muted); font-size:13px; text-align:center; margin-top:8px; line-height:1.5; }
 
 .hata { color:#FF6B6B; font-weight:600; text-align:center; }
 .basari { color:#2FE686; font-weight:600; text-align:center; }
