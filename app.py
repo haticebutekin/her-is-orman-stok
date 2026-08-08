@@ -637,14 +637,6 @@ def manifest():
     })
 
 
-@app.route("/qr_baglan")
-def qr_baglan():
-    url = request.host_url
-    img = qrcode.make(url)
-    bio = io.BytesIO()
-    img.save(bio, format="PNG")
-    bio.seek(0)
-    return send_file(bio, mimetype="image/png")
 
 @app.route("/barkod/<kod>.png")
 def barkod_resim_endpoint(kod):
@@ -654,17 +646,6 @@ def barkod_resim_endpoint(kod):
         veri = barkod_png_bytes(kod).getvalue()
         with _CACHE_KILIT:
             _BARKOD_CACHE[kod] = veri
-    return send_file(io.BytesIO(veri), mimetype="image/png")
-
-
-@app.route("/qr/<kod>.png")
-def qr_resim_endpoint(kod):
-    with _CACHE_KILIT:
-        veri = _QR_CACHE.get(kod)
-    if veri is None:
-        veri = qr_png_bytes(kod).getvalue()
-        with _CACHE_KILIT:
-            _QR_CACHE[kod] = veri
     return send_file(io.BytesIO(veri), mimetype="image/png")
 
 
@@ -828,8 +809,6 @@ def index():
             + '<h3 class="alt">Devam etmek için ismini seç</h3>'
             + secim_html
             + """
-            <div class="kart qr-kutu">
-              <p style="margin-top:0;">📱 Bu siteyi telefonundan hızlı açmak için QR'ı okut:</p>
               <img src="/qr_baglan" width="170" height="170">
               <p class="qr-not">Açıldıktan sonra tarayıcı menüsünden
               "Ana Ekrana Ekle" seçersen, ikonu telefonuna normal bir
