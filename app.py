@@ -1052,7 +1052,7 @@ def ekle2():
     return sayfa(icerik, "Stok Panel")
 
 
-@app.route("/ekle", methods=["GET", "POST"])
+@app.route("/ekle2", methods=["GET", "POST"])
 @rol_gerekli("depocu", "patron")
 def ekle2():
     on_dolu_barkod = request.args.get("barkod", "")
