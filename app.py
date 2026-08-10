@@ -853,6 +853,109 @@ def index():
         """
     if rol in ("muhasebeci", "patron"):
         butonlar += """
+        <div class="bolum-baslik">Sipariş</div>
+        <a href="/siparis_olustur" class="okut-kart okut-yesil">
+          <div class="okut-ikon">🧾</div>
+          <div class="okut-metin"><div class="okut-baslik">Yeni Sipariş Oluştur</div><div class="okut-alt">Depocuya hazırlatılacak ürünleri seç</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/siparisler" class="okut-kart okut-turuncu">
+          <div class="okut-ikon">📋</div>
+          <div class="okut-metin"><div class="okut-baslik">Siparişler</div><div class="okut-alt">Açık ve tamamlanan siparişler</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+
+        <div class="bolum-baslik">İşlemler</div>
+        <a href="/ekle" class="okut-kart okut-mavi">
+          <div class="okut-ikon">➕</div>
+          <div class="okut-metin"><div class="okut-baslik">Ürün Ekle</div><div class="okut-alt">Yeni ürün kaydı oluştur</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/toplu_yukle" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">📥</div>
+          <div class="okut-metin"><div class="okut-baslik">Excel'den Toplu Yükle</div><div class="okut-alt">Excel yükle → otomatik barkod → toplu etiket</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/liste" class="okut-kart okut-mor">
+          <div class="okut-ikon">📦</div>
+          <div class="okut-metin"><div class="okut-baslik">Stok Listesi</div><div class="okut-alt">Ürünleri görüntüle, etiket bas</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/depo_stok" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">🏭</div>
+          <div class="okut-metin"><div class="okut-baslik">Depo Stok Durumu</div><div class="okut-alt">Hangi depoda ne kadar ürün var</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/hareketler" class="okut-kart okut-kirmizi">
+          <div class="okut-ikon">📊</div>
+          <div class="okut-metin"><div class="okut-baslik">Hareketler</div><div class="okut-alt">Tüm giriş/çıkış geçmişi</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+
+        <div class="bolum-baslik">Raporlar</div>
+        <div class="rapor-satir">
+          <a href="/rapor/excel" class="rapor-pil">📥 XLSX</a>
+          <a href="/rapor/xls" class="rapor-pil">📥 XLS</a>
+          <a href="/rapor/csv" class="rapor-pil">📥 CSV</a>
+        </div>
+        """
+
+
+    icerik = (
+        "<h1>📦 STOK PANEL</h1>"
+        + '<h3 class="alt">👤 ' + kullanici + ' (' + rol + ')</h3>'
+        + butonlar
+    )
+    return sayfa(icerik, "Stok Panel")
+
+
+@app.route("/ekle", methods=["GET", "POST"])
+@rol_gerekli("depocu", "patron")
+def ekle2():
+    on_dolu_barkod = request.args.get("barkod", "")
+
+    if request.method == "POST":
+        ad = request.form.get("ad", "").strip()
+        if not ad:
+            return sayfa('<p class="hata">❌ Ürün adı boş olamaz.</p><a class="btn gri" href="/ekle">⬅ Geri Dön</a>', "Hata")
+
+        try:
+            adet = int(request.form.get("adet", "").strip())
+        except (TypeError, ValueError):
+            return sayfa('<p class="hata">❌ Adet sayısal olmalı.</p><a class="btn gri" href="/ekle">⬅ Geri Dön</a>', "Hata")
+
+        barkod = request.form.get("barkod")
+        if not barkod:
+            barkod = barkod_uret()
+
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    cur.execute("""
+                    INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
+                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    """, (
+                        ad,
+                        request.form.get("cins", ""),
+                        request.form.get("ebat", ""),
+                        request.form.get("kalinlik", ""),
+                        request.form.get("yuzey", ""),
+                        request.form.get("sinif", ""),
+                        request.form.get("renk", ""),
+                        adet,
+                        request.form.get("depo", ""),
+                        barkod,
+                    ))
+                    cur.execute("""
+                    INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
+                    VALUES (%s, %s, 'giris', %s, %s, %s)
+                    """, (barkod, ad, adet, session.get("kullanici", "Bilinmiyor"), tr_simdi()))
+        finally:
+            con.close()
+     
+    if rol in ("muhasebeci", "patron"):
+        butonlar += """
         ... (senin mevcut kodun bu kısımdan sonra aynen devam ediyor) ...
         """
 
