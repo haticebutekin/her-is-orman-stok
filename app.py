@@ -2074,7 +2074,7 @@ def etiket(barkod):
     <title>Etiket - {ad}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        @page {{ size: 40mm 58mm; margin: 2mm; }}
+        @page {{ size: 40mm 58mm; margin: 0mm; }}
         * {{ box-sizing: border-box; }}
         body {{
             font-family: Arial, sans-serif; margin:0; padding:0;
@@ -2161,7 +2161,7 @@ def etiketler():
     <title>Etiketler ({len(satirlar)} adet)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        @page {{ size: 40mm 58mm; margin: 2mm; }}
+        @page {{ size: 40mm 58mm; margin: 0mm; }}
         * {{ box-sizing: border-box; }}
         body {{
             font-family: Arial, sans-serif; margin:0; padding:0;
