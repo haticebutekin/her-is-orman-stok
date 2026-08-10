@@ -620,7 +620,25 @@ def sayfa(icerik, baslik="Stok Takip"):
         + "</body></html>"
     )
 
+@app.route("/palet_giris/<kod>", methods=["POST"])
+def palet_giris(kod):
+    adet = int(request.form.get("adet", 0))
 
+    con = db()
+    with con:
+        with con.cursor() as cur:
+            cur.execute("""
+                UPDATE urun
+                SET adet = adet + %s
+                WHERE barkod = %s
+            """, (adet, kod))
+
+            cur.execute("""
+                INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
+                VALUES (%s, %s, 'giris', %s, %s, %s)
+            """, (kod, "PALET GİRİŞ", adet, "Depo", tr_simdi()))
+
+    return "OK"
 @app.route("/manifest.json")
 def manifest():
     return jsonify({
