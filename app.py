@@ -802,6 +802,11 @@ def index():
             renk = ROL_RENK.get(ROLLER[isim], "kisi-mavi")
             secim_html += f"""
             <a href="/pin_gir/{isim}" class="kisi-kart">
+            <a href="/transfer" class="okut-kart okut-mavi">
+             <div class="okut-ikon">🔁</div>
+             <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
+             <div class="okut-ok">›</div>
+              </a>
               <div class="kisi-avatar {renk}">{bas_harf}</div>
               <div class="kisi-metin">
                 <div class="kisi-ad">{isim}</div>
@@ -810,6 +815,17 @@ def index():
               <div class="okut-ok">›</div>
             </a>
             """
+            if rol in ("depocu",):
+    butonlar += """
+    <a href="/depo_stok" class="okut-kart okut-turkuaz">
+      ...
+    </a>
+    <a href="/transfer" class="okut-kart okut-mavi">
+      <div class="okut-ikon">🔁</div>
+      <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
+      <div class="okut-ok">›</div>
+    </a>
+    """
 
         icerik = (
             f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
