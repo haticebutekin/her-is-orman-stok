@@ -2,7 +2,7 @@ from functools import wraps
 
 from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file, Response
 import psycopg2
-import os, random, io, json, threading
+import os, random, io, json, threading, traceback, qrcode
 
 try:
     from pywebpush import webpush, WebPushException
