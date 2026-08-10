@@ -37,7 +37,7 @@ def site_girisi_kontrol():
         return
     if request.endpoint in ("site_giris", "manifest", "service_worker"):
         return
-    if request.path.startswith("/static/") or request.path.startswith("/barkod/") or request.path.startswith:
+    if request.path.startswith("/static/") or request.path.startswith("/barkod/"):
         return
     if not session.get("site_giris"):
         return redirect("/site_giris")
@@ -802,11 +802,6 @@ def index():
             renk = ROL_RENK.get(ROLLER[isim], "kisi-mavi")
             secim_html += f"""
             <a href="/pin_gir/{isim}" class="kisi-kart">
-            <a href="/transfer" class="okut-kart okut-mavi">
-             <div class="okut-ikon">🔁</div>
-             <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
-             <div class="okut-ok">›</div>
-              </a>
               <div class="kisi-avatar {renk}">{bas_harf}</div>
               <div class="kisi-metin">
                 <div class="kisi-ad">{isim}</div>
@@ -815,30 +810,58 @@ def index():
               <div class="okut-ok">›</div>
             </a>
             """
-            if rol in ("depocu",):
-    butonlar += """
-    <a href="/depo_stok" class="okut-kart okut-turkuaz">
-      ...
-    </a>
-    <a href="/transfer" class="okut-kart okut-mavi">
-      <div class="okut-ikon">🔁</div>
-      <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
-      <div class="okut-ok">›</div>
-    </a>
-    """
 
         icerik = (
             f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
             + f'<h1 style="font-size:19px;line-height:1.35;margin-bottom:2px;">{UYGULAMA_ADI}</h1>'
             + '<h3 class="alt">Devam etmek için ismini seç</h3>'
             + secim_html
-            + """
-              "Ana Ekrana Ekle" seçersen, ikonu telefonuna normal bir
-              uygulama gibi kurabilirsin.</p>
-            </div>
-            """
         )
         return sayfa(icerik, "Giriş - " + UYGULAMA_ADI)
+
+    butonlar = ""
+    if rol in ("depocu", "muhasebeci", "patron"):
+        giris_sayisi, cikis_sayisi = bugunku_ozet(kullanici)
+        butonlar += f"""
+        <div class="ozet-satir">
+          <div class="ozet-kutu ozet-yesil"><div class="ozet-sayi">{giris_sayisi}</div><div class="ozet-etiket">Bugün Giriş</div></div>
+          <div class="ozet-kutu ozet-turuncu"><div class="ozet-sayi">{cikis_sayisi}</div><div class="ozet-etiket">Bugün Çıkış</div></div>
+        </div>
+        <a href="/kamera/giris" class="okut-kart okut-yesil">
+          <div class="okut-ikon">⬆️</div>
+          <div class="okut-metin"><div class="okut-baslik">Giriş Okut</div><div class="okut-alt">Depoya gelen ürünü tara</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/kamera/cikis" class="okut-kart okut-turuncu">
+          <div class="okut-ikon">⬇️</div>
+          <div class="okut-metin"><div class="okut-baslik">Çıkış Okut</div><div class="okut-alt">Depodan çıkan ürünü tara</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        """
+    if rol in ("depocu",):
+        butonlar += """
+        <a href="/depo_stok" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">🏭</div>
+          <div class="okut-metin"><div class="okut-baslik">Depo Stok Durumu</div><div class="okut-alt">Hangi depoda ne kadar var</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/transfer" class="okut-kart okut-mavi">
+          <div class="okut-ikon">🔁</div>
+          <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        """
+    if rol in ("muhasebeci", "patron"):
+        butonlar += """
+        ... (senin mevcut kodun bu kısımdan sonra aynen devam ediyor) ...
+        """
+
+    icerik = (
+        "<h1>📦 STOK PANEL</h1>"
+        + '<h3 class="alt">👤 ' + kullanici + ' (' + rol + ')</h3>'
+        + butonlar
+    )
+    return sayfa(icerik, "Stok Panel")
 
     butonlar = ""
     if rol in ("depocu", "muhasebeci", "patron"):
