@@ -620,6 +620,40 @@ def sayfa(icerik, baslik="Stok Takip"):
         + "</body></html>"
     )
 
+@app.route("/transfer", methods=["POST"])
+def transfer():
+    try:
+        data = request.json
+        urun_id = data.get("urun_id")
+        miktar = int(data.get("miktar"))
+        kaynak = data.get("kaynak_depo")
+        hedef = data.get("hedef_depo")
+
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+
+        # Kaynaktan düş
+        cur.execute("""
+            UPDATE stok 
+            SET miktar = miktar - %s 
+            WHERE urun_id=%s AND depo=%s
+        """, (miktar, urun_id, kaynak))
+
+        # Hedefe ekle
+        cur.execute("""
+            INSERT INTO stok (urun_id, depo, miktar)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (urun_id, depo)
+            DO UPDATE SET miktar = stok.miktar + %s
+        """, (urun_id, hedef, miktar, miktar))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "msg": str(e)})
 
 @app.route("/manifest.json")
 def manifest():
@@ -789,6 +823,41 @@ def kullanici_degistir():
 
 @app.route("/")
 def index():
+    return render_template_string("""
+    <h1>Panel</h1>
+
+    <!-- BURAYA EKLE -->
+    <div style="padding:20px; border:1px solid #ccc;">
+      <h3>Depo Transfer</h3>
+
+      <input id="urun" placeholder="Ürün ID"><br><br>
+      <input id="miktar" placeholder="Miktar"><br><br>
+
+      <input id="kaynak" placeholder="Kaynak Depo"><br><br>
+      <input id="hedef" placeholder="Hedef Depo"><br><br>
+
+      <button onclick="gonder()">Transfer Yap</button>
+    </div>
+
+    <script>
+    function gonder(){
+      fetch("/transfer", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+          urun_id: document.getElementById("urun").value,
+          miktar: document.getElementById("miktar").value,
+          kaynak_depo: document.getElementById("kaynak").value,
+          hedef_depo: document.getElementById("hedef").value
+        })
+      })
+      .then(r=>r.json())
+      .then(d=>{
+        alert(d.status=="ok" ? "Başarılı" : d.msg)
+      })
+    }
+    </script>
+""")
     kullanici = session.get("kullanici")
     rol = session.get("rol")
 
@@ -1356,6 +1425,8 @@ def duzenle(eski_barkod):
         sayfa(icerik, "Ürün Düzenle"),
         ad=ad, cins=cins, ebat=ebat, kalinlik=kalinlik, yuzey=yuzey,
         sinif=sinif, renk=renk, adet=adet, depo=depo, barkod=barkod, depolar=DEPOLAR
+
+
     )
 
 
