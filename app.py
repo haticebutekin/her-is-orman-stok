@@ -216,8 +216,8 @@ def barkod_png_bytes(kod):
     from barcode.writer import ImageWriter
     CODE128 = barcode.get_barcode_class("code128")
     yazici_ayarlari = {
-        "module_width": 0.32,   # her çizginin kalınlığı (mm) — çok ince olursa termal kafa net basamıyor
-        "module_height": 12.0,  # barkod yüksekliği (mm)
+        "module_width": 0.28,   # her çizginin kalınlığı (mm) — çok ince olursa termal kafa net basamıyor
+        "module_height": 16.0,  # barkod yüksekliği (mm)
         "quiet_zone": 4.0,      # barkodun sağ/solundaki beyaz boşluk (mm) — taramada kritik
         "font_size": 8,
         "text_distance": 3.0,
