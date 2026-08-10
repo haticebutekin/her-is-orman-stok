@@ -2096,6 +2096,7 @@ def etiket(barkod):
             .yazdir-btn {{ display:none; }}
             body {{ margin:0; }}
         }}
+        
     </style>
     </head>
     <body>
@@ -2106,6 +2107,7 @@ def etiket(barkod):
             <img class="barkod" src="/barkod/{barkod}.png">
         </div>
         <button class="yazdir-btn" onclick="window.print()">🖨️ Yazdır</button>
+        <div class="label" style="border:1px solid red;"></div>
     </body>
     </html>
     """
