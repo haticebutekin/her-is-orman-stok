@@ -216,12 +216,13 @@ def barkod_png_bytes(kod):
     from barcode.writer import ImageWriter
     CODE128 = barcode.get_barcode_class("code128")
     yazici_ayarlari = {
-        "module_width": 0.28,   # her çizginin kalınlığı (mm) — çok ince olursa termal kafa net basamıyor
-        "module_height": 16.0,  # barkod yüksekliği (mm)
-        "quiet_zone": 4.0,      # barkodun sağ/solundaki beyaz boşluk (mm) — taramada kritik
-        "font_size": 8,
-        "text_distance": 3.0,
+        "module_width": 0.32,     # XP-470B termal kafası için biraz kalın (net basım)
+        "module_height": 14.0,    # 40mm etiket yüksekliğine göre optimize
+        "quiet_zone": 3.0,
+        "font_size": 7,
+        "text_distance": 2.5,
         "write_text": True,
+        "dpi": 203,               # XP-470B çözünürlüğü genelde 203 dpi
     }
     bio = io.BytesIO()
     CODE128(kod, writer=ImageWriter()).write(bio, options=yazici_ayarlari)
@@ -654,7 +655,39 @@ def manifest():
         ],
     })
 
+@app.route("/transfer_gecmisi")
+@rol_gerekli("depocu", "muhasebeci", "patron")
+def transfer_gecmisi():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT ad, barkod, adet, kullanici, tarih
+                FROM hareket
+                WHERE tip IN ('giris','cikis')
+                ORDER BY id DESC LIMIT 200
+            """)
+            kayitlar = cur.fetchall()
+    finally:
+        con.close()
 
+    kartlar = ""
+    for ad, barkod, adet, kullanici, tarih in kayitlar:
+        kartlar += f"""
+        <div class="hareket-kart hareket-giris">
+          <div class="hareket-ikon">🔁</div>
+          <div class="hareket-govde">
+            <div class="hareket-ust">
+              <div class="hareket-ad">{ad}</div>
+              <div class="hareket-adet giris">{adet}</div>
+            </div>
+            <div class="hareket-alt">🔢 {barkod} • 👤 {kullanici} • 🕒 {tarih}</div>
+          </div>
+        </div>
+        """
+
+    icerik = "<h2>🔁 TRANSFER GEÇMİŞİ</h2>" + kartlar
+    return sayfa(icerik, "Transfer Geçmişi")
 @app.route("/qr_baglan")
 def qr_baglan():
     url = request.host_url
@@ -825,6 +858,10 @@ def index():
                 <div class="kisi-ad">{isim}</div>
                 <div class="kisi-rol">{rol_adi}</div>
               </div>
+              <div class="okut-ok">›</div>
+              <a href="/transfer_gecmisi" class="okut-kart okut-mor">
+              <div class="okut-ikon">🔁</div>
+              <div class="okut-metin"><div class="okut-baslik">Transfer Geçmişi</div></div>
               <div class="okut-ok">›</div>
             </a>
             """
@@ -2092,7 +2129,7 @@ def etiket(barkod):
     <title>Etiket - {ad}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        @page {{ size: 40mm 58mm; margin: 0mm; }}
+        @page {{ size: 58mm 40mm; margin: 0mm; }}
         * {{ box-sizing: border-box; }}
         body {{
             font-family: Arial, sans-serif; margin:0; padding:0;
@@ -2181,7 +2218,7 @@ def etiketler():
     <title>Etiketler ({len(satirlar)} adet)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        @page {{ size: 40mm 58mm; margin: 0mm; }}
+        @page {{ size: 58mm 40mm; margin: 0mm; }}
         * {{ box-sizing: border-box; }}
         body {{
             font-family: Arial, sans-serif; margin:0; padding:0;
