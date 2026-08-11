@@ -928,7 +928,7 @@ def manifest():
         "name": UYGULAMA_ADI,
         "short_name": "HER-İŞ Stok",
         "start_url": "/",
-        "display": "standalone",
+        "display": "browser",
         "background_color": "#0f1115",
         "theme_color": "#111111",
         "icons": [
