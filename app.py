@@ -2,6 +2,9 @@ from functools import wraps
 from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file, Response
 import psycopg2
 import os, random, io, json, threading, traceback
+import smtplib
+from email.message import EmailMessage
+from datetime import timedelta
 
 try:
     from pywebpush import webpush, WebPushException
@@ -249,7 +252,67 @@ def barkod_png_bytes(kod):
     bio.seek(0)
     return bio
 
+def yedek_json_olustur():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok FROM urun")
+            urunler = cur.fetchall()
+            cur.execute("SELECT barkod,ad,tip,adet,kullanici,tarih FROM hareket ORDER BY id")
+            hareketler = cur.fetchall()
+            cur.execute("SELECT musteri,depo,durum,olusturan,tarih,aciklama FROM siparis")
+            siparisler = cur.fetchall()
+            cur.execute("""
+                SELECT sk.siparis_id, sk.barkod, sk.ad, sk.istenen, sk.verilen
+                FROM siparis_kalem sk
+            """)
+            siparis_kalemleri = cur.fetchall()
+    finally:
+        con.close()
 
+    yedek = {
+        "olusturulma_tarihi": str(tr_simdi()),
+        "urunler": [list(r) for r in urunler],
+        "hareketler": [[str(x) for x in r] for r in hareketler],
+        "siparisler": [[str(x) for x in r] for r in siparisler],
+        "siparis_kalemleri": [list(r) for r in siparis_kalemleri],
+    }
+
+    return json.dumps(yedek, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def yedek_email_gonder():
+    SMTP_HOST = os.environ.get("SMTP_HOST", "")
+    SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+    SMTP_USER = os.environ.get("SMTP_USER", "")
+    SMTP_PASS = os.environ.get("SMTP_PASS", "")
+    YEDEK_ALICI = os.environ.get("YEDEK_ALICI_EMAIL", "")
+
+    if not (SMTP_HOST and SMTP_USER and SMTP_PASS and YEDEK_ALICI):
+        print("Yedek e-posta ayarları eksik, e-posta gönderilmedi.")
+        return False
+
+    try:
+        veri = yedek_json_olustur()
+        dosya_adi = f"yedek_{tr_simdi().strftime('%Y%m%d_%H%M')}.json"
+
+        msg = EmailMessage()
+        msg["Subject"] = f"HER-İŞ Stok Yedek - {tr_simdi().strftime('%d.%m.%Y')}"
+        msg["From"] = SMTP_USER
+        msg["To"] = YEDEK_ALICI
+        msg.set_content("Otomatik stok yedeği ekte. Bu e-postayı sil, arşivle veya güvenli bir yerde tut.")
+        msg.add_attachment(veri, maintype="application", subtype="json", filename=dosya_adi)
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
+            smtp.starttls()
+            smtp.login(SMTP_USER, SMTP_PASS)
+            smtp.send_message(msg)
+
+        print(f"Yedek e-postası gönderildi: {dosya_adi}")
+        return True
+    except Exception:
+        traceback.print_exc()
+        return False
 def ikon_uret():
     try:
         from PIL import Image, ImageDraw
@@ -640,7 +703,36 @@ def sayfa(icerik, baslik="Stok Takip"):
         + "<div class=\"sayfa\">" + icerik + "</div>"
         + "</body></html>"
     )
+@app.route("/yedek_al")
+@rol_gerekli("patron")
+def yedek_al():
+    veri = yedek_json_olustur()
+    bio = io.BytesIO(veri)
+    bio.seek(0)
+    return send_file(
+        bio,
+        as_attachment=True,
+        download_name=f"yedek_{tr_simdi().strftime('%Y%m%d_%H%M')}.json",
+        mimetype="application/json",
+    )
 
+
+@app.route("/yedek_email_test")
+@rol_gerekli("patron")
+def yedek_email_test():
+    basarili = yedek_email_gonder()
+    if basarili:
+        return sayfa(
+            '<div style="text-align:center;font-size:52px;">✅</div>'
+            '<h2 style="text-align:center;">Yedek e-postası gönderildi</h2>'
+            '<a class="btn mavi" href="/">🏠 Ana Sayfaya Dön</a>',
+            "Yedek Gönderildi"
+        )
+    return sayfa(
+        '<p class="hata">❌ E-posta gönderilemedi. SMTP ayarlarını (SMTP_HOST, SMTP_USER, SMTP_PASS, YEDEK_ALICI_EMAIL) kontrol edin.</p>'
+        '<a class="btn gri" href="/">🏠 Ana Sayfaya Dön</a>',
+        "Hata"
+    )
 @app.route("/palet_giris", methods=["GET", "POST"])
 @rol_gerekli("depocu", "muhasebeci", "patron")
 def palet_giris():
@@ -1138,6 +1230,11 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Yedek Al (JSON)</div><div class="okut-alt">Tüm stok ve hareket verisini indir</div></div>
           <div class="okut-ok">›</div>
         </a>
+        <a href="/yedek_email_test" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">📧</div>
+          <div class="okut-metin"><div class="okut-baslik">Yedeği E-posta ile Gönder</div><div class="okut-alt">Test amaçlı hemen gönder</div></div>
+          <div class="okut-ok">›</div>
+        </a>
         """
     icerik = (
         "<h1>📦 STOK PANEL</h1>"
@@ -1450,7 +1547,27 @@ def toplu_yukle():
     </div>
     """
     return sayfa(icerik, "Toplu Yükleme")
+_SON_YEDEK_TARIHI = None
+_YEDEK_KILIT = threading.Lock()
 
+def gunluk_yedek_kontrol_dongusu():
+    global _SON_YEDEK_TARIHI
+    while True:
+        try:
+            simdi = tr_simdi()
+            with _YEDEK_KILIT:
+                bugun = simdi.date()
+                if _SON_YEDEK_TARIHI != bugun and simdi.hour == 3:
+                    if yedek_email_gonder():
+                        _SON_YEDEK_TARIHI = bugun
+        except Exception:
+            traceback.print_exc()
+        threading.Event().wait(1800)  # 30 dakikada bir kontrol et
+
+
+if DATABASE_URL and os.environ.get("YEDEK_ALICI_EMAIL"):
+    yedek_thread = threading.Thread(target=gunluk_yedek_kontrol_dongusu, daemon=True)
+    yedek_thread.start()
 @app.route("/yedek_al")
 @rol_gerekli("patron")
 def yedek_al():
