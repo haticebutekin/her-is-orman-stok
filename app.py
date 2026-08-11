@@ -1,7 +1,7 @@
 from functools import wraps
 from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file, Response
 import psycopg2
-import os, random, io, json, threading, traceback, qrcode
+import os, random, io, json, threading, traceback
 
 try:
     from pywebpush import webpush, WebPushException
@@ -864,14 +864,6 @@ def transfer_gecmisi():
 
     icerik = "<h2>🔁 TRANSFER GEÇMİŞİ</h2>" + kartlar
     return sayfa(icerik, "Transfer Geçmişi")
-@app.route("/qr_baglan")
-def qr_baglan():
-    url = request.host_url
-    img = qrcode.make(url)
-    bio = io.BytesIO()
-    img.save(bio, format="PNG")
-    bio.seek(0)
-    return send_file(bio, mimetype="image/png")
 
 @app.route("/barkod/<kod>.png")
 def barkod_resim_endpoint(kod):
@@ -1104,7 +1096,6 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Siparişler</div><div class="okut-alt">Açık ve tamamlanan siparişler</div></div>
           <div class="okut-ok">›</div>
         </a>
-
         <div class="bolum-baslik">İşlemler</div>
         <a href="/ekle" class="okut-kart okut-mavi">
           <div class="okut-ikon">➕</div>
@@ -1139,7 +1130,15 @@ def index():
           <a href="/rapor/csv" class="rapor-pil">📥 CSV</a>
         </div>
         """
-
+    if rol == "patron":
+        butonlar += """
+        <div class="bolum-baslik">Yedekleme</div>
+        <a href="/yedek_al" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">💾</div>
+          <div class="okut-metin"><div class="okut-baslik">Yedek Al (JSON)</div><div class="okut-alt">Tüm stok ve hareket verisini indir</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        """
     icerik = (
         "<h1>📦 STOK PANEL</h1>"
         + '<h3 class="alt">👤 ' + kullanici + ' (' + rol + ')</h3>'
@@ -1200,7 +1199,6 @@ def ekle2():
             + '<span class="rozet">Barkod</span><br><br>'
             + '<b style="font-size:18px;letter-spacing:1px;">' + barkod + '</b><br><br>'
             + '<img src="/barkod/' + barkod + '.png" width="260"><br><br>'
-            + '<img src="/qr/' + barkod + '.png" width="140">'
             + '</div>'
             + '<a href="/etiket/' + barkod + '" target="_blank" class="okut-kart okut-mavi">'
             + '<div class="okut-ikon">🖨️</div><div class="okut-metin"><div class="okut-baslik">Etiket Yazdır</div></div><div class="okut-ok">›</div></a>'
@@ -1453,7 +1451,34 @@ def toplu_yukle():
     """
     return sayfa(icerik, "Toplu Yükleme")
 
+@app.route("/yedek_al")
+@rol_gerekli("patron")
+def yedek_al():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT * FROM urun")
+            urunler = cur.fetchall()
+            cur.execute("SELECT * FROM hareket")
+            hareketler = cur.fetchall()
+    finally:
+        con.close()
 
+    import json as json_lib
+    yedek = {
+        "urunler": [list(r) for r in urunler],
+        "hareketler": [[str(x) for x in r] for r in hareketler],
+        "tarih": str(tr_simdi()),
+    }
+
+    bio = io.BytesIO(json_lib.dumps(yedek, ensure_ascii=False, indent=2).encode("utf-8"))
+    bio.seek(0)
+    return send_file(
+        bio,
+        as_attachment=True,
+        download_name=f"yedek_{tr_simdi().strftime('%Y%m%d_%H%M')}.json",
+        mimetype="application/json",
+    )
 @app.route("/duzenle/<eski_barkod>", methods=["GET", "POST"])
 @rol_gerekli("muhasebeci")
 def duzenle(eski_barkod):
