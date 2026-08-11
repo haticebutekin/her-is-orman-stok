@@ -1640,7 +1640,6 @@ def duzenle(eski_barkod):
                     if yeni_barkod != eski_barkod:
                         cur.execute("SELECT id FROM urun WHERE barkod=%s", (yeni_barkod,))
                         if cur.fetchone():
-                            con.close()
                             return sayfa(
                                 '<p class="hata">❌ Bu barkod zaten başka bir üründe kullanılıyor.</p>'
                                 '<a class="btn gri" href="/duzenle/' + eski_barkod + '">⬅ Geri Dön</a>',
@@ -1982,17 +1981,14 @@ def transfer():
                     cur.execute("SELECT id, ad, adet, depo FROM urun WHERE barkod=%s", (barkod,))
                     row = cur.fetchone()
                     if not row:
-                        con.close()
                         return sayfa('<p class="hata">❌ Ürün bulunamadı.</p><a class="btn gri" href="/transfer">⬅ Geri Dön</a>', "Hata")
 
                     uid, ad, mevcut_adet, kaynak_depo = row
 
                     if kaynak_depo == hedef_depo:
-                        con.close()
                         return sayfa('<p class="hata">❌ Kaynak ve hedef depo aynı olamaz.</p><a class="btn gri" href="/transfer">⬅ Geri Dön</a>', "Hata")
 
                     if miktar > mevcut_adet:
-                        con.close()
                         return sayfa(f'<p class="hata">❌ Yetersiz stok. {kaynak_depo} deposunda sadece {mevcut_adet} adet var.</p><a class="btn gri" href="/transfer">⬅ Geri Dön</a>', "Hata")
 
                     kalan = mevcut_adet - miktar
