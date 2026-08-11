@@ -1231,6 +1231,7 @@ def index():
 
         <div class="bolum-baslik">Raporlar</div>
         <div class="rapor-satir">
+          <a href="/rapor/pdf" class="rapor-pil">📄 PDF</a>
           <a href="/rapor/excel" class="rapor-pil">📥 XLSX</a>
           <a href="/rapor/xls" class="rapor-pil">📥 XLS</a>
           <a href="/rapor/csv" class="rapor-pil">📥 CSV</a>
@@ -1238,6 +1239,12 @@ def index():
         """
     if rol == "patron":
         butonlar += """
+        <div class="bolum-baslik">Yönetim</div>
+        <a href="/dashboard" class="okut-kart okut-yesil">
+          <div class="okut-ikon">📊</div>
+          <div class="okut-metin"><div class="okut-baslik">Yönetim Paneli</div><div class="okut-alt">Genel durum, grafikler, özet</div></div>
+          <div class="okut-ok">›</div>
+        </a>
         <div class="bolum-baslik">Yedekleme</div>
         <a href="/yedek_al" class="okut-kart okut-turkuaz">
           <div class="okut-ikon">💾</div>
@@ -1924,6 +1931,161 @@ def liste():
     return sayfa(icerik, "Stok Listesi")
 
 
+@app.route("/dashboard")
+@rol_gerekli("patron")
+def dashboard():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT adet, min_stok, depo FROM urun WHERE silindi IS NOT TRUE")
+            urunler = cur.fetchall()
+
+            bugun = tr_simdi().date()
+            hafta_once = bugun - timedelta(days=6)
+
+            cur.execute("""
+                SELECT tip, COUNT(*), SUM(adet) FROM hareket
+                WHERE tarih::date = %s GROUP BY tip
+            """, (bugun,))
+            bugun_ozet = {tip: (adet_toplam or 0) for tip, sayi, adet_toplam in cur.fetchall()}
+
+            cur.execute("""
+                SELECT tarih::date AS gun, tip, SUM(adet) FROM hareket
+                WHERE tarih::date >= %s
+                GROUP BY gun, tip ORDER BY gun
+            """, (hafta_once,))
+            haftalik_satirlar = cur.fetchall()
+
+            cur.execute("""
+                SELECT ad, SUM(adet) AS toplam FROM hareket
+                WHERE tip='cikis' AND tarih::date >= %s
+                GROUP BY ad ORDER BY toplam DESC LIMIT 5
+            """, (hafta_once,))
+            en_cok_cikan = cur.fetchall()
+
+            cur.execute("""
+                SELECT kullanici, COUNT(*) FROM hareket
+                WHERE tarih::date >= %s
+                GROUP BY kullanici ORDER BY COUNT(*) DESC LIMIT 5
+            """, (hafta_once,))
+            en_aktif_kullanicilar = cur.fetchall()
+    finally:
+        con.close()
+
+    toplam_urun = len(urunler)
+    toplam_adet = sum(u[0] for u in urunler)
+    kritik_sayisi = sum(1 for u in urunler if u[0] <= (u[1] if u[1] is not None else 5))
+    depo_sayisi = len(set(u[2] for u in urunler if u[2]))
+
+    bugun_giris = bugun_ozet.get("giris", 0)
+    bugun_cikis = bugun_ozet.get("cikis", 0)
+
+    # Haftalık gün bazlı giriş/çıkış tablosu
+    gunler = [(hafta_once + timedelta(days=i)) for i in range(7)]
+    gun_verisi = {g: {"giris": 0, "cikis": 0} for g in gunler}
+    for gun, tip, toplam in haftalik_satirlar:
+        if gun in gun_verisi and tip in ("giris", "cikis"):
+            gun_verisi[gun][tip] = toplam or 0
+    max_deger = max([max(v["giris"], v["cikis"]) for v in gun_verisi.values()] + [1])
+
+    gun_kisa_ad = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
+    grafik_html = '<div class="dash-grafik">'
+    for g in gunler:
+        giris_yukseklik = int((gun_verisi[g]["giris"] / max_deger) * 90) + 4
+        cikis_yukseklik = int((gun_verisi[g]["cikis"] / max_deger) * 90) + 4
+        grafik_html += f"""
+        <div class="dash-gun">
+          <div class="dash-cubuk-grup">
+            <div class="dash-cubuk dash-cubuk-giris" style="height:{giris_yukseklik}px;" title="Giriş: {gun_verisi[g]['giris']}"></div>
+            <div class="dash-cubuk dash-cubuk-cikis" style="height:{cikis_yukseklik}px;" title="Çıkış: {gun_verisi[g]['cikis']}"></div>
+          </div>
+          <div class="dash-gun-etiket">{gun_kisa_ad[g.weekday()]}</div>
+        </div>
+        """
+    grafik_html += '</div>'
+
+    en_cok_cikan_html = ""
+    if en_cok_cikan:
+        for ad, toplam in en_cok_cikan:
+            en_cok_cikan_html += f'<div class="dash-liste-satir"><span>{ad}</span><span class="dash-liste-deger">{toplam} adet</span></div>'
+    else:
+        en_cok_cikan_html = '<p style="color:var(--muted);font-size:13px;">Bu hafta çıkış hareketi yok.</p>'
+
+    aktif_kullanici_html = ""
+    if en_aktif_kullanicilar:
+        for kullanici, sayi in en_aktif_kullanicilar:
+            aktif_kullanici_html += f'<div class="dash-liste-satir"><span>{kullanici}</span><span class="dash-liste-deger">{sayi} işlem</span></div>'
+    else:
+        aktif_kullanici_html = '<p style="color:var(--muted);font-size:13px;">Bu hafta hareket yok.</p>'
+
+    icerik = f"""
+    <h2 style="margin-bottom:2px;">📊 Yönetim Paneli</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">Genel durum özeti</p>
+
+    <div class="dash-kart-satir">
+      <div class="dash-kart"><div class="dash-kart-sayi">{toplam_urun}</div><div class="dash-kart-etiket">Ürün Çeşidi</div></div>
+      <div class="dash-kart"><div class="dash-kart-sayi">{toplam_adet}</div><div class="dash-kart-etiket">Toplam Adet</div></div>
+      <div class="dash-kart dash-kart-kirmizi"><div class="dash-kart-sayi">{kritik_sayisi}</div><div class="dash-kart-etiket">Kritik Stok</div></div>
+      <div class="dash-kart"><div class="dash-kart-sayi">{depo_sayisi}</div><div class="dash-kart-etiket">Aktif Depo</div></div>
+    </div>
+
+    <div class="dash-kart-satir">
+      <div class="dash-kart dash-kart-yesil"><div class="dash-kart-sayi">+{bugun_giris}</div><div class="dash-kart-etiket">Bugün Giriş</div></div>
+      <div class="dash-kart dash-kart-turuncu"><div class="dash-kart-sayi">-{bugun_cikis}</div><div class="dash-kart-etiket">Bugün Çıkış</div></div>
+    </div>
+
+    <div class="kart">
+      <label>Son 7 Gün — Giriş / Çıkış</label>
+      {grafik_html}
+      <div class="dash-lejant">
+        <span><span class="dash-lejant-nokta dash-lejant-yesil"></span> Giriş</span>
+        <span><span class="dash-lejant-nokta dash-lejant-turuncu"></span> Çıkış</span>
+      </div>
+    </div>
+
+    <div class="kart">
+      <label>🔥 Bu Hafta En Çok Çıkan Ürünler</label>
+      {en_cok_cikan_html}
+    </div>
+
+    <div class="kart">
+      <label>👤 Bu Hafta En Aktif Kullanıcılar</label>
+      {aktif_kullanici_html}
+    </div>
+
+    <a href="/liste" class="okut-kart okut-mor">
+      <div class="okut-ikon">📦</div>
+      <div class="okut-metin"><div class="okut-baslik">Stok Listesine Git</div></div>
+      <div class="okut-ok">›</div>
+    </a>
+
+    <style>
+    .dash-kart-satir {{ display:flex; gap:8px; margin-bottom:10px; }}
+    .dash-kart {{ flex:1; background:var(--kart-bg,#1a1c22); border:1px solid var(--border); border-radius:14px; padding:14px 8px; text-align:center; }}
+    .dash-kart-sayi {{ font-size:22px; font-weight:800; color:var(--text); }}
+    .dash-kart-etiket {{ font-size:11.5px; color:var(--muted); margin-top:2px; }}
+    .dash-kart-kirmizi .dash-kart-sayi {{ color:#e74c3c; }}
+    .dash-kart-yesil .dash-kart-sayi {{ color:#2ecc71; }}
+    .dash-kart-turuncu .dash-kart-sayi {{ color:#e67e22; }}
+    .dash-grafik {{ display:flex; justify-content:space-between; align-items:flex-end; height:120px; padding:8px 4px 0; }}
+    .dash-gun {{ display:flex; flex-direction:column; align-items:center; flex:1; }}
+    .dash-cubuk-grup {{ display:flex; align-items:flex-end; gap:3px; height:100px; }}
+    .dash-cubuk {{ width:9px; border-radius:3px 3px 0 0; }}
+    .dash-cubuk-giris {{ background:#2ecc71; }}
+    .dash-cubuk-cikis {{ background:#e67e22; }}
+    .dash-gun-etiket {{ font-size:11px; color:var(--muted); margin-top:6px; }}
+    .dash-lejant {{ display:flex; justify-content:center; gap:16px; margin-top:8px; font-size:12px; color:var(--muted); }}
+    .dash-lejant-nokta {{ display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:4px; }}
+    .dash-lejant-yesil {{ background:#2ecc71; }}
+    .dash-lejant-turuncu {{ background:#e67e22; }}
+    .dash-liste-satir {{ display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--border); font-size:13.5px; }}
+    .dash-liste-satir:last-child {{ border-bottom:none; }}
+    .dash-liste-deger {{ color:var(--muted); font-weight:600; }}
+    </style>
+    """
+    return sayfa(icerik, "Yönetim Paneli")
+
+
 @app.route("/depo_stok")
 @rol_gerekli("depocu", "muhasebeci", "patron")
 def depo_stok():
@@ -2223,6 +2385,102 @@ def hareket_listesi():
     )
     return sayfa(icerik, "Hareketler")
    
+
+@app.route("/rapor/pdf")
+@rol_gerekli("muhasebeci")
+def rapor_pdf():
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+
+    depo_filtre = request.args.get("depo", "")
+
+    con = db()
+    try:
+        with con.cursor() as cur:
+            if depo_filtre:
+                cur.execute("""
+                    SELECT ad,cins,ebat,adet,depo,barkod,min_stok FROM urun
+                    WHERE silindi IS NOT TRUE AND depo=%s ORDER BY ad
+                """, (depo_filtre,))
+            else:
+                cur.execute("""
+                    SELECT ad,cins,ebat,adet,depo,barkod,min_stok FROM urun
+                    WHERE silindi IS NOT TRUE ORDER BY ad
+                """)
+            urunler = cur.fetchall()
+    finally:
+        con.close()
+
+    bio = io.BytesIO()
+    doc = SimpleDocTemplate(
+        bio, pagesize=landscape(A4),
+        topMargin=14*mm, bottomMargin=14*mm, leftMargin=14*mm, rightMargin=14*mm
+    )
+    stiller = getSampleStyleSheet()
+    baslik_stil = ParagraphStyle("baslik", parent=stiller["Title"], fontSize=18, spaceAfter=2, textColor=colors.HexColor("#111111"))
+    alt_stil = ParagraphStyle("alt", parent=stiller["Normal"], fontSize=9.5, textColor=colors.HexColor("#555555"), spaceAfter=10)
+    ozet_stil = ParagraphStyle("ozet", parent=stiller["Normal"], fontSize=10, alignment=TA_RIGHT, textColor=colors.HexColor("#333333"))
+
+    elemanlar = []
+    elemanlar.append(Paragraph(UYGULAMA_ADI, baslik_stil))
+    alt_baslik = "Stok Durum Raporu"
+    if depo_filtre:
+        alt_baslik += f" — {depo_filtre}"
+    elemanlar.append(Paragraph(alt_baslik + f" &nbsp;•&nbsp; Oluşturulma: {tr_simdi().strftime('%d.%m.%Y %H:%M')}", alt_stil))
+
+    toplam_urun = len(urunler)
+    toplam_adet = sum(u[3] for u in urunler)
+    kritik_sayisi = sum(1 for u in urunler if u[3] <= (u[6] if u[6] is not None else 5))
+    elemanlar.append(Paragraph(
+        f"Toplam {toplam_urun} çeşit ürün &nbsp;•&nbsp; {toplam_adet} adet &nbsp;•&nbsp; {kritik_sayisi} üründe kritik stok",
+        ozet_stil
+    ))
+    elemanlar.append(Spacer(1, 8))
+
+    veri = [["Ürün Adı", "Cins", "Ebat", "Adet", "Depo", "Barkod"]]
+    for ad, cins, ebat, adet, depo, barkod, min_stok in urunler:
+        kritik_mi = adet <= (min_stok if min_stok is not None else 5)
+        veri.append([ad or "-", cins or "-", ebat or "-", str(adet), depo or "-", barkod or "-"])
+
+    tablo = Table(veri, colWidths=[70*mm, 35*mm, 30*mm, 20*mm, 55*mm, 45*mm], repeatRows=1)
+    stil_komutlari = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111111")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTSIZE", (0, 0), (-1, 0), 10),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 1), (-1, -1), 9),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f4f4f4")]),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("ALIGN", (3, 0), (3, -1), "CENTER"),
+    ]
+    for i, (ad, cins, ebat, adet, depo, barkod, min_stok) in enumerate(urunler, start=1):
+        if adet <= (min_stok if min_stok is not None else 5):
+            stil_komutlari.append(("TEXTCOLOR", (3, i), (3, i), colors.HexColor("#c0392b")))
+            stil_komutlari.append(("FONTNAME", (3, i), (3, i), "Helvetica-Bold"))
+    tablo.setStyle(TableStyle(stil_komutlari))
+    elemanlar.append(tablo)
+
+    def alt_bilgi(canvas, doc_):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#999999"))
+        canvas.drawRightString(landscape(A4)[0] - 14*mm, 8*mm, f"Sayfa {doc_.page}")
+        canvas.drawString(14*mm, 8*mm, UYGULAMA_ADI)
+        canvas.restoreState()
+
+    doc.build(elemanlar, onFirstPage=alt_bilgi, onLaterPages=alt_bilgi)
+    bio.seek(0)
+
+    dosya_adi = f"stok_raporu_{tr_simdi().strftime('%Y%m%d_%H%M')}.pdf"
+    return send_file(bio, as_attachment=True, download_name=dosya_adi, mimetype="application/pdf")
+
 
 @app.route("/rapor/excel")
 @rol_gerekli("muhasebeci")
