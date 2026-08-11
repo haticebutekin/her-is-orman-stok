@@ -410,6 +410,13 @@ a { color: inherit; }
 }
 @keyframes belir { from { opacity:0; transform: translateY(6px);} to { opacity:1; transform:none; } }
 
+.uygulama-footer {
+  text-align:center; font-size:11px; color:#4a5060;
+  margin-top:36px; padding-top:16px;
+  border-top:1px solid var(--border);
+  letter-spacing:.3px;
+}
+
 h1, h2, h3 { text-align:center; letter-spacing:-.01em; }
 h1 { font-size: 24px; position:relative; padding-bottom:10px; }
 h1::after {
@@ -746,7 +753,9 @@ def sayfa(icerik, baslik="Stok Takip"):
         + "<style>" + ORTAK_CSS + "</style>"
         + "</head><body>"
         + UST_BAR
-        + "<div class=\"sayfa\">" + icerik + "</div>"
+        + "<div class=\"sayfa\">" + icerik
+        + f'<div class="uygulama-footer">{UYGULAMA_ADI} &nbsp;•&nbsp; Stok &amp; Sipariş Yönetimi</div>'
+        + "</div>"
         + "</body></html>"
     )
 @app.route("/yedek_al")
@@ -4720,6 +4729,19 @@ function geriAl(){
 def ping():
     return "ok"
 import traceback
+
+@app.errorhandler(404)
+def sayfa_bulunamadi(e):
+    icerik = """
+    <div style="text-align:center;font-size:56px;margin-top:20px;">🔍</div>
+    <h2>Sayfa Bulunamadı</h2>
+    <p style="text-align:center;color:var(--muted);">
+    Aradığınız sayfa mevcut değil veya taşınmış olabilir.
+    </p>
+    <a class="btn mavi" href="/">🏠 Ana Sayfaya Dön</a>
+    """
+    return sayfa(icerik, "Sayfa Bulunamadı"), 404
+
 
 @app.errorhandler(500)
 def sunucu_hatasi(e):
