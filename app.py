@@ -32,7 +32,7 @@ VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "BHVDYu-AltC6T-LUrITOY3toL
 VAPID_CLAIMS_EMAIL = os.environ.get("VAPID_EMAIL", "mailto:admin@heris-stok.local")
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)) or ".", "static"))
-app.secret_key = "heris-stok-2026-101907"
+app.secret_key = os.environ.get("SECRET_KEY", "bu-anahtari-canliya-almadan-once-degistir")
 SITE_PAROLA = os.environ.get("SITE_PAROLA", "") 
 
 @app.before_request
