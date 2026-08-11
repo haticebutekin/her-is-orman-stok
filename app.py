@@ -4138,13 +4138,6 @@ def siparis_fis(siparis_id):
                 WHERE k.siparis_id=%s ORDER BY k.id
             """, (siparis_id,))
             kalemler = cur.fetchall()
-
-            musteri_tc_vergi = None
-            if sip[1]:
-                cur.execute("SELECT tc_vergi_no FROM musteri WHERE ad=%s", (sip[1],))
-                m_row = cur.fetchone()
-                if m_row:
-                    musteri_tc_vergi = m_row[0]
     finally:
         con.close()
 
@@ -4202,7 +4195,6 @@ def siparis_fis(siparis_id):
             </div>
             <div class="bilgi-satir">
                 <div><b>Müşteri:</b> {musteri or '-'}</div>
-                {'<div><b>TC/Vergi No:</b> ' + musteri_tc_vergi + '</div>' if musteri_tc_vergi else ''}
                 <div><b>Depo:</b> {depo}</div>
                 <div><b>Durum:</b> {durum}</div>
                 <div><b>Oluşturan:</b> {olusturan}</div>
