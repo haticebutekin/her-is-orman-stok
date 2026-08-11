@@ -1,5 +1,4 @@
 from functools import wraps
-
 from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file, Response
 import psycopg2
 import os, random, io, json, threading, traceback, qrcode
@@ -9,13 +8,15 @@ try:
     PUSH_AKTIF = True
 except ImportError:
     PUSH_AKTIF = False
+    
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import barcode
+from barcode.writer import ImageWriter
+
 # ==================== BARKOD/RESİM CACHE (RAM, ücretsiz) ====================
 _BARKOD_CACHE = {}
-_CACHE_KILIT = threading.Lock()   # aşağıda import threading eklemen gerekiyor
-from barcode.writer import ImageWriter
+_CACHE_KILIT = threading.Lock()  
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
@@ -29,7 +30,7 @@ VAPID_CLAIMS_EMAIL = os.environ.get("VAPID_EMAIL", "mailto:admin@heris-stok.loca
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)) or ".", "static"))
 app.secret_key = os.environ.get("SECRET_KEY", "bu-anahtari-canliya-almadan-once-degistir")
-SITE_PAROLA = os.environ.get("SITE_PAROLA", "")  # Render'da ayarlanmazsa bu katman devre dışı kalır
+SITE_PAROLA = os.environ.get("SITE_PAROLA", "") 
 
 @app.before_request
 def site_girisi_kontrol():
@@ -126,6 +127,10 @@ PIN_KODLARI = _pin_yukle()
 def db():
     return psycopg2.connect(DATABASE_URL)
 
+def tr_simdi():
+    return datetime.now(TR_TZ).replace(tzinfo=None)
+
+
 
 def tablolari_olustur():
     con = db()
@@ -176,11 +181,26 @@ def tablolari_olustur():
 
 if DATABASE_URL:
     tablolari_olustur()
-
-
-def tr_simdi():
-    return datetime.now(TR_TZ).replace(tzinfo=None)
-
+    
+def rol_gerekli(*izinli_roller):
+    TAM_YETKILI = ("patron", "muhasebeci")
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            rol = session.get("rol")
+            if not rol:
+                return redirect("/")
+            if rol not in TAM_YETKILI and rol not in izinli_roller:
+                return sayfa("""
+                <h2>⛔ Erişim Yetkiniz Yok</h2>
+                <p style="text-align:center;color:var(--muted);">
+                Bu işlem senin rolüne kapalı. Yanlış kişi olarak girdiysen
+                sağ üstten kullanıcı değiştir.
+                </p>
+                """, "Yetkisiz Erişim")
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
 
 def bugunku_ozet(kullanici):
     bugun = tr_simdi().date()
