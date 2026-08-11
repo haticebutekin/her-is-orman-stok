@@ -862,8 +862,8 @@ def transfer_gecmisi():
         </div>
         """
 
-    icerik = "<h2>🔁 TRANSFER GEÇMİŞİ</h2>" + kartlar
-    return sayfa(icerik, "Transfer Geçmişi")
+       icerik = "<h2>🔁 TRANSFER GEÇMİŞİ</h2>" + kartlar
+       return sayfa(icerik, "Transfer Geçmişi")
 @app.route("/qr_baglan")
 def qr_baglan():
     url = request.host_url
@@ -1058,7 +1058,7 @@ def index():
         + secim_html
     )
     return sayfa(icerik, "Giriş - " + UYGULAMA_ADI)
-icerik = (
+    icerik = (
     f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
     + f'<h1 style="font-size:19px;line-height:1.35;margin-bottom:2px;">{UYGULAMA_ADI}</h1>'
     + '<h3 class="alt">Devam etmek için ismini seç</h3>'
