@@ -3651,7 +3651,7 @@ def kamera(tip):
     <div class="kart elle-giris-alan">
       <label>Barkod okunmuyorsa elle gir</label>
       <div class="elle-giris-satir">
-        <input type="text" id="elle-barkod" inputmode="numeric" placeholder="Barkod numarası">
+        <input type="text" id="elle-barkod" inputmode="numeric" placeholder="Barkod numarası" onkeydown="if(event.key==='Enter'){event.preventDefault();elleGonder();}" autofocus>
         <button class="btn mavi" style="width:auto;" onclick="elleGonder()">Ekle</button>
       </div>
     </div>
@@ -3761,6 +3761,13 @@ function kameraBaslat(){
 
     codeReader.decodeFromConstraints(kisitlar, 'video', (result, err) => {
         if (result && !kilit) {
+            const simdi = Date.now();
+            // Aynı barkodu kamera sabit tutulunca 1.5sn içinde tekrar okumasın (yanlışlıkla çift sayım engeli)
+            if (result.text === sonOkunanBarkod && (simdi - sonOkumaZamani) < 1500) {
+                return;
+            }
+            sonOkunanBarkod = result.text;
+            sonOkumaZamani = simdi;
             kilit = true;
             basariliGoruntu();
             isleGonder(result.text);
@@ -3849,12 +3856,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+let sonOkunanBarkod = null;
+let sonOkumaZamani = 0;
+
 function elleGonder(){
     const kutu = document.getElementById('elle-barkod');
     const kod = kutu.value.trim();
     if(!kod) return;
     kutu.value = '';
     isleGonder(kod);
+    setTimeout(() => kutu.focus(), 50);
 }
 
 function isleGonder(barkod){
@@ -3868,7 +3879,7 @@ function isleGonder(barkod){
     })
     .then(r => r.json())
     .then(d => sonucGoster(d, barkod))
-    .finally(() => { setTimeout(() => { kilit = false; }, 900); });
+    .finally(() => { kilit = false; });
 }
 
 function sonucGoster(d, barkod){
