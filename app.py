@@ -1023,28 +1023,33 @@ def index():
         ROL_ETIKET = {"depocu": "Depocu", "muhasebeci": "Muhasebeci", "patron": "Patron"}
         ROL_RENK = {"depocu": "kisi-yesil", "muhasebeci": "kisi-mavi", "patron": "kisi-mor"}
         secim_html = ""
-        for isim in ROLLER:
-            bas_harf = isim[0].upper()
-            rol_adi = ROL_ETIKET.get(ROLLER[isim], "")
-            renk = ROL_RENK.get(ROLLER[isim], "kisi-mavi")
-            secim_html += f"""
-            <a href="/pin_gir/{isim}" class="kisi-kart">
-              <div class="kisi-avatar {renk}">{bas_harf}</div>
-              <div class="kisi-metin">
-                <div class="kisi-ad">{isim}</div>
-                <div class="kisi-rol">{rol_adi}</div>
-              </div>
-              <div class="okut-ok">›</div>
-              <a href="/transfer_gecmisi" class="okut-kart okut-mor">
-              <div class="okut-ikon">🔁</div>
-              <div class="okut-metin"><div class="okut-baslik">Transfer Geçmişi</div></div>
-              <div class="okut-ok">›</div>
-              <a href="/palet_giris" class="okut-kart okut-mor">
-              <div class="okut-ikon">🧱</div>
-             <div class="okut-metin"><div class="okut-baslik">Palet Girişi</div><div class="okut-alt">Farklı adetli paletleri tek seferde gir</div></div>
-             <div class="okut-ok">›</div>
-            </a>
-            """
+for isim in ROLLER:
+    bas_harf = isim[0].upper()
+    rol_adi = ROL_ETIKET.get(ROLLER[isim], "")
+    renk = ROL_RENK.get(ROLLER[isim], "kisi-mavi")
+    secim_html += f"""
+    <a href="/pin_gir/{isim}" class="kisi-kart">
+      <div class="kisi-avatar {renk}">{bas_harf}</div>
+      <div class="kisi-metin">
+        <div class="kisi-ad">{isim}</div>
+        <div class="kisi-rol">{rol_adi}</div>
+      </div>
+      <div class="okut-ok">›</div>
+    </a>
+    """
+
+secim_html += """
+<a href="/transfer_gecmisi" class="okut-kart okut-mor">
+  <div class="okut-ikon">🔁</div>
+  <div class="okut-metin"><div class="okut-baslik">Transfer Geçmişi</div></div>
+  <div class="okut-ok">›</div>
+</a>
+<a href="/palet_giris" class="okut-kart okut-mor">
+  <div class="okut-ikon">🧱</div>
+  <div class="okut-metin"><div class="okut-baslik">Palet Girişi</div><div class="okut-alt">Farklı adetli paletleri tek seferde gir</div></div>
+  <div class="okut-ok">›</div>
+</a>
+"""
 
         icerik = (
             f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
