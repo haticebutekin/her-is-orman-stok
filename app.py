@@ -862,8 +862,8 @@ def transfer_gecmisi():
         </div>
         """
 
-       icerik = "<h2>🔁 TRANSFER GEÇMİŞİ</h2>" + kartlar
-       return sayfa(icerik, "Transfer Geçmişi")
+    icerik = "<h2>🔁 TRANSFER GEÇMİŞİ</h2>" + kartlar
+    return sayfa(icerik, "Transfer Geçmişi")
 @app.route("/qr_baglan")
 def qr_baglan():
     url = request.host_url
