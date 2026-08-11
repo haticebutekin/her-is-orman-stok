@@ -361,6 +361,7 @@ BASE_HEAD_EXTRA = """
 """
 
 ORTAK_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 :root {
   --bg:#0b0d12; --bg2:#12151c; --card:#171a22; --card2:#1c202b;
   --border:#262b38; --text:#f4f5f7; --muted:#8b93a3; --accent:#2196F3;
@@ -373,8 +374,9 @@ body {
     radial-gradient(1200px 600px at 50% -10%, rgba(33,150,243,.08), transparent 60%),
     var(--bg);
   color: var(--text); margin:0; padding:0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
   -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
 }
 input, select, button, textarea { font-size: 16px; font-family: inherit; }
 a { color: inherit; }
@@ -388,14 +390,18 @@ a { color: inherit; }
   background: rgba(18,21,28,.75); backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border-bottom: 1px solid rgba(255,255,255,.06);
+  box-shadow: 0 2px 16px rgba(0,0,0,.2);
 }
 .topbar-btn {
   text-decoration:none; color:white; font-size:19px; padding:8px 12px;
   border-radius:10px; transition: background .15s ease, transform .1s ease;
 }
 .topbar-btn:active { background:rgba(255,255,255,.08); transform: scale(0.94); }
+@media (hover: hover) {
+  .topbar-btn:hover { background:rgba(255,255,255,.06); }
+}
 .topbar-title { font-weight:700; font-size:14.5px; color:#eee; letter-spacing:.2px; display:flex; align-items:center; gap:7px; }
-.topbar-logo { height:26px; width:26px; border-radius:6px; object-fit:contain; background:white; padding:2px; }
+.topbar-logo { height:26px; width:26px; border-radius:6px; object-fit:contain; background:white; padding:2px; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
 
 .sayfa {
   max-width: 520px; margin: 0 auto;
@@ -422,6 +428,9 @@ h3.alt { color: var(--muted); font-weight:500; margin-top:-6px; font-size:14px; 
   letter-spacing:.1px;
 }
 .btn:active { filter:brightness(0.88); transform: scale(0.985); box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+@media (hover: hover) {
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,.34); filter:brightness(1.06); }
+}
 .mavi   { background: linear-gradient(135deg, #2196F3, #00BCD4); }
 .yesil  { background: linear-gradient(135deg, #00C853, #64DD17); }
 .turuncu{ background: linear-gradient(135deg, #FF6F00, #FF9800); }
@@ -442,7 +451,10 @@ h3.alt { color: var(--muted); font-weight:500; margin-top:-6px; font-size:14px; 
   border:1px solid var(--border); border-radius: var(--radius);
   padding:16px; margin:12px 0; text-align:left;
   box-shadow: 0 2px 10px rgba(0,0,0,.18);
-  transition: border-color .15s ease;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+@media (hover: hover) {
+  .kart:hover { border-color: rgba(255,255,255,.14); }
 }
 .kart label {
   display:block; font-size:12.5px; font-weight:700; color:var(--muted);
@@ -547,13 +559,18 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
   border-radius: var(--radius); padding:14px 16px; margin:10px 0;
   border:1px solid var(--border);
   background: linear-gradient(180deg, var(--card2), var(--card));
-  transition: transform .1s ease, filter .15s ease;
+  transition: transform .12s ease, filter .15s ease, box-shadow .15s ease;
+  box-shadow: 0 2px 10px rgba(0,0,0,.16);
 }
 .kisi-kart:active { transform: scale(0.98); filter:brightness(0.92); }
+@media (hover: hover) {
+  .kisi-kart:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,.28); border-color: rgba(255,255,255,.14); }
+}
 .kisi-avatar {
   width:44px; height:44px; border-radius:50%; flex-shrink:0;
   display:flex; align-items:center; justify-content:center;
   font-weight:800; font-size:17px; color:white;
+  box-shadow: 0 3px 10px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.2);
 }
 .kisi-yesil { background: linear-gradient(135deg, #00C853, #64DD17); }
 .kisi-mavi { background: linear-gradient(135deg, #2196F3, #00BCD4); }
@@ -3175,6 +3192,7 @@ def musteri_tablosu_olustur():
                     WHERE musteri IS NOT NULL AND musteri <> ''
                     AND NOT EXISTS (SELECT 1 FROM musteri m WHERE m.ad = siparis.musteri)
                 """)
+                cur.execute("ALTER TABLE musteri ADD COLUMN IF NOT EXISTS tc_vergi_no TEXT")
     finally:
         con.close()
 
@@ -3410,6 +3428,7 @@ def musteri_ekle():
         ad = request.form.get("ad", "").strip()
         telefon = request.form.get("telefon", "").strip()
         adres = request.form.get("adres", "").strip()
+        tc_vergi_no = request.form.get("tc_vergi_no", "").strip()
         not_alani = request.form.get("not_alani", "").strip()
 
         if not ad:
@@ -3424,9 +3443,9 @@ def musteri_ekle():
                             hata = "❌ Bu isimde bir müşteri zaten var."
                         else:
                             cur.execute("""
-                                INSERT INTO musteri (ad, telefon, adres, not_alani, olusturulma)
-                                VALUES (%s,%s,%s,%s,%s)
-                            """, (ad, telefon, adres, not_alani, tr_simdi()))
+                                INSERT INTO musteri (ad, telefon, adres, tc_vergi_no, not_alani, olusturulma)
+                                VALUES (%s,%s,%s,%s,%s,%s)
+                            """, (ad, telefon, adres, tc_vergi_no, not_alani, tr_simdi()))
             finally:
                 con.close()
             if not hata:
@@ -3443,6 +3462,8 @@ def musteri_ekle():
     <input name="telefon" placeholder="05xx xxx xx xx">
     <label>Adres</label>
     <input name="adres" placeholder="Adres">
+    <label>TC Kimlik No / Vergi No (isteğe bağlı)</label>
+    <input name="tc_vergi_no" placeholder="11 haneli TC ya da vergi no" inputmode="numeric">
     <label>Not</label>
     <input name="not_alani" placeholder="Varsa özel not">
     <button class="btn mavi">Kaydet</button>
@@ -3458,7 +3479,7 @@ def musteri_detay(musteri_id):
     con = db()
     try:
         with con.cursor() as cur:
-            cur.execute("SELECT id, ad, telefon, adres, not_alani FROM musteri WHERE id=%s", (musteri_id,))
+            cur.execute("SELECT id, ad, telefon, adres, not_alani, tc_vergi_no FROM musteri WHERE id=%s", (musteri_id,))
             m = cur.fetchone()
             if not m:
                 return sayfa('<p class="hata">❌ Müşteri bulunamadı.</p><a class="btn gri" href="/musteriler">⬅ Geri Dön</a>', "Hata")
@@ -3469,7 +3490,7 @@ def musteri_detay(musteri_id):
     finally:
         con.close()
 
-    _, ad, telefon, adres, not_alani = m
+    _, ad, telefon, adres, not_alani, tc_vergi_no = m
 
     siparis_html = ""
     for sid, durum, tarih in siparisler:
@@ -3487,8 +3508,14 @@ def musteri_detay(musteri_id):
     <div class="kart">
       {'<div style="margin-bottom:4px;">📞 ' + telefon + '</div>' if telefon else ''}
       {'<div style="margin-bottom:4px;">📍 ' + adres + '</div>' if adres else ''}
+      {'<div style="margin-bottom:4px;">🪪 TC/Vergi No: ' + tc_vergi_no + '</div>' if tc_vergi_no else ''}
       {'<div style="color:var(--muted);font-size:13px;margin-top:6px;">📝 ' + not_alani + '</div>' if not_alani else ''}
     </div>
+    <a href="/musteri_duzenle/{musteri_id}" class="okut-kart okut-turkuaz">
+      <div class="okut-ikon">✏️</div>
+      <div class="okut-metin"><div class="okut-baslik">Bilgileri Düzenle</div></div>
+      <div class="okut-ok">›</div>
+    </a>
     <a href="/siparis_olustur?musteri={ad}" class="okut-kart okut-yesil">
       <div class="okut-ikon">🧾</div>
       <div class="okut-metin"><div class="okut-baslik">Bu Müşteriye Sipariş Oluştur</div></div>
@@ -3501,6 +3528,59 @@ def musteri_detay(musteri_id):
     <a href="/musteriler" class="okut-kart okut-mor"><div class="okut-ikon">🏢</div><div class="okut-metin"><div class="okut-baslik">Tüm Müşterilere Dön</div></div><div class="okut-ok">›</div></a>
     """
     return sayfa(icerik, ad)
+
+
+@app.route("/musteri_duzenle/<int:musteri_id>", methods=["GET", "POST"])
+@rol_gerekli("muhasebeci")
+def musteri_duzenle(musteri_id):
+    if request.method == "POST":
+        telefon = request.form.get("telefon", "").strip()
+        adres = request.form.get("adres", "").strip()
+        tc_vergi_no = request.form.get("tc_vergi_no", "").strip()
+        not_alani = request.form.get("not_alani", "").strip()
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    cur.execute("""
+                        UPDATE musteri SET telefon=%s, adres=%s, tc_vergi_no=%s, not_alani=%s
+                        WHERE id=%s
+                    """, (telefon, adres, tc_vergi_no, not_alani, musteri_id))
+        finally:
+            con.close()
+        return redirect(f"/musteri/{musteri_id}")
+
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT ad, telefon, adres, tc_vergi_no, not_alani FROM musteri WHERE id=%s", (musteri_id,))
+            m = cur.fetchone()
+    finally:
+        con.close()
+
+    if not m:
+        return sayfa('<p class="hata">❌ Müşteri bulunamadı.</p><a class="btn gri" href="/musteriler">⬅ Geri Dön</a>', "Hata")
+
+    ad, telefon, adres, tc_vergi_no, not_alani = m
+
+    icerik = f"""
+    <h2>✏️ {ad} — Düzenle</h2>
+    <form method="post">
+    <div class="kart">
+    <label>Telefon</label>
+    <input name="telefon" value="{telefon or ''}" placeholder="05xx xxx xx xx">
+    <label>Adres</label>
+    <input name="adres" value="{adres or ''}" placeholder="Adres">
+    <label>TC Kimlik No / Vergi No (isteğe bağlı)</label>
+    <input name="tc_vergi_no" value="{tc_vergi_no or ''}" placeholder="11 haneli TC ya da vergi no" inputmode="numeric">
+    <label>Not</label>
+    <input name="not_alani" value="{not_alani or ''}" placeholder="Varsa özel not">
+    <button class="btn mavi">Kaydet</button>
+    </div>
+    </form>
+    <a href="/musteri/{musteri_id}" class="okut-kart okut-mor"><div class="okut-ikon">🏢</div><div class="okut-metin"><div class="okut-baslik">Kaydetmeden Geri Dön</div></div><div class="okut-ok">›</div></a>
+    """
+    return sayfa(icerik, "Müşteri Düzenle")
 
 
 @app.route("/musteri_ara")
@@ -4058,6 +4138,13 @@ def siparis_fis(siparis_id):
                 WHERE k.siparis_id=%s ORDER BY k.id
             """, (siparis_id,))
             kalemler = cur.fetchall()
+
+            musteri_tc_vergi = None
+            if sip[1]:
+                cur.execute("SELECT tc_vergi_no FROM musteri WHERE ad=%s", (sip[1],))
+                m_row = cur.fetchone()
+                if m_row:
+                    musteri_tc_vergi = m_row[0]
     finally:
         con.close()
 
@@ -4115,6 +4202,7 @@ def siparis_fis(siparis_id):
             </div>
             <div class="bilgi-satir">
                 <div><b>Müşteri:</b> {musteri or '-'}</div>
+                {'<div><b>TC/Vergi No:</b> ' + musteri_tc_vergi + '</div>' if musteri_tc_vergi else ''}
                 <div><b>Depo:</b> {depo}</div>
                 <div><b>Durum:</b> {durum}</div>
                 <div><b>Oluşturan:</b> {olusturan}</div>
