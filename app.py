@@ -1564,6 +1564,30 @@ if DATABASE_URL and os.environ.get("YEDEK_ALICI_EMAIL"):
     yedek_thread = threading.Thread(target=gunluk_yedek_kontrol_dongusu, daemon=True)
     yedek_thread.start()
 
+
+# ==================== UYANIK KALMA (KEEP-ALIVE) ====================
+# Render ücretsiz planda 15 dakika hareketsizlikten sonra uykuya dalar.
+# Bu döngü kendi /ping adresini düzenli aralıklarla çağırarak uygulamayı
+# uyanık tutmaya çalışır (garanti değildir, ücretsiz planın doğal
+# davranışıdır — kalıcı çözüm için Render'da ücretli plana geçmek gerekir).
+def kendini_uyandirma_dongusu():
+    import urllib.request
+    kendi_url = os.environ.get("RENDER_EXTERNAL_URL", "").rstrip("/")
+    if not kendi_url:
+        print("KEEP-ALIVE: RENDER_EXTERNAL_URL tanımlı değil, kendi kendini uyandırma pasif.")
+        return
+    while True:
+        threading.Event().wait(600)  # 10 dakikada bir
+        try:
+            urllib.request.urlopen(kendi_url + "/ping", timeout=15)
+        except Exception:
+            pass
+
+
+keep_alive_thread = threading.Thread(target=kendini_uyandirma_dongusu, daemon=True)
+keep_alive_thread.start()
+
+
 @app.route("/duzenle/<eski_barkod>", methods=["GET", "POST"])
 @rol_gerekli("muhasebeci")
 def duzenle(eski_barkod):
@@ -3596,6 +3620,15 @@ def kamera(tip):
 
     <div id="sonuc-alan"></div>
 
+    <div class="kart" id="oturum-ozet-kart" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <label style="margin:0;">📋 Bu Oturumda Okutulanlar</label>
+        <button type="button" class="btn-kucuk gri" style="width:auto;" onclick="oturumuTemizle()">🗑️ Temizle</button>
+      </div>
+      <div id="oturum-listesi"></div>
+      <div style="margin-top:8px;font-weight:700;color:var(--text);" id="oturum-toplam"></div>
+    </div>
+
     <div class="kart elle-giris-alan">
       <label>Barkod okunmuyorsa elle gir</label>
       <div class="elle-giris-satir">
@@ -3615,6 +3648,39 @@ let sonIslem = null;
 let siparisId = {{ (siparis_id or 'null') }};
 let kameraListesi = [];
 let aktifKameraIndex = 0;
+let oturumListesi = {};  // barkod -> {ad, toplamAdet}
+
+function oturumGuncelle(barkod, ad, adet){
+    if(!oturumListesi[barkod]){
+        oturumListesi[barkod] = {ad: ad, toplamAdet: 0};
+    }
+    oturumListesi[barkod].toplamAdet += adet;
+    oturumEkraniCiz();
+}
+
+function oturumEkraniCiz(){
+    const anahtarlar = Object.keys(oturumListesi);
+    const kart = document.getElementById('oturum-ozet-kart');
+    if(anahtarlar.length === 0){ kart.style.display = 'none'; return; }
+    kart.style.display = 'block';
+    let genelToplam = 0;
+    let html = '';
+    anahtarlar.forEach(bk => {
+        const kalem = oturumListesi[bk];
+        genelToplam += kalem.toplamAdet;
+        html += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13.5px;">
+            <span>${kalem.ad}</span><span style="color:var(--muted);">${kalem.toplamAdet} adet</span>
+        </div>`;
+    });
+    document.getElementById('oturum-listesi').innerHTML = html;
+    document.getElementById('oturum-toplam').textContent =
+        anahtarlar.length + ' farklı ürün • Toplam ' + genelToplam + ' adet';
+}
+
+function oturumuTemizle(){
+    oturumListesi = {};
+    oturumEkraniCiz();
+}
 
 function arayuzuGuncelle(t){
     document.getElementById('btn-giris').className = 'mod-btn' + (t === 'giris' ? ' aktif-giris' : '');
@@ -3791,6 +3857,7 @@ function sonucGoster(d, barkod){
 
     if (d.ok) {
         sonIslem = { barkod: barkod, tip: aktifTip, siparis_id: siparisId };
+        oturumGuncelle(barkod, d.ad, 1);
         const baslikRengi = aktifTip === 'giris' ? '✅' : '📤';
         let siparisSatiri = '';
         if(d.siparis_ilerleme){
