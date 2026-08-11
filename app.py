@@ -1115,19 +1115,6 @@ def index():
             </a>
             """
 
-        secim_html += """
-        <a href="/transfer_gecmisi" class="okut-kart okut-mor">
-          <div class="okut-ikon">🔁</div>
-          <div class="okut-metin"><div class="okut-baslik">Transfer Geçmişi</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <a href="/palet_giris" class="okut-kart okut-mor">
-          <div class="okut-ikon">🧱</div>
-          <div class="okut-metin"><div class="okut-baslik">Palet Girişi</div><div class="okut-alt">Farklı adetli paletleri tek seferde gir</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        """
-
         icerik = (
             f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
             + f'<h1 style="font-size:19px;line-height:1.35;margin-bottom:2px;">{UYGULAMA_ADI}</h1>'
@@ -1167,6 +1154,16 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
           <div class="okut-ok">›</div>
         </a>
+        <a href="/transfer_gecmisi" class="okut-kart okut-mor">
+          <div class="okut-ikon">📜</div>
+          <div class="okut-metin"><div class="okut-baslik">Transfer Geçmişi</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/palet_giris" class="okut-kart okut-mor">
+          <div class="okut-ikon">🧱</div>
+          <div class="okut-metin"><div class="okut-baslik">Palet Girişi</div><div class="okut-alt">Farklı adetli paletleri tek seferde gir</div></div>
+          <div class="okut-ok">›</div>
+        </a>
         """
     if rol in ("muhasebeci", "patron"):
         butonlar += """
@@ -1200,6 +1197,21 @@ def index():
         <a href="/depo_stok" class="okut-kart okut-turkuaz">
           <div class="okut-ikon">🏭</div>
           <div class="okut-metin"><div class="okut-baslik">Depo Stok Durumu</div><div class="okut-alt">Hangi depoda ne kadar ürün var</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/transfer" class="okut-kart okut-mavi">
+          <div class="okut-ikon">🔁</div>
+          <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/transfer_gecmisi" class="okut-kart okut-mor">
+          <div class="okut-ikon">📜</div>
+          <div class="okut-metin"><div class="okut-baslik">Transfer Geçmişi</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/palet_giris" class="okut-kart okut-mor">
+          <div class="okut-ikon">🧱</div>
+          <div class="okut-metin"><div class="okut-baslik">Palet Girişi</div><div class="okut-alt">Farklı adetli paletleri tek seferde gir</div></div>
           <div class="okut-ok">›</div>
         </a>
         <a href="/hareketler" class="okut-kart okut-kirmizi">
