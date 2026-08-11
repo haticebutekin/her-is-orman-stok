@@ -177,6 +177,15 @@ def tablolari_olustur():
                 )
                 """)
                 cur.execute("ALTER TABLE hareket ALTER COLUMN tarih DROP DEFAULT")
+
+                # ---- Hız için indeksler ----
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_urun_depo ON urun(depo)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_urun_silindi ON urun(silindi)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_urun_ad ON urun(ad)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_hareket_barkod ON hareket(barkod)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_hareket_tarih ON hareket(tarih)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_hareket_kullanici ON hareket(kullanici)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_hareket_tip ON hareket(tip)")
     finally:
         con.close()
 
