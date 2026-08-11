@@ -621,25 +621,181 @@ def sayfa(icerik, baslik="Stok Takip"):
         + "</body></html>"
     )
 
-@app.route("/palet_giris/<kod>", methods=["POST"])
-def palet_giris(kod):
-    adet = int(request.form.get("adet", 0))
+@app.route("/palet_giris", methods=["GET", "POST"])
+@rol_gerekli("depocu", "muhasebeci", "patron")
+def palet_giris():
+    if request.method == "POST":
+        barkod = request.form.get("barkod", "").strip()
+        ad = request.form.get("ad", "").strip()
+        depo = request.form.get("depo", "")
+        adetler = request.form.getlist("palet_adet")
 
-    con = db()
-    with con:
-        with con.cursor() as cur:
-            cur.execute("""
-                UPDATE urun
-                SET adet = adet + %s
-                WHERE barkod = %s
-            """, (adet, kod))
+        if not barkod or not adetler:
+            return sayfa('<p class="hata">❌ Barkod ve en az bir palet adedi girilmeli.</p><a class="btn gri" href="/palet_giris">⬅ Geri Dön</a>', "Hata")
 
-            cur.execute("""
-                INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
-                VALUES (%s, %s, 'giris', %s, %s, %s)
-            """, (kod, "PALET GİRİŞ", adet, "Depo", tr_simdi()))
+        toplam = 0
+        for a in adetler:
+            try:
+                toplam += int(a)
+            except (TypeError, ValueError):
+                pass
 
-    return "OK"
+        if toplam <= 0:
+            return sayfa('<p class="hata">❌ Toplam adet 0 olamaz.</p><a class="btn gri" href="/palet_giris">⬅ Geri Dön</a>', "Hata")
+
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=%s", (barkod,))
+                    row = cur.fetchone()
+                    if row:
+                        uid, urun_ad, mevcut = row
+                        cur.execute("UPDATE urun SET adet=%s WHERE id=%s", (mevcut + toplam, uid))
+                        ad = urun_ad
+                    else:
+                        cur.execute("""
+                            INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
+                            VALUES(%s,'','','','','','',%s,%s,%s)
+                        """, (ad or "İsimsiz Ürün", toplam, depo, barkod))
+
+                    kullanici = session.get("kullanici", "Bilinmiyor")
+                    simdi = tr_simdi()
+                    for a in adetler:
+                        try:
+                            palet_adet = int(a)
+                        except (TypeError, ValueError):
+                            continue
+                        if palet_adet <= 0:
+                            continue
+                        cur.execute("""
+                            INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
+                            VALUES (%s, %s, 'giris', %s, %s, %s)
+                        """, (barkod, ad, palet_adet, kullanici, simdi))
+        finally:
+            con.close()
+
+        icerik = (
+            '<div style="text-align:center;font-size:52px;margin-bottom:4px;">✅</div>'
+            + f'<h2 style="margin-top:0;">{len(adetler)} Palet Girişi Yapıldı</h2>'
+            + f'<p style="text-align:center;color:var(--muted);"><b style="color:var(--text);">{ad}</b><br>Toplam: {toplam} adet</p>'
+            + '<a href="/liste" class="okut-kart okut-mor"><div class="okut-ikon">📦</div><div class="okut-metin"><div class="okut-baslik">Stok Listesine Git</div></div><div class="okut-ok">›</div></a>'
+            + '<a href="/palet_giris" class="okut-kart okut-yesil"><div class="okut-ikon">🧱</div><div class="okut-metin"><div class="okut-baslik">Yeni Palet Girişi</div></div><div class="okut-ok">›</div></a>'
+        )
+        return sayfa(icerik, "Palet Girişi Tamamlandı")
+
+    icerik = """
+    <h2 style="margin-bottom:2px;">🧱 Palet Girişi</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">
+    Her paletin adedi farklıysa, aşağıya her palet için ayrı satır ekle.
+    </p>
+
+    <div class="kart">
+    <label>Barkod Ara (mevcut ürünse aynı barkodu seç)</label>
+    <div class="urun-arama-kutu">
+      <input type="text" id="urun-arama" class="arama" placeholder="🔍 Ürün adı veya barkod ara..." autocomplete="off" oninput="urunAra()">
+      <div class="urun-arama-sonuc" id="urun-arama-sonuc"></div>
+    </div>
+    </div>
+
+    <form method="post" id="palet-form">
+    <div class="kart">
+    <label>Barkod</label>
+    <input name="barkod" id="form-barkod" placeholder="Barkod" required>
+    <label>Ürün Adı (yeni ürünse)</label>
+    <input name="ad" id="form-ad" placeholder="Ürün Adı">
+    <label>Depo</label>
+    <select name="depo">
+    """ + "".join(f'<option>{d}</option>' for d in DEPOLAR) + """
+    </select>
+    </div>
+
+    <div class="kart">
+    <label>Paletler</label>
+    <div id="palet-satirlari"></div>
+    <button type="button" class="btn-kucuk mavi" onclick="paletEkle()">➕ Palet Ekle</button>
+    <div id="palet-toplam" style="margin-top:12px;color:var(--muted);font-size:13.5px;">Toplam: 0 adet</div>
+    </div>
+
+    <button type="submit" class="btn yesil">✅ Girişi Kaydet</button>
+    </form>
+
+    <script>
+    let paletSayisi = 0;
+
+    function paletEkle(){
+      paletSayisi++;
+      const kapsayici = document.getElementById('palet-satirlari');
+      const satir = document.createElement('div');
+      satir.className = 'sepet-satir';
+      satir.id = 'palet-' + paletSayisi;
+      satir.innerHTML = `
+        <div class="sepet-ad">Palet ${paletSayisi}</div>
+        <input type="number" name="palet_adet" class="sepet-adet-input" min="1" placeholder="Adet" oninput="toplamGuncelle()">
+        <button type="button" class="sepet-sil" onclick="paletSil(${paletSayisi})">✕</button>
+      `;
+      kapsayici.appendChild(satir);
+    }
+
+    function paletSil(id){
+      const el = document.getElementById('palet-' + id);
+      if(el) el.remove();
+      toplamGuncelle();
+    }
+
+    function toplamGuncelle(){
+      const girisler = document.querySelectorAll('input[name="palet_adet"]');
+      let toplam = 0;
+      girisler.forEach(g => { toplam += parseInt(g.value) || 0; });
+      document.getElementById('palet-toplam').textContent = 'Toplam: ' + toplam + ' adet';
+    }
+
+    document.getElementById('palet-satirlari').addEventListener('input', toplamGuncelle);
+
+    paletEkle();
+    paletEkle();
+
+    let aramaZamanlayici = null;
+    function urunAra(){
+      clearTimeout(aramaZamanlayici);
+      const q = document.getElementById('urun-arama').value.trim();
+      const kutu = document.getElementById('urun-arama-sonuc');
+      if(q.length < 1){ kutu.style.display='none'; kutu.innerHTML=''; return; }
+      aramaZamanlayici = setTimeout(() => {
+        fetch('/urun_ara?q=' + encodeURIComponent(q))
+          .then(r => r.json())
+          .then(sonuclar => {
+            if(sonuclar.length === 0){
+              kutu.innerHTML = '<div class="urun-arama-oge" style="color:var(--muted);">Ürün bulunamadı, yeni ürün olarak girebilirsin</div>';
+              kutu.style.display = 'block';
+              return;
+            }
+            kutu.innerHTML = sonuclar.map(u => `
+              <div class="urun-arama-oge" onclick='urunSec(${JSON.stringify(JSON.stringify(u))})'>
+                <div class="ad">${u.ad}</div>
+                <div class="detay">🔢 ${u.barkod} • 📦 Stokta: ${u.adet} • 🏭 ${u.depo}</div>
+              </div>
+            `).join('');
+            kutu.style.display = 'block';
+          });
+      }, 250);
+    }
+    function urunSec(uJson){
+      const u = JSON.parse(uJson);
+      document.getElementById('urun-arama-sonuc').style.display = 'none';
+      document.getElementById('urun-arama').value = u.ad;
+      document.getElementById('form-barkod').value = u.barkod;
+      document.getElementById('form-ad').value = u.ad;
+    }
+    document.addEventListener('click', function(e){
+      const kutu = document.getElementById('urun-arama-sonuc');
+      if(!kutu.contains(e.target) && e.target.id !== 'urun-arama'){
+        kutu.style.display = 'none';
+      }
+    });
+    </script>
+    """
+    return sayfa(icerik, "Palet Girişi")
 @app.route("/manifest.json")
 def manifest():
     return jsonify({
@@ -863,6 +1019,10 @@ def index():
               <div class="okut-ikon">🔁</div>
               <div class="okut-metin"><div class="okut-baslik">Transfer Geçmişi</div></div>
               <div class="okut-ok">›</div>
+              <a href="/palet_giris" class="okut-kart okut-mor">
+              <div class="okut-ikon">🧱</div>
+             <div class="okut-metin"><div class="okut-baslik">Palet Girişi</div><div class="okut-alt">Farklı adetli paletleri tek seferde gir</div></div>
+             <div class="okut-ok">›</div>
             </a>
             """
 
