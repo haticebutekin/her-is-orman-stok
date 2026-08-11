@@ -32,7 +32,8 @@ VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "BHVDYu-AltC6T-LUrITOY3toL
 VAPID_CLAIMS_EMAIL = os.environ.get("VAPID_EMAIL", "mailto:admin@heris-stok.local")
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)) or ".", "static"))
-app.secret_key = os.environ.get("SECRET_KEY", "bu-anahtari-canliya-almadan-once-degistir")
+app.secret_key = os.environ.get("SECRET_KEY", "heris-stok-2026-sabit-guvenli-anahtar-x7k9m2-degistirme")
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 SITE_PAROLA = os.environ.get("SITE_PAROLA", "") 
 
 @app.before_request
@@ -142,6 +143,12 @@ def tablolari_olustur():
                 """)
                 cur.execute("""
                 ALTER TABLE urun ADD COLUMN IF NOT EXISTS min_stok INTEGER DEFAULT 5
+                """)
+                cur.execute("""
+                ALTER TABLE urun ADD COLUMN IF NOT EXISTS silindi BOOLEAN DEFAULT FALSE
+                """)
+                cur.execute("""
+                ALTER TABLE urun ADD COLUMN IF NOT EXISTS silinme_tarihi TIMESTAMP
                 """)
                 cur.execute("""
                 CREATE TABLE IF NOT EXISTS urun_barkod(
@@ -974,6 +981,7 @@ def pin_gir(isim):
     if request.method == "POST":
         girilen = request.form.get("pin", "")
         if girilen == PIN_KODLARI.get(isim):
+            session.permanent = True
             session["kullanici"] = isim
             session["rol"] = ROLLER[isim]
             return redirect("/")
@@ -1207,6 +1215,11 @@ def index():
         <a href="/yedek_email_test" class="okut-kart okut-turkuaz">
           <div class="okut-ikon">📧</div>
           <div class="okut-metin"><div class="okut-baslik">Yedeği E-posta ile Gönder</div><div class="okut-alt">Test amaçlı hemen gönder</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/cop_kutusu" class="okut-kart okut-kirmizi">
+          <div class="okut-ikon">🗑️</div>
+          <div class="okut-metin"><div class="okut-baslik">Çöp Kutusu</div><div class="okut-alt">Silinen ürünleri geri getir</div></div>
           <div class="okut-ok">›</div>
         </a>
         """
@@ -1712,9 +1725,9 @@ def liste():
     try:
         with con.cursor() as cur:
             if depo_filtre:
-                cur.execute("SELECT * FROM urun WHERE depo=%s ORDER BY ad", (depo_filtre,))
+                cur.execute("SELECT * FROM urun WHERE depo=%s AND silindi IS NOT TRUE ORDER BY ad", (depo_filtre,))
             else:
-                cur.execute("SELECT * FROM urun ORDER BY ad")
+                cur.execute("SELECT * FROM urun WHERE silindi IS NOT TRUE ORDER BY ad")
             urunler = cur.fetchall()
     finally:
         con.close()
@@ -2056,16 +2069,29 @@ def transfer():
 @app.route("/hareketler")
 @rol_gerekli("muhasebeci")
 def hareket_listesi():
+    baslangic = request.args.get("baslangic", "")
+    bitis = request.args.get("bitis", "")
+
+    sorgu = """
+        SELECT h.ad, h.barkod, h.tip, h.adet, h.kullanici, h.tarih,
+               u.cins, u.sinif, u.yuzey, u.renk, u.ebat, u.depo
+        FROM hareket h
+        LEFT JOIN urun u ON u.barkod = h.barkod
+        WHERE 1=1
+    """
+    parametreler = []
+    if baslangic:
+        sorgu += " AND h.tarih::date >= %s"
+        parametreler.append(baslangic)
+    if bitis:
+        sorgu += " AND h.tarih::date <= %s"
+        parametreler.append(bitis)
+    sorgu += " ORDER BY h.id DESC"
+
     con = db()
     try:
         with con.cursor() as cur:
-            cur.execute("""
-                SELECT h.ad, h.barkod, h.tip, h.adet, h.kullanici, h.tarih,
-                       u.cins, u.sinif, u.yuzey, u.renk, u.ebat, u.depo
-                FROM hareket h
-                LEFT JOIN urun u ON u.barkod = h.barkod
-                ORDER BY h.id DESC
-            """)
+            cur.execute(sorgu, tuple(parametreler))
             kayitlar = cur.fetchall()
     finally:
         con.close()
@@ -2091,8 +2117,25 @@ def hareket_listesi():
         </div>
         """
 
+    if not kayitlar:
+        kartlar = '<p style="text-align:center;color:var(--muted);margin-top:20px;">Bu aralıkta hareket bulunamadı.</p>'
+
     icerik = (
         "<h2>📊 TÜM HAREKETLER</h2>"
+        + f"""
+        <form method="get" class="kart" style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+          <div style="flex:1;min-width:130px;">
+            <label>Başlangıç</label>
+            <input type="date" name="baslangic" value="{baslangic}">
+          </div>
+          <div style="flex:1;min-width:130px;">
+            <label>Bitiş</label>
+            <input type="date" name="bitis" value="{bitis}">
+          </div>
+          <button class="btn mavi" style="width:auto;padding:10px 18px;">Filtrele</button>
+          {'<a href="/hareketler" class="btn gri" style="width:auto;padding:10px 18px;text-decoration:none;">Temizle</a>' if (baslangic or bitis) else ''}
+        </form>
+        """
         + '<input class="arama" id="arama" placeholder="🔍 Ürün, barkod veya kullanıcı ara..." oninput="ara()">'
         + """
         <div class="filtre-satir">
@@ -2308,7 +2351,7 @@ def hizli_islem():
     try:
         with con:
             with con.cursor() as cur:
-                cur.execute("SELECT id, ad, adet, cins, ebat, yuzey, sinif, renk, depo FROM urun WHERE barkod=%s", (barkod,))
+                cur.execute("SELECT id, ad, adet, cins, ebat, yuzey, sinif, renk, depo FROM urun WHERE barkod=%s AND silindi IS NOT TRUE", (barkod,))
                 row = cur.fetchone()
 
                 if not row:
@@ -2390,11 +2433,83 @@ def urun_sil(barkod):
     try:
         with con:
             with con.cursor() as cur:
-                cur.execute("DELETE FROM urun WHERE barkod=%s", (barkod,))
-                silindi = cur.rowcount > 0
+                cur.execute(
+                    "UPDATE urun SET silindi=TRUE, silinme_tarihi=%s WHERE barkod=%s AND silindi IS NOT TRUE",
+                    (tr_simdi(), barkod)
+                )
+                basarili = cur.rowcount > 0
     finally:
         con.close()
-    return jsonify({"ok": silindi})
+    return jsonify({"ok": basarili})
+
+
+@app.route("/cop_kutusu")
+@rol_gerekli("muhasebeci")
+def cop_kutusu():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT ad, barkod, adet, depo, silinme_tarihi
+                FROM urun WHERE silindi IS TRUE
+                ORDER BY silinme_tarihi DESC
+            """)
+            urunler = cur.fetchall()
+    finally:
+        con.close()
+
+    kartlar = ""
+    for ad, barkod, adet, depo, silinme_tarihi in urunler:
+        kartlar += f"""
+        <div class="hareket-kart">
+          <div class="hareket-ikon">🗑️</div>
+          <div class="hareket-govde">
+            <div class="hareket-ust">
+              <div class="hareket-ad">{ad}</div>
+              <div class="hareket-adet">{adet} adet</div>
+            </div>
+            <div class="hareket-alt">🔢 {barkod} • 🏭 {depo or '-'} • 🕒 {silinme_tarihi}</div>
+          </div>
+          <button class="btn-kucuk yesil" onclick="geriGetir('{barkod}', this)" style="margin-top:8px;">↩️ Geri Getir</button>
+        </div>
+        """
+
+    if not urunler:
+        kartlar = '<p style="text-align:center;color:var(--muted);margin-top:20px;">Çöp kutusu boş.</p>'
+
+    icerik = "<h2>🗑️ Silinen Ürünler</h2>" + kartlar + """
+    <script>
+    function geriGetir(barkod, btn){
+      fetch('/geri_getir/' + encodeURIComponent(barkod), {method:'POST'})
+        .then(r => r.json())
+        .then(d => {
+          if(d.ok){ btn.closest('.hareket-kart').remove(); }
+          else { alert('❌ Geri getirilemedi: ' + (d.msg || 'bilinmeyen hata')); }
+        });
+    }
+    </script>
+    """
+    return sayfa(icerik, "Çöp Kutusu")
+
+
+@app.route("/geri_getir/<barkod>", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def urun_geri_getir(barkod):
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("SELECT id FROM urun WHERE barkod=%s AND silindi IS NOT TRUE", (barkod,))
+                if cur.fetchone():
+                    return jsonify({"ok": False, "msg": "Aynı barkodlu aktif bir ürün zaten var."})
+                cur.execute(
+                    "UPDATE urun SET silindi=FALSE, silinme_tarihi=NULL WHERE barkod=%s AND silindi IS TRUE",
+                    (barkod,)
+                )
+                basarili = cur.rowcount > 0
+    finally:
+        con.close()
+    return jsonify({"ok": basarili})
 
 
 @app.route("/etiket/<barkod>")
@@ -2823,7 +2938,7 @@ def urun_ara():
         with con.cursor() as cur:
             cur.execute("""
                 SELECT ad, barkod, adet, depo, cins, ebat FROM urun
-                WHERE ad ILIKE %s OR barkod ILIKE %s
+                WHERE (ad ILIKE %s OR barkod ILIKE %s) AND silindi IS NOT TRUE
                 ORDER BY ad LIMIT 20
             """, (f"%{q}%", f"%{q}%"))
             satirlar = cur.fetchall()
