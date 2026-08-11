@@ -93,25 +93,6 @@ ROLLER = {
     "Ahmet": "patron",
 }
 
-def bugunku_ozet(kullanici):
-    bugun = tr_simdi().date()
-    try:
-        con = db()
-        try:
-            with con.cursor() as cur:
-                cur.execute("""
-                    SELECT tip, COUNT(*) FROM hareket
-                    WHERE kullanici=%s AND tarih::date=%s
-                    GROUP BY tip
-                """, (kullanici, bugun))
-                satirlar = dict(cur.fetchall())
-        finally:
-            con.close()
-        return satirlar.get("giris", 0), satirlar.get("cikis", 0)
-    except Exception:
-        traceback.print_exc()
-        return 0, 0
-
 def _pin_yukle():
     varsayilan = {
         "Ramazan": "1111", "Behiç": "2222", "Orhan": "3333",
@@ -759,7 +740,7 @@ def palet_giris():
         try:
             with con:
                 with con.cursor() as cur:
-                    cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=%s", (barkod,))
+                    cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=%s AND depo=%s", (barkod, depo))
                     row = cur.fetchone()
                     if row:
                         uid, urun_ad, mevcut = row
@@ -767,9 +748,24 @@ def palet_giris():
                         ad = urun_ad
                     else:
                         cur.execute("""
-                            INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
-                            VALUES(%s,'','','','','','',%s,%s,%s)
-                        """, (ad or "İsimsiz Ürün", toplam, depo, barkod))
+                            SELECT ad, cins, ebat, kalinlik, yuzey, sinif, renk
+                            FROM urun WHERE barkod=%s LIMIT 1
+                        """, (barkod,))
+                        baska_depo_urun = cur.fetchone()
+                        if baska_depo_urun:
+                            mevcut_ad, cins, ebat, kalinlik, yuzey, sinif, renk = baska_depo_urun
+                            ad = ad or mevcut_ad
+                            yeni_barkod = barkod_uret()
+                            cur.execute("""
+                                INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
+                                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            """, (ad, cins, ebat, kalinlik, yuzey, sinif, renk, toplam, depo, yeni_barkod))
+                            barkod = yeni_barkod
+                        else:
+                            cur.execute("""
+                                INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
+                                VALUES(%s,'','','','','','',%s,%s,%s)
+                            """, (ad or "İsimsiz Ürün", toplam, depo, barkod))
 
                     kullanici = session.get("kullanici", "Bilinmiyor")
                     simdi = tr_simdi()
@@ -967,28 +963,6 @@ def barkod_resim_endpoint(kod):
             _BARKOD_CACHE[kod] = veri
     return send_file(io.BytesIO(veri), mimetype="image/png")
 
-
-
-def rol_gerekli(*izinli_roller):
-    TAM_YETKILI = ("patron", "muhasebeci")
-
-    def decorator(f):
-        @wraps(f)
-        def wrapper(*args, **kwargs):
-            rol = session.get("rol")
-            if not rol:
-                return redirect("/")
-            if rol not in TAM_YETKILI and rol not in izinli_roller:
-                return sayfa("""
-                <h2>⛔ Erişim Yetkiniz Yok</h2>
-                <p style="text-align:center;color:var(--muted);">
-                Bu işlem senin rolüne kapalı. Yanlış kişi olarak girdiysen
-                sağ üstten kullanıcı değiştir.
-                </p>
-                """, "Yetkisiz Erişim")
-            return f(*args, **kwargs)
-        return wrapper
-    return decorator
 
 
 @app.route("/pin_gir/<isim>", methods=["GET", "POST"])
@@ -1262,13 +1236,18 @@ def ekle2():
         if not barkod:
             barkod = barkod_uret()
 
+        try:
+            min_stok = int(request.form.get("min_stok", "5").strip() or "5")
+        except (TypeError, ValueError):
+            min_stok = 5
+
         con = db()
         try:
             with con:
                 with con.cursor() as cur:
                     cur.execute("""
-                    INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
-                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok)
+                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """, (
                         ad,
                         request.form.get("cins", ""),
@@ -1280,6 +1259,7 @@ def ekle2():
                         adet,
                         request.form.get("depo", ""),
                         barkod,
+                        min_stok,
                     ))
                     cur.execute("""
                     INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
@@ -1352,6 +1332,8 @@ def ekle2():
     <option>{{d}}</option>
     {% endfor %}
     </select>
+    <label>Kritik Stok Eşiği (bu adedin altına düşünce uyarı verir)</label>
+    <input name="min_stok" type="number" placeholder="5" value="5">
     <button class="btn mavi">Kaydet</button>
     </form>
     """
@@ -1568,34 +1550,7 @@ def gunluk_yedek_kontrol_dongusu():
 if DATABASE_URL and os.environ.get("YEDEK_ALICI_EMAIL"):
     yedek_thread = threading.Thread(target=gunluk_yedek_kontrol_dongusu, daemon=True)
     yedek_thread.start()
-@app.route("/yedek_al")
-@rol_gerekli("patron")
-def yedek_al():
-    con = db()
-    try:
-        with con.cursor() as cur:
-            cur.execute("SELECT * FROM urun")
-            urunler = cur.fetchall()
-            cur.execute("SELECT * FROM hareket")
-            hareketler = cur.fetchall()
-    finally:
-        con.close()
 
-    import json as json_lib
-    yedek = {
-        "urunler": [list(r) for r in urunler],
-        "hareketler": [[str(x) for x in r] for r in hareketler],
-        "tarih": str(tr_simdi()),
-    }
-
-    bio = io.BytesIO(json_lib.dumps(yedek, ensure_ascii=False, indent=2).encode("utf-8"))
-    bio.seek(0)
-    return send_file(
-        bio,
-        as_attachment=True,
-        download_name=f"yedek_{tr_simdi().strftime('%Y%m%d_%H%M')}.json",
-        mimetype="application/json",
-    )
 @app.route("/duzenle/<eski_barkod>", methods=["GET", "POST"])
 @rol_gerekli("muhasebeci")
 def duzenle(eski_barkod):
@@ -1613,6 +1568,11 @@ def duzenle(eski_barkod):
         if not yeni_barkod:
             yeni_barkod = eski_barkod
 
+        try:
+            min_stok = int(request.form.get("min_stok", "5").strip() or "5")
+        except (TypeError, ValueError):
+            min_stok = 5
+
         con = db()
         try:
             with con:
@@ -1628,7 +1588,7 @@ def duzenle(eski_barkod):
                             )
                     cur.execute("""
                         UPDATE urun
-                        SET ad=%s, cins=%s, ebat=%s, kalinlik=%s, yuzey=%s, sinif=%s, renk=%s, adet=%s, depo=%s, barkod=%s
+                        SET ad=%s, cins=%s, ebat=%s, kalinlik=%s, yuzey=%s, sinif=%s, renk=%s, adet=%s, depo=%s, barkod=%s, min_stok=%s
                         WHERE barkod=%s
                     """, (
                         ad,
@@ -1641,6 +1601,7 @@ def duzenle(eski_barkod):
                         adet,
                         request.form.get("depo", ""),
                         yeni_barkod,
+                        min_stok,
                         eski_barkod,
                     ))
         finally:
@@ -1669,7 +1630,7 @@ def duzenle(eski_barkod):
     con = db()
     try:
         with con.cursor() as cur:
-            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod FROM urun WHERE barkod=%s", (eski_barkod,))
+            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok FROM urun WHERE barkod=%s", (eski_barkod,))
             row = cur.fetchone()
     finally:
         con.close()
@@ -1677,7 +1638,7 @@ def duzenle(eski_barkod):
     if not row:
         return sayfa('<p class="hata">❌ Ürün bulunamadı.</p><a class="btn gri" href="/liste">⬅ Stok Listesine Dön</a>', "Hata")
 
-    ad, cins, ebat, kalinlik, yuzey, sinif, renk, adet, depo, barkod = row
+    ad, cins, ebat, kalinlik, yuzey, sinif, renk, adet, depo, barkod, min_stok = row
 
     icerik = """
     <h2 style="margin-bottom:2px;">✏️ Ürün Düzenle</h2>
@@ -1725,6 +1686,8 @@ def duzenle(eski_barkod):
     <option {{ 'selected' if d==depo else '' }}>{{d}}</option>
     {% endfor %}
     </select>
+    <label>Kritik Stok Eşiği</label>
+    <input name="min_stok" type="number" value="{{min_stok}}" placeholder="5">
     <button class="btn mavi">Kaydet</button>
     </div>
     </form>
@@ -1736,7 +1699,7 @@ def duzenle(eski_barkod):
     return render_template_string(
         sayfa(icerik, "Ürün Düzenle"),
         ad=ad, cins=cins, ebat=ebat, kalinlik=kalinlik, yuzey=yuzey,
-        sinif=sinif, renk=renk, adet=adet, depo=depo, barkod=barkod, depolar=DEPOLAR
+        sinif=sinif, renk=renk, adet=adet, depo=depo, barkod=barkod, min_stok=min_stok, depolar=DEPOLAR
     )
 
 
@@ -1756,10 +1719,15 @@ def liste():
     finally:
         con.close()
 
-    KRITIK_ESIK = 5
+    def _min_stok(u):
+        try:
+            return u[11] if len(u) > 11 and u[11] is not None else 5
+        except (IndexError, TypeError):
+            return 5
+
     toplam_urun = len(urunler)
     toplam_adet = sum(u[8] for u in urunler)
-    kritik_sayisi = sum(1 for u in urunler if u[8] <= KRITIK_ESIK)
+    kritik_sayisi = sum(1 for u in urunler if u[8] <= _min_stok(u))
 
     filtre_html = '<div class="filtre-satir">'
     filtre_html += f'<a href="/liste" class="filtre-cip {"aktif" if not depo_filtre else ""}" style="text-decoration:none;display:block;">Tümü</a>'
@@ -1770,7 +1738,7 @@ def liste():
 
     kartlar = ""
     for u in urunler:
-        kritik_mi = u[8] <= KRITIK_ESIK
+        kritik_mi = u[8] <= _min_stok(u)
         ozellikler = " • ".join([x for x in [u[2], u[3], u[4], u[5], u[6], u[7]] if x])
         kartlar += f"""
         <div class='urun-kart {"urun-kritik" if kritik_mi else ""}' id="urun-{u[10]}">
