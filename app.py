@@ -405,7 +405,12 @@ a { color: inherit; }
 @keyframes belir { from { opacity:0; transform: translateY(6px);} to { opacity:1; transform:none; } }
 
 h1, h2, h3 { text-align:center; letter-spacing:-.01em; }
-h1 { font-size: 24px; }
+h1 { font-size: 24px; position:relative; padding-bottom:10px; }
+h1::after {
+  content:""; position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+  width:42px; height:3px; border-radius:3px;
+  background: linear-gradient(90deg, #2196F3, #00BCD4);
+}
 h3.alt { color: var(--muted); font-weight:500; margin-top:-6px; font-size:14px; }
 
 .btn {
@@ -439,6 +444,11 @@ h3.alt { color: var(--muted); font-weight:500; margin-top:-6px; font-size:14px; 
   box-shadow: 0 2px 10px rgba(0,0,0,.18);
   transition: border-color .15s ease;
 }
+.kart label {
+  display:block; font-size:12.5px; font-weight:700; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.4px; margin:12px 0 4px;
+}
+.kart label:first-child { margin-top:0; }
 
 input[type=text], input[type=number], input[type=password], input[type=file], select, textarea {
   width:100%; padding:14px; margin:6px 0 14px; border-radius: var(--radius-sm);
@@ -496,6 +506,9 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
   transition: transform .12s ease, filter .15s ease;
 }
 .okut-kart:active { transform: scale(0.97); filter:brightness(0.92); }
+@media (hover: hover) {
+  .okut-kart:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.32); filter:brightness(1.05); }
+}
 .okut-yesil { background: linear-gradient(135deg, rgba(0,200,83,.22), rgba(100,221,23,.10)); border-color: rgba(100,221,23,.35); }
 .okut-turuncu { background: linear-gradient(135deg, rgba(255,111,0,.22), rgba(255,152,0,.10)); border-color: rgba(255,152,0,.35); }
 .okut-mavi { background: linear-gradient(135deg, rgba(33,150,243,.22), rgba(0,188,212,.10)); border-color: rgba(33,150,243,.35); }
@@ -506,11 +519,19 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .okut-metin { flex:1; }
 .okut-baslik { font-size:17px; font-weight:700; }
 .okut-alt { font-size:12.5px; color: var(--muted); margin-top:2px; }
-.okut-ok { font-size:24px; color: var(--muted); }
+.okut-ok { font-size:24px; color: var(--muted); transition: transform .15s ease; }
+@media (hover: hover) {
+  .okut-kart:hover .okut-ok { transform: translateX(3px); }
+}
 
 .bolum-baslik {
   color: var(--muted); font-size:12.5px; font-weight:700; text-transform:uppercase;
-  letter-spacing:.5px; margin: 22px 4px 8px;
+  letter-spacing:.8px; margin: 26px 4px 8px;
+  display:flex; align-items:center; gap:8px;
+}
+.bolum-baslik::after {
+  content:""; flex:1; height:1px;
+  background: linear-gradient(90deg, var(--border), transparent);
 }
 .rapor-satir { display:flex; gap:8px; margin-bottom:6px; }
 .rapor-pil {
@@ -1185,6 +1206,11 @@ def index():
         <a href="/siparisler" class="okut-kart okut-turuncu">
           <div class="okut-ikon">📋</div>
           <div class="okut-metin"><div class="okut-baslik">Siparişler</div><div class="okut-alt">Açık ve tamamlanan siparişler</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/musteriler" class="okut-kart okut-mavi">
+          <div class="okut-ikon">🏢</div>
+          <div class="okut-metin"><div class="okut-baslik">Müşteriler</div><div class="okut-alt">Kayıtlı müşteriler ve sipariş geçmişi</div></div>
           <div class="okut-ok">›</div>
         </a>
         <div class="bolum-baslik">İşlemler</div>
