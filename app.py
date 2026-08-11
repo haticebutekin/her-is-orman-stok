@@ -2389,12 +2389,21 @@ def hareket_listesi():
 @app.route("/rapor/pdf")
 @rol_gerekli("muhasebeci")
 def rapor_pdf():
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib.units import mm
-    from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    try:
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.units import mm
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    except ImportError:
+        return sayfa(
+            '<p class="hata">❌ PDF rapor özelliği için sunucuya "reportlab" kütüphanesi kurulmamış.'
+            '<br><br>Render\'da projenin requirements.txt dosyasına <code>reportlab</code> satırını ekleyip '
+            'tekrar deploy edin.</p>'
+            '<a class="btn gri" href="/">🏠 Ana Sayfaya Dön</a>',
+            "Kütüphane Eksik"
+        )
 
     depo_filtre = request.args.get("depo", "")
 
@@ -3092,6 +3101,61 @@ def siparis_hareket_tablosu_olustur():
 if DATABASE_URL:
     siparis_hareket_tablosu_olustur()
 
+
+def siparis_iade_tablosu_olustur():
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS siparis_iade(
+                    id SERIAL PRIMARY KEY,
+                    siparis_id INTEGER REFERENCES siparis(id) ON DELETE CASCADE,
+                    barkod TEXT,
+                    ad TEXT,
+                    adet INTEGER,
+                    kullanici TEXT,
+                    tarih TIMESTAMP,
+                    sebep TEXT
+                )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_siparis_iade_siparis ON siparis_iade(siparis_id)")
+    finally:
+        con.close()
+
+
+if DATABASE_URL:
+    siparis_iade_tablosu_olustur()
+
+
+def musteri_tablosu_olustur():
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS musteri(
+                    id SERIAL PRIMARY KEY,
+                    ad TEXT UNIQUE,
+                    telefon TEXT,
+                    adres TEXT,
+                    not_alani TEXT,
+                    olusturulma TIMESTAMP
+                )
+                """)
+                cur.execute("""
+                    INSERT INTO musteri (ad, olusturulma)
+                    SELECT DISTINCT musteri, NOW() FROM siparis
+                    WHERE musteri IS NOT NULL AND musteri <> ''
+                    AND NOT EXISTS (SELECT 1 FROM musteri m WHERE m.ad = siparis.musteri)
+                """)
+    finally:
+        con.close()
+
+
+if DATABASE_URL:
+    musteri_tablosu_olustur()
+
 def push_tablosu_olustur():
     con = db()
     try:
@@ -3260,6 +3324,175 @@ def urun_ara():
     ])
 
 
+@app.route("/musteriler")
+@rol_gerekli("muhasebeci")
+def musteriler():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT m.id, m.ad, m.telefon, m.adres, m.not_alani,
+                       COUNT(s.id) AS siparis_sayisi
+                FROM musteri m
+                LEFT JOIN siparis s ON s.musteri = m.ad
+                GROUP BY m.id, m.ad, m.telefon, m.adres, m.not_alani
+                ORDER BY m.ad
+            """)
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+
+    kartlar = ""
+    for mid, ad, telefon, adres, not_alani, sip_sayisi in satirlar:
+        kartlar += f"""
+        <a href="/musteri/{mid}" class="okut-kart okut-mavi">
+          <div class="okut-ikon">🏢</div>
+          <div class="okut-metin">
+            <div class="okut-baslik">{ad}</div>
+            <div class="okut-alt">{(telefon + ' • ') if telefon else ''}{sip_sayisi} sipariş</div>
+          </div>
+          <div class="okut-ok">›</div>
+        </a>
+        """
+    if not satirlar:
+        kartlar = '<p style="text-align:center;color:var(--muted);margin-top:20px;">Henüz müşteri kaydı yok.</p>'
+
+    icerik = (
+        "<h2>🏢 Müşteriler</h2>"
+        + '<input class="arama" id="arama" placeholder="🔍 Müşteri ara..." oninput="ara()">'
+        + '<a href="/musteri_ekle" class="okut-kart okut-yesil"><div class="okut-ikon">➕</div><div class="okut-metin"><div class="okut-baslik">Yeni Müşteri Ekle</div></div><div class="okut-ok">›</div></a>'
+        + f'<div id="liste">{kartlar}</div>'
+        + """
+        <script>
+        function ara(){
+            var q = document.getElementById('arama').value.toLocaleLowerCase('tr');
+            document.querySelectorAll('#liste > a').forEach(function(k){
+                k.style.display = k.innerText.toLocaleLowerCase('tr').includes(q) ? '' : 'none';
+            });
+        }
+        </script>
+        """
+    )
+    return sayfa(icerik, "Müşteriler")
+
+
+@app.route("/musteri_ekle", methods=["GET", "POST"])
+@rol_gerekli("muhasebeci")
+def musteri_ekle():
+    hata = None
+    if request.method == "POST":
+        ad = request.form.get("ad", "").strip()
+        telefon = request.form.get("telefon", "").strip()
+        adres = request.form.get("adres", "").strip()
+        not_alani = request.form.get("not_alani", "").strip()
+
+        if not ad:
+            hata = "❌ Müşteri adı zorunlu."
+        else:
+            con = db()
+            try:
+                with con:
+                    with con.cursor() as cur:
+                        cur.execute("SELECT id FROM musteri WHERE ad=%s", (ad,))
+                        if cur.fetchone():
+                            hata = "❌ Bu isimde bir müşteri zaten var."
+                        else:
+                            cur.execute("""
+                                INSERT INTO musteri (ad, telefon, adres, not_alani, olusturulma)
+                                VALUES (%s,%s,%s,%s,%s)
+                            """, (ad, telefon, adres, not_alani, tr_simdi()))
+            finally:
+                con.close()
+            if not hata:
+                return redirect("/musteriler")
+
+    icerik = f"""
+    <h2>➕ Yeni Müşteri</h2>
+    {'<p class="hata">' + hata + '</p>' if hata else ''}
+    <form method="post">
+    <div class="kart">
+    <label>Müşteri / Firma Adı *</label>
+    <input name="ad" required placeholder="Örn: Ahmet Yılmaz İnşaat">
+    <label>Telefon</label>
+    <input name="telefon" placeholder="05xx xxx xx xx">
+    <label>Adres</label>
+    <input name="adres" placeholder="Adres">
+    <label>Not</label>
+    <input name="not_alani" placeholder="Varsa özel not">
+    <button class="btn mavi">Kaydet</button>
+    </div>
+    </form>
+    """
+    return sayfa(icerik, "Yeni Müşteri")
+
+
+@app.route("/musteri/<int:musteri_id>")
+@rol_gerekli("muhasebeci")
+def musteri_detay(musteri_id):
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT id, ad, telefon, adres, not_alani FROM musteri WHERE id=%s", (musteri_id,))
+            m = cur.fetchone()
+            if not m:
+                return sayfa('<p class="hata">❌ Müşteri bulunamadı.</p><a class="btn gri" href="/musteriler">⬅ Geri Dön</a>', "Hata")
+            cur.execute("""
+                SELECT id, durum, tarih FROM siparis WHERE musteri=%s ORDER BY id DESC
+            """, (m[1],))
+            siparisler = cur.fetchall()
+    finally:
+        con.close()
+
+    _, ad, telefon, adres, not_alani = m
+
+    siparis_html = ""
+    for sid, durum, tarih in siparisler:
+        siparis_html += f"""
+        <a href="/siparis/{sid}" class="dash-liste-satir" style="text-decoration:none;color:inherit;">
+          <span>Sipariş #{sid} <span class="siparis-durum {durum}" style="margin-left:6px;">{durum}</span></span>
+          <span class="dash-liste-deger">{tarih}</span>
+        </a>
+        """
+    if not siparisler:
+        siparis_html = '<p style="color:var(--muted);font-size:13px;">Henüz siparişi yok.</p>'
+
+    icerik = f"""
+    <h2>🏢 {ad}</h2>
+    <div class="kart">
+      {'<div style="margin-bottom:4px;">📞 ' + telefon + '</div>' if telefon else ''}
+      {'<div style="margin-bottom:4px;">📍 ' + adres + '</div>' if adres else ''}
+      {'<div style="color:var(--muted);font-size:13px;margin-top:6px;">📝 ' + not_alani + '</div>' if not_alani else ''}
+    </div>
+    <a href="/siparis_olustur?musteri={ad}" class="okut-kart okut-yesil">
+      <div class="okut-ikon">🧾</div>
+      <div class="okut-metin"><div class="okut-baslik">Bu Müşteriye Sipariş Oluştur</div></div>
+      <div class="okut-ok">›</div>
+    </a>
+    <div class="kart">
+      <div class="bolum-baslik" style="margin:0 0 4px;">Sipariş Geçmişi</div>
+      {siparis_html}
+    </div>
+    <a href="/musteriler" class="okut-kart okut-mor"><div class="okut-ikon">🏢</div><div class="okut-metin"><div class="okut-baslik">Tüm Müşterilere Dön</div></div><div class="okut-ok">›</div></a>
+    """
+    return sayfa(icerik, ad)
+
+
+@app.route("/musteri_ara")
+@rol_gerekli("muhasebeci")
+def musteri_ara():
+    q = request.args.get("q", "").strip()
+    if len(q) < 1:
+        return jsonify([])
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT ad, telefon FROM musteri WHERE ad ILIKE %s ORDER BY ad LIMIT 10", (f"%{q}%",))
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+    return jsonify([{"ad": s[0], "telefon": s[1] or ""} for s in satirlar])
+
+
 @app.route("/siparis_olustur", methods=["GET", "POST"])
 @rol_gerekli("muhasebeci")
 def siparis_olustur():
@@ -3291,6 +3524,12 @@ def siparis_olustur():
         try:
             with con:
                 with con.cursor() as cur:
+                    if musteri:
+                        cur.execute("""
+                            INSERT INTO musteri (ad, olusturulma)
+                            VALUES (%s, %s)
+                            ON CONFLICT (ad) DO NOTHING
+                        """, (musteri, tr_simdi()))
                     cur.execute("""
                         INSERT INTO siparis (musteri, depo, durum, olusturan, tarih, aciklama)
                         VALUES (%s,%s,'acik',%s,%s,%s) RETURNING id
@@ -3313,6 +3552,8 @@ def siparis_olustur():
 
         return redirect(f"/siparis/{siparis_id}")
 
+    musteri_on_dolu = request.args.get("musteri", "")
+
     icerik = """
     <h2 style="margin-bottom:2px;">🧾 Yeni Sipariş Oluştur</h2>
     <p style="text-align:center;color:var(--muted);margin-top:0;">
@@ -3322,7 +3563,10 @@ def siparis_olustur():
     <form method="post" id="siparis-form">
     <div class="kart">
     <label>Müşteri / Sipariş Adı (opsiyonel)</label>
-    <input name="musteri" placeholder="Örn: Ahmet Bey - Mutfak Dolabı">
+    <div class="urun-arama-kutu">
+      <input name="musteri" id="musteri-arama" placeholder="Örn: Ahmet Bey - Mutfak Dolabı" autocomplete="off" value="{{musteri_on_dolu}}" oninput="musteriAra()">
+      <div class="urun-arama-sonuc" id="musteri-arama-sonuc"></div>
+    </div>
     <label>Depo</label>
     <select name="depo" required>
     """ + "".join(f'<option>{d}</option>' for d in DEPOLAR) + """
@@ -3430,9 +3674,40 @@ def siparis_olustur():
         kutu.style.display = 'none';
       }
     });
+
+    let musteriZamanlayici;
+    function musteriAra(){
+        clearTimeout(musteriZamanlayici);
+        const q = document.getElementById('musteri-arama').value.trim();
+        const sonucKutu = document.getElementById('musteri-arama-sonuc');
+        if(q.length < 1){ sonucKutu.style.display = 'none'; return; }
+        musteriZamanlayici = setTimeout(() => {
+            fetch('/musteri_ara?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(d => {
+                    if(!d.length){ sonucKutu.style.display = 'none'; return; }
+                    sonucKutu.innerHTML = d.map(m =>
+                        `<div class="urun-arama-satir" onclick="musteriSec('${m.ad.replace(/'/g, "\\'")}')">
+                            <b>${m.ad}</b>${m.telefon ? ' <span style="color:var(--muted);">' + m.telefon + '</span>' : ''}
+                        </div>`
+                    ).join('');
+                    sonucKutu.style.display = 'block';
+                });
+        }, 200);
+    }
+    function musteriSec(ad){
+        document.getElementById('musteri-arama').value = ad;
+        document.getElementById('musteri-arama-sonuc').style.display = 'none';
+    }
+    document.addEventListener('click', function(e){
+      const kutu = document.getElementById('musteri-arama-sonuc');
+      if(kutu && !kutu.contains(e.target) && e.target.id !== 'musteri-arama'){
+        kutu.style.display = 'none';
+      }
+    });
     </script>
     """
-    return sayfa(icerik, "Yeni Sipariş")
+    return render_template_string(sayfa(icerik, "Yeni Sipariş"), musteri_on_dolu=musteri_on_dolu)
 
 
 @app.route("/siparisler")
@@ -3524,6 +3799,12 @@ def siparis_detay(siparis_id):
             kullanici_dagilimi = {}
             for barkod, kullanici, toplam in cur.fetchall():
                 kullanici_dagilimi.setdefault(barkod, []).append((kullanici, toplam))
+
+            cur.execute("""
+                SELECT id, ad, adet, kullanici, tarih, sebep
+                FROM siparis_iade WHERE siparis_id=%s ORDER BY tarih DESC
+            """, (siparis_id,))
+            iadeler = cur.fetchall()
     finally:
         con.close()
 
@@ -3539,11 +3820,13 @@ def siparis_detay(siparis_id):
         iade_form = ""
         if verilen > 0:
             iade_form = f"""
-            <form method="post" action="/kalem_iade/{kid}" style="display:flex;gap:6px;margin-top:6px;"
+            <form method="post" action="/kalem_iade/{kid}" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;"
                   onsubmit="return confirm('{verilen} adet verilmişti, iade alınsın mı?');">
               <input type="number" name="miktar" min="1" max="{verilen}" value="1"
-                     style="margin:0;padding:8px;flex:1;">
-              <button type="submit" class="btn-kucuk kirmizi" style="margin:0;">↩️ İade Al</button>
+                     style="margin:0;padding:8px;flex:1;min-width:60px;">
+              <input type="text" name="sebep" placeholder="İade sebebi (opsiyonel)"
+                     style="margin:0;padding:8px;flex:2;min-width:120px;">
+              <button type="submit" class="btn-kucuk kirmizi" style="margin:0;">↩️ İade Al ve Fiş Kes</button>
             </form>
             """
         kalem_html += f"""
@@ -3568,6 +3851,16 @@ def siparis_detay(siparis_id):
         </form>
         """
 
+    iade_gecmisi_html = ""
+    if iadeler:
+        for iid, iad, iadet, ikullanici, itarih, isebep in iadeler:
+            iade_gecmisi_html += f"""
+            <div class="dash-liste-satir">
+              <span>↩️ {iad} — {iadet} adet <span style="color:var(--muted);">({ikullanici})</span>{(' • ' + isebep) if isebep else ''}</span>
+              <span><a href="/iade_fisi/{iid}" target="_blank" style="color:#B388FF;text-decoration:none;font-size:12px;">🧾 Fiş</a></span>
+            </div>
+            """
+
     icerik = (
         f"<h2>🧾 Sipariş #{siparis_id}</h2>"
         + f'<h3 class="alt">{musteri or "—"}</h3>'
@@ -3585,6 +3878,12 @@ def siparis_detay(siparis_id):
           {kalem_html}
         </div>
         """
+        + (f"""
+        <div class="kart">
+          <div class="bolum-baslik" style="margin:0 0 4px;">↩️ İade Geçmişi</div>
+          {iade_gecmisi_html}
+        </div>
+        """ if iadeler else "")
         + aksiyon_html
         + '<a href="/siparisler" class="okut-kart okut-mor"><div class="okut-ikon">📋</div><div class="okut-metin"><div class="okut-baslik">Tüm Siparişlere Dön</div></div><div class="okut-ok">›</div></a>'
     )
@@ -3599,6 +3898,7 @@ def kalem_iade(kalem_id):
         miktar = 1
     if miktar < 1:
         miktar = 1
+    sebep = request.form.get("sebep", "").strip()
 
     con = db()
     try:
@@ -3613,16 +3913,105 @@ def kalem_iade(kalem_id):
 
                 cur.execute("UPDATE siparis_kalem SET verilen = verilen - %s WHERE id=%s", (miktar, kalem_id))
                 cur.execute("UPDATE urun SET adet = adet + %s WHERE barkod=%s", (miktar, barkod))
+                kullanici = session.get("kullanici", "Bilinmiyor")
+                simdi = tr_simdi()
                 cur.execute("""
                     INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
                     VALUES (%s, %s, 'iade', %s, %s, %s)
-                """, (barkod, ad, miktar, session.get("kullanici", "Bilinmiyor"), tr_simdi()))
+                """, (barkod, ad, miktar, kullanici, simdi))
+                cur.execute("""
+                    INSERT INTO siparis_iade (siparis_id, barkod, ad, adet, kullanici, tarih, sebep)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+                """, (siparis_id, barkod, ad, miktar, kullanici, simdi, sebep))
+                iade_id = cur.fetchone()[0]
                 # iade sonrası sipariş artık eksik hale geldiyse yeniden açık yap
                 cur.execute("UPDATE siparis SET durum='acik' WHERE id=%s AND durum='tamamlandi'", (siparis_id,))
     finally:
         con.close()
 
-    return redirect(f"/siparis/{siparis_id}")
+    return redirect(f"/iade_fisi/{iade_id}")
+
+
+@app.route("/iade_fisi/<int:iade_id>")
+@rol_gerekli("depocu", "muhasebeci", "patron")
+def iade_fisi(iade_id):
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT si.siparis_id, si.barkod, si.ad, si.adet, si.kullanici, si.tarih, si.sebep,
+                       s.musteri, s.depo
+                FROM siparis_iade si
+                LEFT JOIN siparis s ON s.id = si.siparis_id
+                WHERE si.id=%s
+            """, (iade_id,))
+            row = cur.fetchone()
+    finally:
+        con.close()
+
+    if not row:
+        return sayfa('<p class="hata">❌ İade kaydı bulunamadı.</p><a class="btn gri" href="/siparisler">⬅ Geri Dön</a>', "Hata")
+
+    siparis_id, barkod, ad, adet, kullanici, tarih, sebep, musteri, depo = row
+
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="tr">
+    <head>
+    <meta charset="utf-8">
+    <title>İade Fişi #{iade_id}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        @page {{ size: A4; margin: 12mm; }}
+        body {{ font-family: Arial, sans-serif; color:#111; margin:0; }}
+        .fis {{ max-width: 760px; margin: 0 auto; padding: 12px; }}
+        .fis-baslik {{ display:flex; align-items:center; gap:12px; border-bottom:2px solid #B388FF; padding-bottom:10px; margin-bottom:14px; }}
+        .fis-baslik img {{ width:52px; height:52px; border-radius:8px; background:#fff; }}
+        .fis-baslik h1 {{ font-size:18px; margin:0; }}
+        .rozet-iade {{ display:inline-block; background:#B388FF; color:white; font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; margin-top:4px; }}
+        .bilgi-satir {{ display:flex; justify-content:space-between; font-size:13px; color:#333; margin-bottom:14px; flex-wrap:wrap; gap:6px; }}
+        table {{ width:100%; border-collapse:collapse; font-size:12.5px; }}
+        th, td {{ border:1px solid #ccc; padding:9px 10px; text-align:left; }}
+        th {{ background:#f0f0f0; }}
+        .toplam-satir td {{ font-weight:800; background:#f7f7f7; }}
+        .yazdir-btn {{
+            display:block; margin: 18px auto 0; padding:14px 24px;
+            background:#B388FF; color:white; border:none; border-radius:10px;
+            font-size:16px; font-weight:700; cursor:pointer;
+        }}
+        .geri-link {{ display:block; text-align:center; margin-top:12px; color:#666; font-size:13px; text-decoration:none; }}
+        @media print {{ .yazdir-btn, .geri-link {{ display:none; }} }}
+    </style>
+    </head>
+    <body>
+        <div class="fis">
+            <div class="fis-baslik">
+                <img src="{LOGO_URL}">
+                <h1>{UYGULAMA_ADI}<br><span style="font-weight:400;font-size:13px;">İade Fişi #{iade_id}</span><br><span class="rozet-iade">↩️ İADE</span></h1>
+            </div>
+            <div class="bilgi-satir">
+                <div><b>Sipariş No:</b> #{siparis_id}</div>
+                <div><b>Müşteri:</b> {musteri or '-'}</div>
+                <div><b>Depo:</b> {depo or '-'}</div>
+                <div><b>İşlemi Yapan:</b> {kullanici}</div>
+                <div><b>Tarih:</b> {tarih}</div>
+            </div>
+            {'<p style="font-size:13px;"><b>İade Sebebi:</b> ' + sebep + '</p>' if sebep else ''}
+            <table>
+                <tr><th>Ürün</th><th>Barkod</th><th style="text-align:center;">İade Adet</th></tr>
+                <tr>
+                  <td>{ad}</td>
+                  <td>{barkod}</td>
+                  <td style="text-align:center;">{adet}</td>
+                </tr>
+            </table>
+        </div>
+        <button class="yazdir-btn" onclick="window.print()">🖨️ Yazdır</button>
+        <a class="geri-link" href="/siparis/{siparis_id}">⬅ Siparişe Dön</a>
+    </body>
+    </html>
+    """
+    return html
 
 
 @app.route("/siparis_fis/<int:siparis_id>")
