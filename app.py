@@ -34,7 +34,18 @@ VAPID_CLAIMS_EMAIL = os.environ.get("VAPID_EMAIL", "mailto:admin@heris-stok.loca
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)) or ".", "static"))
 app.secret_key = os.environ.get("SECRET_KEY", "heris-stok-2026-sabit-guvenli-anahtar-x7k9m2-degistirme")
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = False
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_NAME"] = "heris_stok_oturum"
 SITE_PAROLA = os.environ.get("SITE_PAROLA", "") 
+
+@app.before_request
+def _oturum_tani():
+    if request.path in ("/palet_giris", "/transfer") or request.path.startswith("/kamera/") or request.path == "/ekle":
+        cerez_var = bool(request.cookies.get(app.config.get("SESSION_COOKIE_NAME", "session")))
+        print(f"[OTURUM-TANI] path={request.path} cookie_geldi_mi={cerez_var} rol_sessionda={session.get('rol')} kullanici={session.get('kullanici')}")
+
 
 @app.before_request
 def site_girisi_kontrol():
