@@ -582,6 +582,11 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .kisi-yesil { background: linear-gradient(135deg, #00C853, #64DD17); }
 .kisi-mavi { background: linear-gradient(135deg, #2196F3, #00BCD4); }
 .kisi-mor { background: linear-gradient(135deg, #5E35B1, #7E57C2); }
+.rol-rozet {
+  display:inline-block; padding:3px 12px; border-radius:999px;
+  font-size:11.5px; font-weight:700; color:white; letter-spacing:.3px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+}
 .kisi-metin { flex:1; }
 .kisi-ad { font-size:16px; font-weight:700; }
 .kisi-rol { font-size:12px; color:var(--muted); margin-top:1px; }
@@ -796,6 +801,7 @@ def palet_giris():
         ad = request.form.get("ad", "").strip()
         depo = request.form.get("depo", "")
         adetler = request.form.getlist("palet_adet")
+        tedarikci = request.form.get("tedarikci", "").strip()
 
         if not barkod or not adetler:
             return sayfa('<p class="hata">❌ Barkod ve en az bir palet adedi girilmeli.</p><a class="btn gri" href="/palet_giris">⬅ Geri Dön</a>', "Hata")
@@ -814,11 +820,17 @@ def palet_giris():
         try:
             with con:
                 with con.cursor() as cur:
+                    if tedarikci:
+                        cur.execute("""
+                            INSERT INTO tedarikci (ad, olusturulma)
+                            VALUES (%s, %s)
+                            ON CONFLICT (ad) DO NOTHING
+                        """, (tedarikci, tr_simdi()))
                     cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=%s AND depo=%s", (barkod, depo))
                     row = cur.fetchone()
                     if row:
                         uid, urun_ad, mevcut = row
-                        cur.execute("UPDATE urun SET adet=%s WHERE id=%s", (mevcut + toplam, uid))
+                        cur.execute("UPDATE urun SET adet=%s, son_tedarikci=COALESCE(%s, son_tedarikci) WHERE id=%s", (mevcut + toplam, tedarikci or None, uid))
                         ad = urun_ad
                     else:
                         cur.execute("""
@@ -831,15 +843,15 @@ def palet_giris():
                             ad = ad or mevcut_ad
                             yeni_barkod = barkod_uret()
                             cur.execute("""
-                                INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
-                                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                            """, (ad, cins, ebat, kalinlik, yuzey, sinif, renk, toplam, depo, yeni_barkod))
+                                INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,son_tedarikci)
+                                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            """, (ad, cins, ebat, kalinlik, yuzey, sinif, renk, toplam, depo, yeni_barkod, tedarikci or None))
                             barkod = yeni_barkod
                         else:
                             cur.execute("""
-                                INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod)
-                                VALUES(%s,'','','','','','',%s,%s,%s)
-                            """, (ad or "İsimsiz Ürün", toplam, depo, barkod))
+                                INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,son_tedarikci)
+                                VALUES(%s,'','','','','','',%s,%s,%s,%s)
+                            """, (ad or "İsimsiz Ürün", toplam, depo, barkod, tedarikci or None))
 
                     kullanici = session.get("kullanici", "Bilinmiyor")
                     simdi = tr_simdi()
@@ -851,9 +863,9 @@ def palet_giris():
                         if palet_adet <= 0:
                             continue
                         cur.execute("""
-                            INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
-                            VALUES (%s, %s, 'giris', %s, %s, %s)
-                        """, (barkod, ad, palet_adet, kullanici, simdi))
+                            INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih, tedarikci)
+                            VALUES (%s, %s, 'giris', %s, %s, %s, %s)
+                        """, (barkod, ad, palet_adet, kullanici, simdi, tedarikci or None))
         finally:
             con.close()
 
@@ -890,6 +902,14 @@ def palet_giris():
     <select name="depo">
     """ + "".join(f'<option>{d}</option>' for d in DEPOLAR) + """
     </select>
+    </div>
+
+    <div class="kart">
+    <label>Tedarikçi (isteğe bağlı)</label>
+    <div class="urun-arama-kutu">
+      <input name="tedarikci" id="tedarikci-arama" placeholder="Örn: XYZ Ahşap Sanayi" autocomplete="off" oninput="tedarikciAra()">
+      <div class="urun-arama-sonuc" id="tedarikci-arama-sonuc"></div>
+    </div>
     </div>
 
     <div class="kart">
@@ -972,6 +992,37 @@ def palet_giris():
     document.addEventListener('click', function(e){
       const kutu = document.getElementById('urun-arama-sonuc');
       if(!kutu.contains(e.target) && e.target.id !== 'urun-arama'){
+        kutu.style.display = 'none';
+      }
+    });
+
+    let tedarikciZamanlayici;
+    function tedarikciAra(){
+        clearTimeout(tedarikciZamanlayici);
+        const q = document.getElementById('tedarikci-arama').value.trim();
+        const sonucKutu = document.getElementById('tedarikci-arama-sonuc');
+        if(q.length < 1){ sonucKutu.style.display = 'none'; return; }
+        tedarikciZamanlayici = setTimeout(() => {
+            fetch('/tedarikci_ara?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(d => {
+                    if(!d.length){ sonucKutu.style.display = 'none'; return; }
+                    sonucKutu.innerHTML = d.map(t =>
+                        `<div class="urun-arama-satir" onclick="tedarikciSec('${t.ad.replace(/'/g, "\\'")}')">
+                            <b>${t.ad}</b>${t.telefon ? ' <span style="color:var(--muted);">' + t.telefon + '</span>' : ''}
+                        </div>`
+                    ).join('');
+                    sonucKutu.style.display = 'block';
+                });
+        }, 200);
+    }
+    function tedarikciSec(ad){
+        document.getElementById('tedarikci-arama').value = ad;
+        document.getElementById('tedarikci-arama-sonuc').style.display = 'none';
+    }
+    document.addEventListener('click', function(e){
+      const kutu = document.getElementById('tedarikci-arama-sonuc');
+      if(kutu && !kutu.contains(e.target) && e.target.id !== 'tedarikci-arama'){
         kutu.style.display = 'none';
       }
     });
@@ -1176,6 +1227,22 @@ def index():
             + f'<h1 style="font-size:19px;line-height:1.35;margin-bottom:2px;">{UYGULAMA_ADI}</h1>'
             + '<h3 class="alt">Devam etmek için ismini seç</h3>'
             + secim_html
+            + """
+            <style>
+            body::before {
+              content:"";
+              position:fixed; top:-120px; right:-100px; width:320px; height:320px;
+              background: radial-gradient(circle, rgba(33,150,243,.16), transparent 70%);
+              border-radius:50%; z-index:-1; pointer-events:none;
+            }
+            body::after {
+              content:"";
+              position:fixed; bottom:-140px; left:-110px; width:340px; height:340px;
+              background: radial-gradient(circle, rgba(94,53,177,.14), transparent 70%);
+              border-radius:50%; z-index:-1; pointer-events:none;
+            }
+            </style>
+            """
         )
         return sayfa(icerik, "Giriş - " + UYGULAMA_ADI)
 
@@ -1237,6 +1304,11 @@ def index():
         <a href="/musteriler" class="okut-kart okut-mavi">
           <div class="okut-ikon">🏢</div>
           <div class="okut-metin"><div class="okut-baslik">Müşteriler</div><div class="okut-alt">Kayıtlı müşteriler ve sipariş geçmişi</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/tedarikciler" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">🚚</div>
+          <div class="okut-metin"><div class="okut-baslik">Tedarikçiler</div><div class="okut-alt">Malzeme hangi tedarikçiden geldi</div></div>
           <div class="okut-ok">›</div>
         </a>
         <div class="bolum-baslik">İşlemler</div>
@@ -1314,9 +1386,14 @@ def index():
           <div class="okut-ok">›</div>
         </a>
         """
+    rol_rozet_renk = {"depocu": "kisi-yesil", "muhasebeci": "kisi-mavi", "patron": "kisi-mor"}.get(rol, "kisi-mavi")
+    rol_etiket_gosterim = {"depocu": "Depocu", "muhasebeci": "Muhasebeci", "patron": "Patron"}.get(rol, rol)
     icerik = (
         "<h1>📦 STOK PANEL</h1>"
-        + '<h3 class="alt">👤 ' + kullanici + ' (' + rol + ')</h3>'
+        + f'<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:-6px;margin-bottom:8px;">'
+        + f'<span style="color:var(--muted);font-size:14px;">👤 {kullanici}</span>'
+        + f'<span class="rol-rozet {rol_rozet_renk}">{rol_etiket_gosterim}</span>'
+        + '</div>'
         + butonlar
     )
     return sayfa(icerik, "Stok Panel")
@@ -1345,13 +1422,21 @@ def ekle2():
         except (TypeError, ValueError):
             min_stok = 5
 
+        tedarikci = request.form.get("tedarikci", "").strip()
+
         con = db()
         try:
             with con:
                 with con.cursor() as cur:
+                    if tedarikci:
+                        cur.execute("""
+                            INSERT INTO tedarikci (ad, olusturulma)
+                            VALUES (%s, %s)
+                            ON CONFLICT (ad) DO NOTHING
+                        """, (tedarikci, tr_simdi()))
                     cur.execute("""
-                    INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok)
-                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok,son_tedarikci)
+                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """, (
                         ad,
                         request.form.get("cins", ""),
@@ -1364,11 +1449,12 @@ def ekle2():
                         request.form.get("depo", ""),
                         barkod,
                         min_stok,
+                        tedarikci or None,
                     ))
                     cur.execute("""
-                    INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
-                    VALUES (%s, %s, 'giris', %s, %s, %s)
-                    """, (barkod, ad, adet, session.get("kullanici", "Bilinmiyor"), tr_simdi()))
+                    INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih, tedarikci)
+                    VALUES (%s, %s, 'giris', %s, %s, %s, %s)
+                    """, (barkod, ad, adet, session.get("kullanici", "Bilinmiyor"), tr_simdi(), tedarikci or None))
         finally:
             con.close()
 
@@ -1438,8 +1524,51 @@ def ekle2():
     </select>
     <label>Kritik Stok Eşiği (bu adedin altına düşünce uyarı verir)</label>
     <input name="min_stok" type="number" placeholder="5" value="5">
+    </div>
+
+    <div class="kart">
+    <label>Tedarikçi (isteğe bağlı)</label>
+    <div class="urun-arama-kutu">
+      <input name="tedarikci" id="tedarikci-arama" placeholder="Örn: XYZ Ahşap Sanayi" autocomplete="off" oninput="tedarikciAra()">
+      <div class="urun-arama-sonuc" id="tedarikci-arama-sonuc"></div>
+    </div>
+    </div>
+
     <button class="btn mavi">Kaydet</button>
     </form>
+
+    <script>
+    let tedarikciZamanlayici;
+    function tedarikciAra(){
+        clearTimeout(tedarikciZamanlayici);
+        const q = document.getElementById('tedarikci-arama').value.trim();
+        const sonucKutu = document.getElementById('tedarikci-arama-sonuc');
+        if(q.length < 1){ sonucKutu.style.display = 'none'; return; }
+        tedarikciZamanlayici = setTimeout(() => {
+            fetch('/tedarikci_ara?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(d => {
+                    if(!d.length){ sonucKutu.style.display = 'none'; return; }
+                    sonucKutu.innerHTML = d.map(t =>
+                        `<div class="urun-arama-satir" onclick="tedarikciSec('${t.ad.replace(/'/g, "\\'")}')">
+                            <b>${t.ad}</b>${t.telefon ? ' <span style="color:var(--muted);">' + t.telefon + '</span>' : ''}
+                        </div>`
+                    ).join('');
+                    sonucKutu.style.display = 'block';
+                });
+        }, 200);
+    }
+    function tedarikciSec(ad){
+        document.getElementById('tedarikci-arama').value = ad;
+        document.getElementById('tedarikci-arama-sonuc').style.display = 'none';
+    }
+    document.addEventListener('click', function(e){
+      const kutu = document.getElementById('tedarikci-arama-sonuc');
+      if(kutu && !kutu.contains(e.target) && e.target.id !== 'tedarikci-arama'){
+        kutu.style.display = 'none';
+      }
+    });
+    </script>
     """
     return render_template_string(sayfa(icerik, "Ürün Ekle"), depolar=DEPOLAR, on_dolu_barkod=on_dolu_barkod)
 
@@ -2340,7 +2469,7 @@ def hareket_listesi():
 
     sorgu = """
         SELECT h.ad, h.barkod, h.tip, h.adet, h.kullanici, h.tarih,
-               u.cins, u.sinif, u.yuzey, u.renk, u.ebat, u.depo
+               u.cins, u.sinif, u.yuzey, u.renk, u.ebat, u.depo, h.tedarikci
         FROM hareket h
         LEFT JOIN urun u ON u.barkod = h.barkod
         WHERE 1=1
@@ -2363,7 +2492,7 @@ def hareket_listesi():
         con.close()
 
     kartlar = ""
-    for ad, barkod, tip, adet, kullanici, tarih, cins, sinif, yuzey, renk, ebat, depo in kayitlar:
+    for ad, barkod, tip, adet, kullanici, tarih, cins, sinif, yuzey, renk, ebat, depo, tedarikci in kayitlar:
         ozellikler = " • ".join([x for x in [cins, sinif, yuzey, renk, ebat] if x])
         giris_mi = tip == "giris"
         iade_mi = tip == "iade"
@@ -2377,7 +2506,7 @@ def hareket_listesi():
               <div class="hareket-ad">{ad}</div>
               <div class="hareket-adet {'giris' if giris_mi else ('iade' if iade_mi else 'cikis')}">{'+' if (giris_mi or iade_mi) else '-'}{adet}</div>
             </div>
-            <div class="hareket-detay">{ozellikler or '-'}{(' • 🏭 ' + depo) if depo else ''}</div>
+            <div class="hareket-detay">{ozellikler or '-'}{(' • 🏭 ' + depo) if depo else ''}{(' • 🚚 ' + tedarikci) if tedarikci else ''}</div>
             <div class="hareket-alt">🔢 {barkod} &nbsp;•&nbsp; 👤 {kullanici} &nbsp;•&nbsp; 🕒 {tarih}</div>
           </div>
         </div>
@@ -3209,6 +3338,32 @@ def musteri_tablosu_olustur():
 if DATABASE_URL:
     musteri_tablosu_olustur()
 
+
+def tedarikci_tablosu_olustur():
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS tedarikci(
+                    id SERIAL PRIMARY KEY,
+                    ad TEXT UNIQUE,
+                    telefon TEXT,
+                    adres TEXT,
+                    not_alani TEXT,
+                    olusturulma TIMESTAMP
+                )
+                """)
+                cur.execute("ALTER TABLE hareket ADD COLUMN IF NOT EXISTS tedarikci TEXT")
+                cur.execute("ALTER TABLE urun ADD COLUMN IF NOT EXISTS son_tedarikci TEXT")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_hareket_tedarikci ON hareket(tedarikci)")
+    finally:
+        con.close()
+
+
+if DATABASE_URL:
+    tedarikci_tablosu_olustur()
+
 def push_tablosu_olustur():
     con = db()
     try:
@@ -3602,6 +3757,171 @@ def musteri_ara():
     try:
         with con.cursor() as cur:
             cur.execute("SELECT ad, telefon FROM musteri WHERE ad ILIKE %s ORDER BY ad LIMIT 10", (f"%{q}%",))
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+    return jsonify([{"ad": s[0], "telefon": s[1] or ""} for s in satirlar])
+
+
+@app.route("/tedarikciler")
+@rol_gerekli("muhasebeci")
+def tedarikciler():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT t.id, t.ad, t.telefon,
+                       COUNT(h.id) AS giris_sayisi
+                FROM tedarikci t
+                LEFT JOIN hareket h ON h.tedarikci = t.ad AND h.tip = 'giris'
+                GROUP BY t.id, t.ad, t.telefon
+                ORDER BY t.ad
+            """)
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+
+    kartlar = ""
+    for tid, ad, telefon, giris_sayisi in satirlar:
+        kartlar += f"""
+        <a href="/tedarikci/{tid}" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">🚚</div>
+          <div class="okut-metin">
+            <div class="okut-baslik">{ad}</div>
+            <div class="okut-alt">{(telefon + ' • ') if telefon else ''}{giris_sayisi} sevkiyat</div>
+          </div>
+          <div class="okut-ok">›</div>
+        </a>
+        """
+    if not satirlar:
+        kartlar = '<p style="text-align:center;color:var(--muted);margin-top:20px;">Henüz tedarikçi kaydı yok.</p>'
+
+    icerik = (
+        "<h2>🚚 Tedarikçiler</h2>"
+        + '<input class="arama" id="arama" placeholder="🔍 Tedarikçi ara..." oninput="ara()">'
+        + '<a href="/tedarikci_ekle" class="okut-kart okut-yesil"><div class="okut-ikon">➕</div><div class="okut-metin"><div class="okut-baslik">Yeni Tedarikçi Ekle</div></div><div class="okut-ok">›</div></a>'
+        + f'<div id="liste">{kartlar}</div>'
+        + """
+        <script>
+        function ara(){
+            var q = document.getElementById('arama').value.toLocaleLowerCase('tr');
+            document.querySelectorAll('#liste > a').forEach(function(k){
+                k.style.display = k.innerText.toLocaleLowerCase('tr').includes(q) ? '' : 'none';
+            });
+        }
+        </script>
+        """
+    )
+    return sayfa(icerik, "Tedarikçiler")
+
+
+@app.route("/tedarikci_ekle", methods=["GET", "POST"])
+@rol_gerekli("muhasebeci")
+def tedarikci_ekle():
+    hata = None
+    if request.method == "POST":
+        ad = request.form.get("ad", "").strip()
+        telefon = request.form.get("telefon", "").strip()
+        adres = request.form.get("adres", "").strip()
+        not_alani = request.form.get("not_alani", "").strip()
+
+        if not ad:
+            hata = "❌ Tedarikçi adı zorunlu."
+        else:
+            con = db()
+            try:
+                with con:
+                    with con.cursor() as cur:
+                        cur.execute("SELECT id FROM tedarikci WHERE ad=%s", (ad,))
+                        if cur.fetchone():
+                            hata = "❌ Bu isimde bir tedarikçi zaten var."
+                        else:
+                            cur.execute("""
+                                INSERT INTO tedarikci (ad, telefon, adres, not_alani, olusturulma)
+                                VALUES (%s,%s,%s,%s,%s)
+                            """, (ad, telefon, adres, not_alani, tr_simdi()))
+            finally:
+                con.close()
+            if not hata:
+                return redirect("/tedarikciler")
+
+    icerik = f"""
+    <h2>➕ Yeni Tedarikçi</h2>
+    {'<p class="hata">' + hata + '</p>' if hata else ''}
+    <form method="post">
+    <div class="kart">
+    <label>Tedarikçi / Firma Adı *</label>
+    <input name="ad" required placeholder="Örn: XYZ Ahşap Sanayi">
+    <label>Telefon</label>
+    <input name="telefon" placeholder="05xx xxx xx xx">
+    <label>Adres</label>
+    <input name="adres" placeholder="Adres">
+    <label>Not</label>
+    <input name="not_alani" placeholder="Varsa özel not">
+    <button class="btn mavi">Kaydet</button>
+    </div>
+    </form>
+    """
+    return sayfa(icerik, "Yeni Tedarikçi")
+
+
+@app.route("/tedarikci/<int:tedarikci_id>")
+@rol_gerekli("muhasebeci")
+def tedarikci_detay(tedarikci_id):
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT id, ad, telefon, adres, not_alani FROM tedarikci WHERE id=%s", (tedarikci_id,))
+            t = cur.fetchone()
+            if not t:
+                return sayfa('<p class="hata">❌ Tedarikçi bulunamadı.</p><a class="btn gri" href="/tedarikciler">⬅ Geri Dön</a>', "Hata")
+            cur.execute("""
+                SELECT ad, barkod, adet, kullanici, tarih FROM hareket
+                WHERE tedarikci=%s AND tip='giris' ORDER BY id DESC LIMIT 30
+            """, (t[1],))
+            girisler = cur.fetchall()
+    finally:
+        con.close()
+
+    _, ad, telefon, adres, not_alani = t
+
+    giris_html = ""
+    for uad, barkod, adet, kullanici, tarih in girisler:
+        giris_html += f"""
+        <div class="dash-liste-satir">
+          <span>{uad} <span style="color:var(--muted);">({adet} adet)</span></span>
+          <span class="dash-liste-deger">{tarih}</span>
+        </div>
+        """
+    if not girisler:
+        giris_html = '<p style="color:var(--muted);font-size:13px;">Henüz bu tedarikçiden kayıtlı giriş yok.</p>'
+
+    icerik = f"""
+    <h2>🚚 {ad}</h2>
+    <div class="kart">
+      {'<div style="margin-bottom:4px;">📞 ' + telefon + '</div>' if telefon else ''}
+      {'<div style="margin-bottom:4px;">📍 ' + adres + '</div>' if adres else ''}
+      {'<div style="color:var(--muted);font-size:13px;margin-top:6px;">📝 ' + not_alani + '</div>' if not_alani else ''}
+    </div>
+    <div class="kart">
+      <div class="bolum-baslik" style="margin:0 0 4px;">Son Sevkiyatlar</div>
+      {giris_html}
+    </div>
+    <a href="/tedarikciler" class="okut-kart okut-mor"><div class="okut-ikon">🚚</div><div class="okut-metin"><div class="okut-baslik">Tüm Tedarikçilere Dön</div></div><div class="okut-ok">›</div></a>
+    """
+    return sayfa(icerik, ad)
+
+
+@app.route("/tedarikci_ara")
+@rol_gerekli("muhasebeci")
+def tedarikci_ara():
+    q = request.args.get("q", "").strip()
+    if len(q) < 1:
+        return jsonify([])
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT ad, telefon FROM tedarikci WHERE ad ILIKE %s ORDER BY ad LIMIT 10", (f"%{q}%",))
             satirlar = cur.fetchall()
     finally:
         con.close()
