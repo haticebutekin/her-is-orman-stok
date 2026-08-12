@@ -326,10 +326,16 @@ def yedek_email_gonder():
         msg.set_content("Otomatik stok yedeği ekte. Bu e-postayı sil, arşivle veya güvenli bir yerde tut.")
         msg.add_attachment(veri, maintype="application", subtype="json", filename=dosya_adi)
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+        smtp = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
+        try:
             smtp.starttls()
             smtp.login(SMTP_USER, SMTP_PASS)
             smtp.send_message(msg)
+        finally:
+            try:
+                smtp.quit()
+            except Exception:
+                pass
 
         print(f"Yedek e-postası gönderildi: {dosya_adi}")
         return True, "Gönderildi"
@@ -341,8 +347,13 @@ def yedek_email_gonder():
         mesaj = f"SMTP hatası: {e}"
         print("YEDEK E-POSTA HATASI:", mesaj)
         return False, mesaj
-    except OSError as e:
-        mesaj = f"Sunucuya bağlanılamadı (SMTP_HOST/SMTP_PORT hatalı olabilir): {e}"
+    except (OSError, TimeoutError) as e:
+        mesaj = (
+            f"Sunucuya {SMTP_HOST}:{SMTP_PORT} adresine 10 saniye içinde bağlanılamadı ({e}). "
+            "Bu genelde Render'ın outbound SMTP portunu (587) engellediği anlamına gelir — "
+            "bulut sağlayıcılarının çoğu ücretsiz planda bu portu kısıtlar. "
+            "Çözüm için SendGrid, Mailgun veya Resend gibi bir e-posta API servisi kullanmanız gerekebilir."
+        )
         print("YEDEK E-POSTA HATASI:", mesaj)
         return False, mesaj
     except Exception as e:
@@ -866,7 +877,7 @@ def palet_giris():
                             VALUES (%s, %s)
                             ON CONFLICT (ad) DO NOTHING
                         """, (tedarikci, tr_simdi()))
-                    cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=%s AND depo=%s", (barkod, depo))
+                    cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=%s AND depo=%s FOR UPDATE", (barkod, depo))
                     row = cur.fetchone()
                     if row:
                         uid, urun_ad, mevcut = row
@@ -2677,7 +2688,7 @@ def transfer():
         try:
             with con:
                 with con.cursor() as cur:
-                    cur.execute("SELECT id, ad, adet, depo FROM urun WHERE barkod=%s", (barkod,))
+                    cur.execute("SELECT id, ad, adet, depo FROM urun WHERE barkod=%s FOR UPDATE", (barkod,))
                     row = cur.fetchone()
                     if not row:
                         return sayfa('<p class="hata">❌ Ürün bulunamadı.</p><a class="btn gri" href="/transfer">⬅ Geri Dön</a>', "Hata")
@@ -2701,7 +2712,7 @@ def transfer():
                         # Kaynakta miktarı düş
                         cur.execute("UPDATE urun SET adet=%s WHERE id=%s", (kalan, uid))
                         # Hedef depoda aynı barkodlu kayıt var mı bak
-                        cur.execute("SELECT id, adet FROM urun WHERE barkod=%s AND depo=%s", (barkod, hedef_depo))
+                        cur.execute("SELECT id, adet FROM urun WHERE barkod=%s AND depo=%s FOR UPDATE", (barkod, hedef_depo))
                         hedef_satir = cur.fetchone()
                         if hedef_satir:
                             hedef_id, hedef_adet = hedef_satir
@@ -3305,7 +3316,7 @@ def hizli_islem():
     try:
         with con:
             with con.cursor() as cur:
-                cur.execute("SELECT id, ad, adet, cins, ebat, yuzey, sinif, renk, depo FROM urun WHERE barkod=%s AND silindi IS NOT TRUE", (barkod,))
+                cur.execute("SELECT id, ad, adet, cins, ebat, yuzey, sinif, renk, depo FROM urun WHERE barkod=%s AND silindi IS NOT TRUE FOR UPDATE", (barkod,))
                 row = cur.fetchone()
 
                 if not row:
@@ -3662,7 +3673,7 @@ def geri_al():
     try:
         with con:
             with con.cursor() as cur:
-                cur.execute("SELECT id, adet FROM urun WHERE barkod=%s", (barkod,))
+                cur.execute("SELECT id, adet FROM urun WHERE barkod=%s FOR UPDATE", (barkod,))
                 row = cur.fetchone()
                 if not row:
                     return jsonify({"ok": False})
@@ -4074,6 +4085,75 @@ def urun_ara():
     ])
 
 
+@app.route("/musteri_urun_raporu")
+@rol_gerekli("muhasebeci")
+def musteri_urun_raporu():
+    musteri_filtre = request.args.get("musteri", "")
+
+    con = db()
+    try:
+        with con.cursor() as cur:
+            if musteri_filtre:
+                cur.execute("""
+                    SELECT s.musteri, k.ad, SUM(k.verilen) AS toplam
+                    FROM siparis_kalem k
+                    JOIN siparis s ON s.id = k.siparis_id
+                    WHERE k.verilen > 0 AND s.musteri=%s
+                    GROUP BY s.musteri, k.ad ORDER BY toplam DESC
+                """, (musteri_filtre,))
+            else:
+                cur.execute("""
+                    SELECT s.musteri, k.ad, SUM(k.verilen) AS toplam
+                    FROM siparis_kalem k
+                    JOIN siparis s ON s.id = k.siparis_id
+                    WHERE k.verilen > 0 AND s.musteri IS NOT NULL AND s.musteri <> ''
+                    GROUP BY s.musteri, k.ad ORDER BY s.musteri, toplam DESC
+                """)
+            satirlar = cur.fetchall()
+            cur.execute("SELECT DISTINCT ad FROM musteri ORDER BY ad")
+            musteriler_listesi = [r[0] for r in cur.fetchall()]
+    finally:
+        con.close()
+
+    gruplar = {}
+    for musteri, urun_ad, toplam in satirlar:
+        gruplar.setdefault(musteri or "İsimsiz", []).append((urun_ad, toplam))
+
+    kartlar = ""
+    for musteri, urunler in gruplar.items():
+        satir_html = ""
+        for urun_ad, toplam in urunler:
+            satir_html += f"""
+            <div class="dash-liste-satir">
+              <span>{urun_ad}</span>
+              <span class="dash-liste-deger">{toplam} adet</span>
+            </div>
+            """
+        kartlar += f"""
+        <div class="kart">
+          <div class="bolum-baslik" style="margin:0 0 4px;">🏢 {musteri}</div>
+          {satir_html}
+        </div>
+        """
+    if not kartlar:
+        kartlar = '<p style="text-align:center;color:var(--muted);margin-top:20px;">Henüz teslim edilmiş sipariş yok.</p>'
+
+    filtre_html = '<div class="filtre-satir">'
+    filtre_html += f'<a href="/musteri_urun_raporu" class="filtre-cip {"aktif" if not musteri_filtre else ""}" style="text-decoration:none;display:block;">Tümü</a>'
+    for m in musteriler_listesi:
+        aktif = "aktif" if musteri_filtre == m else ""
+        filtre_html += f'<a href="/musteri_urun_raporu?musteri={m}" class="filtre-cip {aktif}" style="text-decoration:none;display:block;">{m}</a>'
+    filtre_html += '</div>'
+
+    icerik = (
+        "<h2>📦 Müşteri — Ürün Alım Raporu</h2>"
+        + '<p style="text-align:center;color:var(--muted);margin-top:-6px;font-size:13px;">Hangi müşteri hangi üründen kaç adet almış</p>'
+        + filtre_html
+        + kartlar
+    )
+    return sayfa(icerik, "Müşteri Ürün Raporu")
+
+
 @app.route("/musteriler")
 @rol_gerekli("muhasebeci")
 def musteriler():
@@ -4111,6 +4191,7 @@ def musteriler():
         "<h2>🏢 Müşteriler</h2>"
         + '<input class="arama" id="arama" placeholder="🔍 Müşteri ara..." oninput="ara()">'
         + '<a href="/musteri_ekle" class="okut-kart okut-yesil"><div class="okut-ikon">➕</div><div class="okut-metin"><div class="okut-baslik">Yeni Müşteri Ekle</div></div><div class="okut-ok">›</div></a>'
+        + '<a href="/musteri_urun_raporu" class="okut-kart okut-mavi"><div class="okut-ikon">📦</div><div class="okut-metin"><div class="okut-baslik">Ürün Alım Raporu</div><div class="okut-alt">Hangi müşteri ne kadar almış</div></div><div class="okut-ok">›</div></a>'
         + f'<div id="liste">{kartlar}</div>'
         + """
         <script>
@@ -4194,6 +4275,15 @@ def musteri_detay(musteri_id):
                 SELECT id, durum, tarih FROM siparis WHERE musteri=%s ORDER BY id DESC
             """, (m[1],))
             siparisler = cur.fetchall()
+
+            cur.execute("""
+                SELECT k.ad, SUM(k.verilen) AS toplam
+                FROM siparis_kalem k
+                JOIN siparis s ON s.id = k.siparis_id
+                WHERE s.musteri=%s AND k.verilen > 0
+                GROUP BY k.ad ORDER BY toplam DESC
+            """, (m[1],))
+            urun_ozet = cur.fetchall()
     finally:
         con.close()
 
@@ -4210,6 +4300,17 @@ def musteri_detay(musteri_id):
         """
     if not siparisler:
         siparis_html = '<p style="color:var(--muted);font-size:13px;">Henüz siparişi yok.</p>'
+
+    urun_ozet_html = ""
+    for urun_ad, toplam in urun_ozet:
+        urun_ozet_html += f"""
+        <div class="dash-liste-satir">
+          <span>{urun_ad}</span>
+          <span class="dash-liste-deger">{toplam} adet</span>
+        </div>
+        """
+    if not urun_ozet:
+        urun_ozet_html = '<p style="color:var(--muted);font-size:13px;">Henüz teslim edilmiş ürün yok.</p>'
 
     icerik = f"""
     <h2>🏢 {ad}</h2>
@@ -4229,6 +4330,10 @@ def musteri_detay(musteri_id):
       <div class="okut-metin"><div class="okut-baslik">Bu Müşteriye Sipariş Oluştur</div></div>
       <div class="okut-ok">›</div>
     </a>
+    <div class="kart">
+      <div class="bolum-baslik" style="margin:0 0 4px;">📦 Ürün Bazlı Alım Özeti</div>
+      {urun_ozet_html}
+    </div>
     <div class="kart">
       <div class="bolum-baslik" style="margin:0 0 4px;">Sipariş Geçmişi</div>
       {siparis_html}
@@ -5381,6 +5486,91 @@ let kameraListesi = [];
 let aktifKameraIndex = 0;
 let oturumListesi = {};  // barkod -> {ad, toplamAdet}
 
+// ==================== BAĞLANTI DURUMU VE OFFLINE KUYRUK ====================
+const BEKLEYEN_KUYRUK_ANAHTARI = 'heris_bekleyen_taramalar';
+
+function kuyrukOku(){
+    try {
+        return JSON.parse(localStorage.getItem(BEKLEYEN_KUYRUK_ANAHTARI) || '[]');
+    } catch(e) { return []; }
+}
+function kuyrukYaz(liste){
+    try { localStorage.setItem(BEKLEYEN_KUYRUK_ANAHTARI, JSON.stringify(liste)); } catch(e) {}
+}
+function kuyrugaEkle(barkod){
+    const liste = kuyrukOku();
+    liste.push({ barkod: barkod, tip: aktifTip, siparis_id: siparisId, zaman: Date.now() });
+    kuyrukYaz(liste);
+    baglantiDurumuGoster();
+}
+
+let senkronDevamEdiyor = false;
+function kuyruguSenkronEt(){
+    if(senkronDevamEdiyor || !navigator.onLine) return;
+    const liste = kuyrukOku();
+    if(liste.length === 0) return;
+    senkronDevamEdiyor = true;
+
+    const isle = (i) => {
+        if(i >= liste.length){
+            kuyrukYaz([]);
+            senkronDevamEdiyor = false;
+            baglantiDurumuGoster();
+            return;
+        }
+        const kalem = liste[i];
+        fetch("/hizli_islem", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ barkod: kalem.barkod, tip: kalem.tip, siparis_id: kalem.siparis_id })
+        })
+        .then(r => r.json())
+        .then(d => {
+            oturumGuncelle(kalem.barkod, d.ad || kalem.barkod, 1);
+            isle(i + 1);
+        })
+        .catch(() => {
+            // hâlâ bağlantı yok, kalan kayıtları kuyrukta bırak ve dur
+            kuyrukYaz(liste.slice(i));
+            senkronDevamEdiyor = false;
+            baglantiDurumuGoster();
+        });
+    };
+    isle(0);
+}
+
+function baglantiDurumuGoster(){
+    const bekleyen = kuyrukOku().length;
+    let banner = document.getElementById('baglanti-banner');
+    if(!navigator.onLine || bekleyen > 0){
+        if(!banner){
+            banner = document.createElement('div');
+            banner.id = 'baglanti-banner';
+            banner.style.cssText = 'position:sticky;top:0;z-index:500;padding:10px 14px;border-radius:12px;margin-bottom:10px;font-size:13px;font-weight:700;text-align:center;';
+            document.querySelector('.sayfa').prepend(banner);
+        }
+        if(!navigator.onLine){
+            banner.style.background = 'rgba(255,23,68,.18)';
+            banner.style.color = '#FF8A80';
+            banner.textContent = '🔴 İnternet bağlantısı yok' + (bekleyen > 0 ? ` — ${bekleyen} tarama bağlantı gelince gönderilecek` : ' — taramalar bağlantı gelince otomatik gönderilecek');
+        } else {
+            banner.style.background = 'rgba(255,152,0,.18)';
+            banner.style.color = '#FFB74D';
+            banner.textContent = `🟡 ${bekleyen} bekleyen tarama gönderiliyor...`;
+        }
+    } else if(banner){
+        banner.remove();
+    }
+}
+
+window.addEventListener('online', () => { baglantiDurumuGoster(); kuyruguSenkronEt(); });
+window.addEventListener('offline', baglantiDurumuGoster);
+document.addEventListener('DOMContentLoaded', () => {
+    baglantiDurumuGoster();
+    if(navigator.onLine) kuyruguSenkronEt();
+});
+setInterval(() => { if(navigator.onLine) kuyruguSenkronEt(); }, 15000);
+
 function oturumGuncelle(barkod, ad, adet){
     if(!oturumListesi[barkod]){
         oturumListesi[barkod] = {ad: ad, toplamAdet: 0};
@@ -5584,6 +5774,13 @@ function isleGonder(barkod){
     if(bipSes){ bipSes.currentTime = 0; bipSes.play().catch(e => {}); }
     if(navigator.vibrate) navigator.vibrate(70);
 
+    if(!navigator.onLine){
+        kuyrugaEkle(barkod);
+        sonucGosterCevrimdisi(barkod);
+        kilit = false;
+        return;
+    }
+
     fetch("/hizli_islem", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
@@ -5591,7 +5788,24 @@ function isleGonder(barkod){
     })
     .then(r => r.json())
     .then(d => sonucGoster(d, barkod))
+    .catch(() => {
+        // Bağlantı koptu / istek gitmedi -> kuyruğa al, veri kaybolmasın
+        kuyrugaEkle(barkod);
+        sonucGosterCevrimdisi(barkod);
+    })
     .finally(() => { kilit = false; });
+}
+
+function sonucGosterCevrimdisi(barkod){
+    const alan = document.getElementById('sonuc-alan');
+    alan.innerHTML = `
+    <div class="kart" style="border-color:rgba(255,152,0,.4);background:rgba(255,152,0,.08);">
+      <div style="text-align:center;font-size:34px;">📶</div>
+      <h3 style="text-align:center;margin:6px 0 2px;">Bağlantı Yok — Kuyruğa Alındı</h3>
+      <p style="text-align:center;color:var(--muted);font-size:13px;">
+        Barkod: ${barkod}<br>İnternet gelince otomatik olarak işlenecek. Sayfayı kapatmayın.
+      </p>
+    </div>`;
 }
 
 function sonucGoster(d, barkod){
