@@ -290,15 +290,30 @@ def yedek_json_olustur():
 
 
 def yedek_email_gonder():
+    """Döndürür: (basarili: bool, mesaj: str)"""
     SMTP_HOST = os.environ.get("SMTP_HOST", "")
-    SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+    SMTP_PORT_STR = os.environ.get("SMTP_PORT", "587")
     SMTP_USER = os.environ.get("SMTP_USER", "")
     SMTP_PASS = os.environ.get("SMTP_PASS", "")
     YEDEK_ALICI = os.environ.get("YEDEK_ALICI_EMAIL", "")
 
-    if not (SMTP_HOST and SMTP_USER and SMTP_PASS and YEDEK_ALICI):
-        print("Yedek e-posta ayarları eksik, e-posta gönderilmedi.")
-        return False
+    eksikler = []
+    if not SMTP_HOST: eksikler.append("SMTP_HOST")
+    if not SMTP_USER: eksikler.append("SMTP_USER")
+    if not SMTP_PASS: eksikler.append("SMTP_PASS")
+    if not YEDEK_ALICI: eksikler.append("YEDEK_ALICI_EMAIL")
+
+    if eksikler:
+        mesaj = "Şu ortam değişkenleri eksik/boş: " + ", ".join(eksikler)
+        print("YEDEK E-POSTA HATASI:", mesaj)
+        return False, mesaj
+
+    try:
+        SMTP_PORT = int(SMTP_PORT_STR)
+    except ValueError:
+        mesaj = f"SMTP_PORT sayısal değil: '{SMTP_PORT_STR}'"
+        print("YEDEK E-POSTA HATASI:", mesaj)
+        return False, mesaj
 
     try:
         veri = yedek_json_olustur()
@@ -311,16 +326,29 @@ def yedek_email_gonder():
         msg.set_content("Otomatik stok yedeği ekte. Bu e-postayı sil, arşivle veya güvenli bir yerde tut.")
         msg.add_attachment(veri, maintype="application", subtype="json", filename=dosya_adi)
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
             smtp.starttls()
             smtp.login(SMTP_USER, SMTP_PASS)
             smtp.send_message(msg)
 
         print(f"Yedek e-postası gönderildi: {dosya_adi}")
-        return True
-    except Exception:
+        return True, "Gönderildi"
+    except smtplib.SMTPAuthenticationError as e:
+        mesaj = f"Kullanıcı adı/şifre reddedildi (SMTPAuthenticationError): {e.smtp_error.decode(errors='replace') if hasattr(e.smtp_error, 'decode') else e.smtp_error}"
+        print("YEDEK E-POSTA HATASI:", mesaj)
+        return False, mesaj
+    except smtplib.SMTPException as e:
+        mesaj = f"SMTP hatası: {e}"
+        print("YEDEK E-POSTA HATASI:", mesaj)
+        return False, mesaj
+    except OSError as e:
+        mesaj = f"Sunucuya bağlanılamadı (SMTP_HOST/SMTP_PORT hatalı olabilir): {e}"
+        print("YEDEK E-POSTA HATASI:", mesaj)
+        return False, mesaj
+    except Exception as e:
         traceback.print_exc()
-        return False
+        return False, f"Beklenmeyen hata: {e}"
+
 def ikon_uret():
     try:
         from PIL import Image, ImageDraw
@@ -552,14 +580,17 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
   content:""; flex:1; height:1px;
   background: linear-gradient(90deg, var(--border), transparent);
 }
-.rapor-satir { display:flex; gap:8px; margin-bottom:6px; }
+.rapor-satir { display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
 .rapor-pil {
-  flex:1; text-align:center; padding:12px 6px; border-radius:999px;
+  flex:1; min-width:110px; text-align:center; padding:12px 6px; border-radius:999px;
   background:#12151c; border:1px solid var(--border); color:var(--text);
   text-decoration:none; font-weight:700; font-size:13px;
-  transition: transform .1s ease, filter .15s ease;
+  transition: transform .1s ease, filter .15s ease, border-color .15s ease;
 }
 .rapor-pil:active { transform: scale(0.96); filter:brightness(1.15); }
+@media (hover: hover) {
+  .rapor-pil:hover { border-color: rgba(255,255,255,.2); }
+}
 
 .kisi-kart {
   display:flex; align-items:center; gap:14px; text-decoration:none; color:white;
@@ -681,11 +712,17 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
   border:1px solid var(--border); border-radius: var(--radius);
   padding:15px 17px; margin:10px 0;
   box-shadow: 0 2px 10px rgba(0,0,0,.18);
+  transition: transform .12s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.siparis-kart:active { transform: scale(0.98); }
+@media (hover: hover) {
+  .siparis-kart:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,.3); border-color: rgba(255,255,255,.14); }
 }
 .siparis-ust { display:flex; justify-content:space-between; align-items:center; gap:8px; }
 .siparis-no { font-size:16px; font-weight:800; }
 .siparis-durum {
   padding:3px 10px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase;
+  box-shadow: 0 1px 4px rgba(0,0,0,.2);
 }
 .siparis-durum.acik { background: rgba(255,152,0,.18); color:#FFB74D; }
 .siparis-durum.tamamlandi { background: rgba(100,221,23,.15); color:#9CCC65; }
@@ -780,7 +817,7 @@ def yedek_al():
 @app.route("/yedek_email_test")
 @rol_gerekli("patron")
 def yedek_email_test():
-    basarili = yedek_email_gonder()
+    basarili, mesaj = yedek_email_gonder()
     if basarili:
         return sayfa(
             '<div style="text-align:center;font-size:52px;">✅</div>'
@@ -789,7 +826,10 @@ def yedek_email_test():
             "Yedek Gönderildi"
         )
     return sayfa(
-        '<p class="hata">❌ E-posta gönderilemedi. SMTP ayarlarını (SMTP_HOST, SMTP_USER, SMTP_PASS, YEDEK_ALICI_EMAIL) kontrol edin.</p>'
+        f'<p class="hata">❌ E-posta gönderilemedi.</p>'
+        f'<div class="kart" style="font-size:13px;color:var(--muted);">'
+        f'<b style="color:var(--text);">Sebep:</b> {mesaj}'
+        f'</div>'
         '<a class="btn gri" href="/">🏠 Ana Sayfaya Dön</a>',
         "Hata"
     )
@@ -1311,6 +1351,11 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Tedarikçiler</div><div class="okut-alt">Malzeme hangi tedarikçiden geldi</div></div>
           <div class="okut-ok">›</div>
         </a>
+        <a href="/sayimlar" class="okut-kart okut-turuncu">
+          <div class="okut-ikon">📋</div>
+          <div class="okut-metin"><div class="okut-baslik">Stok Sayımı</div><div class="okut-alt">Fiziksel sayımla stoğu karşılaştır</div></div>
+          <div class="okut-ok">›</div>
+        </a>
         <div class="bolum-baslik">İşlemler</div>
         <a href="/ekle" class="okut-kart okut-mavi">
           <div class="okut-ikon">➕</div>
@@ -1355,7 +1400,8 @@ def index():
 
         <div class="bolum-baslik">Raporlar</div>
         <div class="rapor-satir">
-          <a href="/rapor/pdf" class="rapor-pil">📄 PDF</a>
+          <a href="/rapor/pdf" class="rapor-pil">📄 Stok PDF</a>
+          <a href="/rapor/pdf?tur=siparisler" class="rapor-pil">🧾 Sipariş PDF</a>
           <a href="/rapor/excel" class="rapor-pil">📥 XLSX</a>
           <a href="/rapor/xls" class="rapor-pil">📥 XLS</a>
           <a href="/rapor/csv" class="rapor-pil">📥 CSV</a>
@@ -1779,7 +1825,8 @@ def gunluk_yedek_kontrol_dongusu():
             with _YEDEK_KILIT:
                 bugun = simdi.date()
                 if _SON_YEDEK_TARIHI != bugun and simdi.hour == 3:
-                    if yedek_email_gonder():
+                    basarili, _ = yedek_email_gonder()
+                    if basarili:
                         _SON_YEDEK_TARIHI = bugun
         except Exception:
             traceback.print_exc()
@@ -2117,6 +2164,237 @@ def liste():
         """
     )
     return sayfa(icerik, "Stok Listesi")
+
+
+@app.route("/sayimlar")
+@rol_gerekli("muhasebeci")
+def sayimlar():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT s.id, s.depo, s.baslatan, s.baslangic_tarihi, s.durum,
+                       COUNT(sk.id) AS toplam, COUNT(sk.id) FILTER (WHERE sk.sayildi) AS sayilan
+                FROM sayim s
+                LEFT JOIN sayim_kalem sk ON sk.sayim_id = s.id
+                GROUP BY s.id, s.depo, s.baslatan, s.baslangic_tarihi, s.durum
+                ORDER BY s.id DESC LIMIT 30
+            """)
+            kayitlar = cur.fetchall()
+    finally:
+        con.close()
+
+    kartlar = ""
+    for sid, depo, baslatan, tarih, durum, toplam, sayilan in kayitlar:
+        durum_etiket = "✅ Tamamlandı" if durum == "tamamlandi" else "🔄 Devam Ediyor"
+        kartlar += f"""
+        <a href="/sayim/{sid}" class="okut-kart {'okut-yesil' if durum == 'tamamlandi' else 'okut-turuncu'}">
+          <div class="okut-ikon">📋</div>
+          <div class="okut-metin">
+            <div class="okut-baslik">{depo}</div>
+            <div class="okut-alt">{durum_etiket} — {sayilan}/{toplam} ürün sayıldı — {baslatan}</div>
+          </div>
+          <div class="okut-ok">›</div>
+        </a>
+        """
+    if not kayitlar:
+        kartlar = '<p style="text-align:center;color:var(--muted);margin-top:20px;">Henüz sayım yapılmamış.</p>'
+
+    icerik = (
+        "<h2>📋 Stok Sayımları</h2>"
+        + '<p style="text-align:center;color:var(--muted);margin-top:-6px;font-size:13px;">Fiziksel sayımla sistemdeki adedi karşılaştır</p>'
+        + '<a href="/sayim_baslat" class="okut-kart okut-mavi"><div class="okut-ikon">➕</div><div class="okut-metin"><div class="okut-baslik">Yeni Sayım Başlat</div></div><div class="okut-ok">›</div></a>'
+        + kartlar
+    )
+    return sayfa(icerik, "Stok Sayımları")
+
+
+@app.route("/sayim_baslat", methods=["GET", "POST"])
+@rol_gerekli("muhasebeci")
+def sayim_baslat():
+    if request.method == "POST":
+        depo = request.form.get("depo", "")
+        if not depo:
+            return sayfa('<p class="hata">❌ Depo seçilmeli.</p><a class="btn gri" href="/sayim_baslat">⬅ Geri Dön</a>', "Hata")
+
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO sayim (depo, baslatan, baslangic_tarihi, durum)
+                        VALUES (%s,%s,%s,'devam') RETURNING id
+                    """, (depo, session.get("kullanici", "Bilinmiyor"), tr_simdi()))
+                    sayim_id = cur.fetchone()[0]
+
+                    cur.execute("SELECT barkod, ad, adet FROM urun WHERE depo=%s AND silindi IS NOT TRUE", (depo,))
+                    urunler = cur.fetchall()
+                    for barkod, ad, adet in urunler:
+                        cur.execute("""
+                            INSERT INTO sayim_kalem (sayim_id, barkod, ad, sistem_adet, sayilan_adet, sayildi)
+                            VALUES (%s,%s,%s,%s,NULL,FALSE)
+                        """, (sayim_id, barkod, ad, adet))
+        finally:
+            con.close()
+
+        log_aktivite("Stok Sayımı Başlatıldı", f"{depo} — {len(urunler)} ürün")
+        return redirect(f"/sayim/{sayim_id}")
+
+    icerik = """
+    <h2>➕ Yeni Sayım Başlat</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:-6px;font-size:13px;">
+    Seçilen depodaki tüm ürünler sayım listesine eklenecek.
+    </p>
+    <form method="post">
+    <div class="kart">
+    <label>Depo</label>
+    <select name="depo" required>
+    """ + "".join(f'<option>{d}</option>' for d in DEPOLAR) + """
+    </select>
+    <button class="btn mavi">Sayımı Başlat</button>
+    </div>
+    </form>
+    """
+    return sayfa(icerik, "Yeni Sayım")
+
+
+@app.route("/sayim/<int:sayim_id>")
+@rol_gerekli("muhasebeci")
+def sayim_detay(sayim_id):
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT id, depo, baslatan, baslangic_tarihi, durum FROM sayim WHERE id=%s", (sayim_id,))
+            s = cur.fetchone()
+            if not s:
+                return sayfa('<p class="hata">❌ Sayım bulunamadı.</p><a class="btn gri" href="/sayimlar">⬅ Geri Dön</a>', "Hata")
+            cur.execute("""
+                SELECT id, barkod, ad, sistem_adet, sayilan_adet, sayildi
+                FROM sayim_kalem WHERE sayim_id=%s ORDER BY sayildi ASC, ad
+            """, (sayim_id,))
+            kalemler = cur.fetchall()
+    finally:
+        con.close()
+
+    _, depo, baslatan, tarih, durum = s
+    toplam = len(kalemler)
+    sayilan = sum(1 for k in kalemler if k[5])
+    farkli = [k for k in kalemler if k[5] and k[4] != k[3]]
+
+    kalem_html = ""
+    for kid, barkod, ad, sistem_adet, sayilan_adet, sayildi in kalemler:
+        if sayildi:
+            fark = sayilan_adet - sistem_adet
+            fark_renk = "color:#2ecc71;" if fark == 0 else ("color:#e74c3c;" if fark < 0 else "color:#f39c12;")
+            fark_metin = "Fark yok" if fark == 0 else (f"{fark:+d} fark")
+            kalem_html += f"""
+            <div class="hareket-kart hareket-giris" style="opacity:.85;">
+              <div class="hareket-ikon">✅</div>
+              <div class="hareket-govde">
+                <div class="hareket-ust">
+                  <div class="hareket-ad">{ad}</div>
+                  <div class="hareket-adet" style="{fark_renk}">{sayilan_adet}</div>
+                </div>
+                <div class="hareket-alt">Sistem: {sistem_adet} &nbsp;•&nbsp; <span style="{fark_renk}">{fark_metin}</span></div>
+              </div>
+            </div>
+            """
+        else:
+            kalem_html += f"""
+            <div class="kart" style="padding:12px 16px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div>
+                  <div style="font-weight:700;">{ad}</div>
+                  <div style="font-size:12px;color:var(--muted);">🔢 {barkod} &nbsp;•&nbsp; Sistemde: {sistem_adet} adet</div>
+                </div>
+              </div>
+              <form onsubmit="sayimKaydet(event, {kid})" style="display:flex;gap:6px;">
+                <input type="number" name="sayilan" placeholder="Sayılan adet" required style="margin:0;">
+                <button type="submit" class="btn-kucuk yesil" style="margin:0;">✅ Kaydet</button>
+              </form>
+            </div>
+            """
+
+    tamamla_buton = ""
+    if durum == "devam" and sayilan == toplam and toplam > 0:
+        tamamla_buton = f"""
+        <form method="post" action="/sayim_tamamla/{sayim_id}" onsubmit="return confirm('Sayım tamamlansın mı? Sistemdeki adetler sayılan adetlerle güncellenecek.');">
+        <button type="submit" class="btn yesil">✅ Sayımı Tamamla ve Stoğu Güncelle</button>
+        </form>
+        """
+
+    icerik = f"""
+    <h2>📋 {depo}</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:-6px;font-size:13px;">
+    {baslatan} • {tarih} • {"✅ Tamamlandı" if durum == "tamamlandi" else "🔄 Devam Ediyor"}
+    </p>
+    <div class="dash-kart-satir">
+      <div class="dash-kart"><div class="dash-kart-sayi">{sayilan}/{toplam}</div><div class="dash-kart-etiket">Sayıldı</div></div>
+      <div class="dash-kart dash-kart-turuncu"><div class="dash-kart-sayi">{len(farkli)}</div><div class="dash-kart-etiket">Farklı Çıkan</div></div>
+    </div>
+    {tamamla_buton}
+    {kalem_html}
+    <a href="/sayimlar" class="okut-kart okut-mor"><div class="okut-ikon">📋</div><div class="okut-metin"><div class="okut-baslik">Tüm Sayımlara Dön</div></div><div class="okut-ok">›</div></a>
+    <script>
+    function sayimKaydet(e, kalemId){{
+      e.preventDefault();
+      const form = e.target;
+      const sayilan = form.sayilan.value;
+      fetch('/sayim_kalem_gir/' + kalemId, {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/x-www-form-urlencoded'}},
+        body: 'sayilan=' + encodeURIComponent(sayilan)
+      }}).then(() => location.reload());
+    }}
+    </script>
+    """
+    return sayfa(icerik, "Sayım Detayı")
+
+
+@app.route("/sayim_kalem_gir/<int:kalem_id>", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def sayim_kalem_gir(kalem_id):
+    try:
+        sayilan = int(request.form.get("sayilan", "0"))
+    except (TypeError, ValueError):
+        sayilan = 0
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                    UPDATE sayim_kalem SET sayilan_adet=%s, sayildi=TRUE WHERE id=%s
+                """, (sayilan, kalem_id))
+    finally:
+        con.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/sayim_tamamla/<int:sayim_id>", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def sayim_tamamla(sayim_id):
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                    SELECT barkod, sistem_adet, sayilan_adet FROM sayim_kalem
+                    WHERE sayim_id=%s AND sayildi=TRUE AND sayilan_adet <> sistem_adet
+                """, (sayim_id,))
+                farklar = cur.fetchall()
+                for barkod, sistem_adet, sayilan_adet in farklar:
+                    cur.execute("UPDATE urun SET adet=%s WHERE barkod=%s", (sayilan_adet, barkod))
+                    kullanici = session.get("kullanici", "Bilinmiyor")
+                    fark = sayilan_adet - sistem_adet
+                    cur.execute("""
+                        INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
+                        SELECT %s, ad, %s, %s, %s, %s FROM urun WHERE barkod=%s
+                    """, (barkod, 'giris' if fark > 0 else 'cikis', abs(fark), kullanici, tr_simdi(), barkod))
+                cur.execute("UPDATE sayim SET durum='tamamlandi', bitis_tarihi=%s WHERE id=%s", (tr_simdi(), sayim_id))
+    finally:
+        con.close()
+    log_aktivite("Stok Sayımı Tamamlandı", f"Sayım #{sayim_id} — {len(farklar)} üründe düzeltme yapıldı")
+    return redirect(f"/sayim/{sayim_id}")
 
 
 @app.route("/dashboard")
@@ -2657,6 +2935,12 @@ def rapor_pdf():
             "Kütüphane Eksik"
         )
 
+    tur = request.args.get("tur", "stok")
+
+    if tur == "siparisler":
+        return _siparis_listesi_pdf(A4, landscape, mm, colors, SimpleDocTemplate, Table, TableStyle,
+                                      Paragraph, Spacer, getSampleStyleSheet, ParagraphStyle, TA_RIGHT)
+
     depo_filtre = request.args.get("depo", "")
 
     con = db()
@@ -2740,6 +3024,105 @@ def rapor_pdf():
     bio.seek(0)
 
     dosya_adi = f"stok_raporu_{tr_simdi().strftime('%Y%m%d_%H%M')}.pdf"
+    return send_file(bio, as_attachment=True, download_name=dosya_adi, mimetype="application/pdf")
+
+
+def _siparis_listesi_pdf(A4, landscape, mm, colors, SimpleDocTemplate, Table, TableStyle,
+                          Paragraph, Spacer, getSampleStyleSheet, ParagraphStyle, TA_RIGHT):
+    durum_filtre = request.args.get("durum", "hepsi")
+
+    con = db()
+    try:
+        with con.cursor() as cur:
+            if durum_filtre == "hepsi":
+                cur.execute("""
+                    SELECT s.id, s.musteri, s.depo, s.durum, s.olusturan, s.tarih,
+                           COALESCE(SUM(k.istenen),0), COALESCE(SUM(k.verilen),0)
+                    FROM siparis s LEFT JOIN siparis_kalem k ON k.siparis_id = s.id
+                    GROUP BY s.id ORDER BY s.id DESC
+                """)
+            else:
+                cur.execute("""
+                    SELECT s.id, s.musteri, s.depo, s.durum, s.olusturan, s.tarih,
+                           COALESCE(SUM(k.istenen),0), COALESCE(SUM(k.verilen),0)
+                    FROM siparis s LEFT JOIN siparis_kalem k ON k.siparis_id = s.id
+                    WHERE s.durum=%s GROUP BY s.id ORDER BY s.id DESC
+                """, (durum_filtre,))
+            siparisler = cur.fetchall()
+
+            cur.execute("""
+                SELECT siparis_id, kullanici FROM siparis_hareket
+                GROUP BY siparis_id, kullanici
+            """)
+            teslim_edenler = {}
+            for sid, kullanici in cur.fetchall():
+                teslim_edenler.setdefault(sid, []).append(kullanici)
+    finally:
+        con.close()
+
+    bio = io.BytesIO()
+    doc = SimpleDocTemplate(
+        bio, pagesize=landscape(A4),
+        topMargin=14*mm, bottomMargin=14*mm, leftMargin=14*mm, rightMargin=14*mm
+    )
+    stiller = getSampleStyleSheet()
+    baslik_stil = ParagraphStyle("baslik", parent=stiller["Title"], fontSize=18, spaceAfter=2, textColor=colors.HexColor("#111111"))
+    alt_stil = ParagraphStyle("alt", parent=stiller["Normal"], fontSize=9.5, textColor=colors.HexColor("#555555"), spaceAfter=10)
+    ozet_stil = ParagraphStyle("ozet", parent=stiller["Normal"], fontSize=10, alignment=TA_RIGHT, textColor=colors.HexColor("#333333"))
+
+    elemanlar = []
+    elemanlar.append(Paragraph(UYGULAMA_ADI, baslik_stil))
+    alt_baslik = "Sipariş Listesi"
+    if durum_filtre != "hepsi":
+        alt_baslik += f" — {durum_filtre.capitalize()}"
+    elemanlar.append(Paragraph(alt_baslik + f" &nbsp;•&nbsp; Oluşturulma: {tr_simdi().strftime('%d.%m.%Y %H:%M')}", alt_stil))
+
+    elemanlar.append(Paragraph(f"Toplam {len(siparisler)} sipariş", ozet_stil))
+    elemanlar.append(Spacer(1, 8))
+
+    veri = [["No", "Müşteri", "Depo", "Durum", "İlerleme", "Oluşturan", "Teslim Eden", "Tarih"]]
+    for sid, musteri, depo, durum, olusturan, tarih, istenen, verilen in siparisler:
+        tarih_str = tarih.strftime('%d.%m.%Y %H:%M') if hasattr(tarih, 'strftime') else str(tarih)
+        teslim_eden_str = ", ".join(sorted(set(teslim_edenler.get(sid, [])))) or "-"
+        ilerleme_str = f"{verilen}/{istenen}"
+        veri.append([f"#{sid}", musteri or "-", depo or "-", durum, ilerleme_str, olusturan or "-", teslim_eden_str, tarih_str])
+
+    tablo = Table(veri, colWidths=[20*mm, 45*mm, 42*mm, 26*mm, 22*mm, 32*mm, 42*mm, 38*mm], repeatRows=1)
+    stil_komutlari = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111111")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTSIZE", (0, 0), (-1, 0), 9.5),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 1), (-1, -1), 8.5),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f4f4f4")]),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+        ("ALIGN", (4, 0), (4, -1), "CENTER"),
+    ]
+    DURUM_RENK = {"acik": colors.HexColor("#e67e22"), "tamamlandi": colors.HexColor("#27ae60"), "iptal": colors.HexColor("#c0392b")}
+    for i, (sid, musteri, depo, durum, olusturan, tarih, istenen, verilen) in enumerate(siparisler, start=1):
+        renk = DURUM_RENK.get(durum)
+        if renk:
+            stil_komutlari.append(("TEXTCOLOR", (3, i), (3, i), renk))
+            stil_komutlari.append(("FONTNAME", (3, i), (3, i), "Helvetica-Bold"))
+    tablo.setStyle(TableStyle(stil_komutlari))
+    elemanlar.append(tablo)
+
+    def alt_bilgi(canvas, doc_):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#999999"))
+        canvas.drawRightString(landscape(A4)[0] - 14*mm, 8*mm, f"Sayfa {doc_.page}")
+        canvas.drawString(14*mm, 8*mm, UYGULAMA_ADI)
+        canvas.restoreState()
+
+    doc.build(elemanlar, onFirstPage=alt_bilgi, onLaterPages=alt_bilgi)
+    bio.seek(0)
+
+    dosya_adi = f"siparis_listesi_{tr_simdi().strftime('%Y%m%d_%H%M')}.pdf"
     return send_file(bio, as_attachment=True, download_name=dosya_adi, mimetype="application/pdf")
 
 
@@ -3493,6 +3876,41 @@ if DATABASE_URL:
     aktivite_log_tablosu_olustur()
 
 
+def sayim_tablosu_olustur():
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS sayim(
+                    id SERIAL PRIMARY KEY,
+                    depo TEXT,
+                    baslatan TEXT,
+                    baslangic_tarihi TIMESTAMP,
+                    bitis_tarihi TIMESTAMP,
+                    durum TEXT DEFAULT 'devam'
+                )
+                """)
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS sayim_kalem(
+                    id SERIAL PRIMARY KEY,
+                    sayim_id INTEGER REFERENCES sayim(id) ON DELETE CASCADE,
+                    barkod TEXT,
+                    ad TEXT,
+                    sistem_adet INTEGER,
+                    sayilan_adet INTEGER,
+                    sayildi BOOLEAN DEFAULT FALSE
+                )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_sayim_kalem_sayim ON sayim_kalem(sayim_id)")
+    finally:
+        con.close()
+
+
+if DATABASE_URL:
+    sayim_tablosu_olustur()
+
+
 def log_aktivite(eylem, detay=""):
     """Kritik işlemleri aktivite loguna kaydeder. Hata olursa sessizce yutar,
     ana işlemi asla bozmaz."""
@@ -3783,10 +4201,11 @@ def musteri_detay(musteri_id):
 
     siparis_html = ""
     for sid, durum, tarih in siparisler:
+        tarih_str = tarih.strftime('%d.%m.%Y %H:%M') if hasattr(tarih, 'strftime') else str(tarih)
         siparis_html += f"""
         <a href="/siparis/{sid}" class="dash-liste-satir" style="text-decoration:none;color:inherit;">
           <span>Sipariş #{sid} <span class="siparis-durum {durum}" style="margin-left:6px;">{durum}</span></span>
-          <span class="dash-liste-deger">{tarih}</span>
+          <span class="dash-liste-deger">{tarih_str}</span>
         </a>
         """
     if not siparisler:
@@ -4363,6 +4782,7 @@ def siparisler():
     kartlar = ""
     for sid, musteri, depo, durum, olusturan, tarih, istenen, verilen in satirlar:
         yuzde = int((verilen / istenen) * 100) if istenen else 0
+        tarih_str = tarih.strftime('%d.%m.%Y %H:%M') if hasattr(tarih, 'strftime') else str(tarih)
         kartlar += f"""
         <a href="/siparis/{sid}" class="siparis-kart">
           <div class="siparis-ust">
@@ -4370,7 +4790,7 @@ def siparisler():
             <div class="siparis-durum {durum}">{durum}</div>
           </div>
           <div class="siparis-detay">
-            🏭 {depo} &nbsp;•&nbsp; 👤 {olusturan} &nbsp;•&nbsp; 🕒 {tarih}<br>
+            🏭 {depo} &nbsp;•&nbsp; 👤 {olusturan} &nbsp;•&nbsp; 🕒 {tarih_str}<br>
             📦 {verilen} / {istenen} adet hazırlandı
           </div>
           <div class="siparis-ilerleme-bar"><div class="siparis-ilerleme-dolu" style="width:{yuzde}%;"></div></div>
@@ -4390,6 +4810,7 @@ def siparisler():
         </div>
         """
         + '<a href="/siparis_olustur" class="okut-kart okut-yesil"><div class="okut-ikon">➕</div><div class="okut-metin"><div class="okut-baslik">Yeni Sipariş</div></div><div class="okut-ok">›</div></a>'
+        + f'<div class="rapor-satir" style="margin:10px 0;"><a href="/rapor/pdf?tur=siparisler&durum={durum_filtre}" class="rapor-pil">📄 Bu Listeyi PDF İndir</a></div>'
         + kartlar
     )
     return sayfa(icerik, "Siparişler")
@@ -4433,6 +4854,13 @@ def siparis_detay(siparis_id):
         con.close()
 
     _, musteri, depo, durum, olusturan, tarih, aciklama = sip
+    tarih = tarih.strftime('%d.%m.%Y %H:%M') if hasattr(tarih, 'strftime') else str(tarih)
+
+    tum_teslim_edenler = set()
+    for liste in kullanici_dagilimi.values():
+        for kullanici_ad, _ in liste:
+            tum_teslim_edenler.add(kullanici_ad)
+    teslim_eden_ozet = ", ".join(sorted(tum_teslim_edenler)) if tum_teslim_edenler else None
 
     kalem_html = ""
     for kid, ad, barkod, istenen, verilen, cins, ebat, kalinlik, yuzey, sinif, renk in kalemler:
@@ -4494,7 +4922,8 @@ def siparis_detay(siparis_id):
             <span class="siparis-durum {durum}">{durum}</span>
             <span style="color:var(--muted);font-size:12.5px;">🏭 {depo}</span>
           </div>
-          <div style="color:var(--muted);font-size:12.5px;">👤 {olusturan} &nbsp;•&nbsp; 🕒 {tarih}</div>
+          <div style="color:var(--muted);font-size:12.5px;">👤 Oluşturan: {olusturan} &nbsp;•&nbsp; 🕒 {tarih}</div>
+          {'<div style="color:var(--muted);font-size:12.5px;margin-top:4px;">📦 Teslim Eden: ' + teslim_eden_ozet + '</div>' if teslim_eden_ozet else ''}
           {'<div style="color:var(--muted);font-size:13px;margin-top:8px;">📝 ' + aciklama + '</div>' if aciklama else ''}
         </div>
         <div class="kart" style="padding:6px 16px;">
@@ -4661,6 +5090,7 @@ def siparis_fis(siparis_id):
         con.close()
 
     _, musteri, depo, durum, olusturan, tarih, aciklama = sip
+    tarih = tarih.strftime('%d.%m.%Y %H:%M') if hasattr(tarih, 'strftime') else str(tarih)
 
     satirlar = ""
     toplam_istenen = 0
