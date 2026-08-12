@@ -1204,7 +1204,7 @@ def index():
     rol = session.get("rol")
 
     if not kullanici:
-        ROL_ETIKET = {"depocu": "Depocu", "muhasebeci": "Muhasebeci", "patron": "Patron"}
+        ROL_ETIKET = {"depocu": "Depo Sorumlusu", "muhasebeci": "Muhasebe Personeli", "patron": "Patron"}
         ROL_RENK = {"depocu": "kisi-yesil", "muhasebeci": "kisi-mavi", "patron": "kisi-mor"}
         secim_html = ""
         for isim in ROLLER:
@@ -1293,7 +1293,7 @@ def index():
         <div class="bolum-baslik">Sipariş</div>
         <a href="/siparis_olustur" class="okut-kart okut-yesil">
           <div class="okut-ikon">🧾</div>
-          <div class="okut-metin"><div class="okut-baslik">Yeni Sipariş Oluştur</div><div class="okut-alt">Depocuya hazırlatılacak ürünleri seç</div></div>
+          <div class="okut-metin"><div class="okut-baslik">Yeni Sipariş Oluştur</div><div class="okut-alt">Depo Sorumlusuna hazırlatılacak ürünleri seç</div></div>
           <div class="okut-ok">›</div>
         </a>
         <a href="/siparisler" class="okut-kart okut-turuncu">
@@ -1369,6 +1369,11 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Yönetim Paneli</div><div class="okut-alt">Genel durum, grafikler, özet</div></div>
           <div class="okut-ok">›</div>
         </a>
+        <a href="/aktivite_log" class="okut-kart okut-mavi">
+          <div class="okut-ikon">📜</div>
+          <div class="okut-metin"><div class="okut-baslik">Aktivite Logu</div><div class="okut-alt">Kim, ne zaman, ne yaptı</div></div>
+          <div class="okut-ok">›</div>
+        </a>
         <div class="bolum-baslik">Yedekleme</div>
         <a href="/yedek_al" class="okut-kart okut-turkuaz">
           <div class="okut-ikon">💾</div>
@@ -1387,7 +1392,7 @@ def index():
         </a>
         """
     rol_rozet_renk = {"depocu": "kisi-yesil", "muhasebeci": "kisi-mavi", "patron": "kisi-mor"}.get(rol, "kisi-mavi")
-    rol_etiket_gosterim = {"depocu": "Depocu", "muhasebeci": "Muhasebeci", "patron": "Patron"}.get(rol, rol)
+    rol_etiket_gosterim = {"depocu": "Depo Sorumlusu", "muhasebeci": "Muhasebe Personeli", "patron": "Patron"}.get(rol, rol)
     icerik = (
         "<h1>📦 STOK PANEL</h1>"
         + f'<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:-6px;margin-bottom:8px;">'
@@ -1457,6 +1462,7 @@ def ekle2():
                     """, (barkod, ad, adet, session.get("kullanici", "Bilinmiyor"), tr_simdi(), tedarikci or None))
         finally:
             con.close()
+        log_aktivite("Ürün Eklendi", f"{ad} — {adet} adet — {barkod}")
 
         icerik = (
             '<div style="text-align:center;font-size:52px;margin-bottom:4px;">✅</div>'
@@ -1862,6 +1868,7 @@ def duzenle(eski_barkod):
                     ))
         finally:
             con.close()
+        log_aktivite("Ürün Düzenlendi", f"{ad} — {eski_barkod}" + (f" → {yeni_barkod}" if yeni_barkod != eski_barkod else ""))
 
         icerik = (
             '<div style="text-align:center;font-size:52px;margin-bottom:4px;">✅</div>'
@@ -2267,6 +2274,68 @@ def dashboard():
     return sayfa(icerik, "Yönetim Paneli")
 
 
+@app.route("/aktivite_log")
+@rol_gerekli("patron")
+def aktivite_log():
+    kullanici_filtre = request.args.get("kullanici", "")
+
+    con = db()
+    try:
+        with con.cursor() as cur:
+            if kullanici_filtre:
+                cur.execute("""
+                    SELECT kullanici, eylem, detay, tarih FROM aktivite_log
+                    WHERE kullanici=%s ORDER BY id DESC LIMIT 200
+                """, (kullanici_filtre,))
+            else:
+                cur.execute("""
+                    SELECT kullanici, eylem, detay, tarih FROM aktivite_log
+                    ORDER BY id DESC LIMIT 200
+                """)
+            kayitlar = cur.fetchall()
+            cur.execute("SELECT DISTINCT kullanici FROM aktivite_log ORDER BY kullanici")
+            kullanicilar = [r[0] for r in cur.fetchall()]
+    finally:
+        con.close()
+
+    EYLEM_IKON = {
+        "Ürün Eklendi": "➕", "Ürün Düzenlendi": "✏️", "Ürün Silindi": "🗑️",
+        "Ürün Geri Getirildi": "↩️", "Depo Transferi": "🔁", "Sipariş Oluşturuldu": "🧾",
+        "Sipariş İptal Edildi": "❌", "İade Alındı": "↩️", "Müşteri Eklendi": "🏢",
+        "Tedarikçi Eklendi": "🚚",
+    }
+
+    kartlar = ""
+    for kullanici, eylem, detay, tarih in kayitlar:
+        ikon = EYLEM_IKON.get(eylem, "📌")
+        kartlar += f"""
+        <div class="dash-liste-satir" style="align-items:flex-start;flex-direction:column;gap:2px;padding:10px 0;">
+          <div style="display:flex;justify-content:space-between;width:100%;">
+            <span>{ikon} <b>{eylem}</b></span>
+            <span class="dash-liste-deger" style="font-size:11.5px;">{tarih}</span>
+          </div>
+          <div style="font-size:12.5px;color:var(--muted);">👤 {kullanici}{(' — ' + detay) if detay else ''}</div>
+        </div>
+        """
+    if not kayitlar:
+        kartlar = '<p style="text-align:center;color:var(--muted);margin-top:20px;">Henüz aktivite kaydı yok.</p>'
+
+    filtre_html = '<div class="filtre-satir">'
+    filtre_html += f'<a href="/aktivite_log" class="filtre-cip {"aktif" if not kullanici_filtre else ""}" style="text-decoration:none;display:block;">Tümü</a>'
+    for k in kullanicilar:
+        aktif = "aktif" if kullanici_filtre == k else ""
+        filtre_html += f'<a href="/aktivite_log?kullanici={k}" class="filtre-cip {aktif}" style="text-decoration:none;display:block;">{k}</a>'
+    filtre_html += '</div>'
+
+    icerik = (
+        "<h2>📜 Aktivite Logu</h2>"
+        + '<p style="text-align:center;color:var(--muted);margin-top:-6px;font-size:13px;">Son 200 kritik işlem</p>'
+        + filtre_html
+        + f'<div class="kart">{kartlar}</div>'
+    )
+    return sayfa(icerik, "Aktivite Logu")
+
+
 @app.route("/depo_stok")
 @rol_gerekli("depocu", "muhasebeci", "patron")
 def depo_stok():
@@ -2380,6 +2449,8 @@ def transfer():
                     """, (barkod, ad, miktar, kullanici, simdi))
         finally:
             con.close()
+
+        log_aktivite("Depo Transferi", f"{ad} — {kaynak_depo} → {hedef_depo} — {miktar} adet")
 
         icerik = (
             '<div style="text-align:center;font-size:52px;margin-bottom:4px;">✅</div>'
@@ -2933,6 +3004,9 @@ def urun_sil(barkod):
     try:
         with con:
             with con.cursor() as cur:
+                cur.execute("SELECT ad FROM urun WHERE barkod=%s", (barkod,))
+                r = cur.fetchone()
+                urun_adi = r[0] if r else barkod
                 cur.execute(
                     "UPDATE urun SET silindi=TRUE, silinme_tarihi=%s WHERE barkod=%s AND silindi IS NOT TRUE",
                     (tr_simdi(), barkod)
@@ -2940,6 +3014,8 @@ def urun_sil(barkod):
                 basarili = cur.rowcount > 0
     finally:
         con.close()
+    if basarili:
+        log_aktivite("Ürün Silindi", f"{urun_adi} — {barkod}")
     return jsonify({"ok": basarili})
 
 
@@ -3002,6 +3078,9 @@ def urun_geri_getir(barkod):
                 cur.execute("SELECT id FROM urun WHERE barkod=%s AND silindi IS NOT TRUE", (barkod,))
                 if cur.fetchone():
                     return jsonify({"ok": False, "msg": "Aynı barkodlu aktif bir ürün zaten var."})
+                cur.execute("SELECT ad FROM urun WHERE barkod=%s", (barkod,))
+                r = cur.fetchone()
+                urun_adi = r[0] if r else barkod
                 cur.execute(
                     "UPDATE urun SET silindi=FALSE, silinme_tarihi=NULL WHERE barkod=%s AND silindi IS TRUE",
                     (barkod,)
@@ -3009,6 +3088,8 @@ def urun_geri_getir(barkod):
                 basarili = cur.rowcount > 0
     finally:
         con.close()
+    if basarili:
+        log_aktivite("Ürün Geri Getirildi", f"{urun_adi} — {barkod}")
     return jsonify({"ok": basarili})
 
 
@@ -3356,6 +3437,7 @@ def tedarikci_tablosu_olustur():
                 """)
                 cur.execute("ALTER TABLE hareket ADD COLUMN IF NOT EXISTS tedarikci TEXT")
                 cur.execute("ALTER TABLE urun ADD COLUMN IF NOT EXISTS son_tedarikci TEXT")
+                cur.execute("ALTER TABLE tedarikci ADD COLUMN IF NOT EXISTS tc_vergi_no TEXT")
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_hareket_tedarikci ON hareket(tedarikci)")
     finally:
         con.close()
@@ -3385,6 +3467,48 @@ def push_tablosu_olustur():
 
 if DATABASE_URL:
     push_tablosu_olustur()
+
+
+def aktivite_log_tablosu_olustur():
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS aktivite_log(
+                    id SERIAL PRIMARY KEY,
+                    kullanici TEXT,
+                    eylem TEXT,
+                    detay TEXT,
+                    tarih TIMESTAMP
+                )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_aktivite_tarih ON aktivite_log(tarih)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_aktivite_kullanici ON aktivite_log(kullanici)")
+    finally:
+        con.close()
+
+
+if DATABASE_URL:
+    aktivite_log_tablosu_olustur()
+
+
+def log_aktivite(eylem, detay=""):
+    """Kritik işlemleri aktivite loguna kaydeder. Hata olursa sessizce yutar,
+    ana işlemi asla bozmaz."""
+    try:
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO aktivite_log (kullanici, eylem, detay, tarih)
+                        VALUES (%s, %s, %s, %s)
+                    """, (session.get("kullanici", "Bilinmiyor"), eylem, detay, tr_simdi()))
+        finally:
+            con.close()
+    except Exception:
+        traceback.print_exc()
 
 def kritik_stok_kontrol(barkod, ad, yeni_adet, depo):
     con = db()
@@ -3613,6 +3737,7 @@ def musteri_ekle():
             finally:
                 con.close()
             if not hata:
+                log_aktivite("Müşteri Eklendi", ad)
                 return redirect("/musteriler")
 
     icerik = f"""
@@ -3823,6 +3948,7 @@ def tedarikci_ekle():
         ad = request.form.get("ad", "").strip()
         telefon = request.form.get("telefon", "").strip()
         adres = request.form.get("adres", "").strip()
+        tc_vergi_no = request.form.get("tc_vergi_no", "").strip()
         not_alani = request.form.get("not_alani", "").strip()
 
         if not ad:
@@ -3837,12 +3963,13 @@ def tedarikci_ekle():
                             hata = "❌ Bu isimde bir tedarikçi zaten var."
                         else:
                             cur.execute("""
-                                INSERT INTO tedarikci (ad, telefon, adres, not_alani, olusturulma)
-                                VALUES (%s,%s,%s,%s,%s)
-                            """, (ad, telefon, adres, not_alani, tr_simdi()))
+                                INSERT INTO tedarikci (ad, telefon, adres, tc_vergi_no, not_alani, olusturulma)
+                                VALUES (%s,%s,%s,%s,%s,%s)
+                            """, (ad, telefon, adres, tc_vergi_no, not_alani, tr_simdi()))
             finally:
                 con.close()
             if not hata:
+                log_aktivite("Tedarikçi Eklendi", ad)
                 return redirect("/tedarikciler")
 
     icerik = f"""
@@ -3856,6 +3983,8 @@ def tedarikci_ekle():
     <input name="telefon" placeholder="05xx xxx xx xx">
     <label>Adres</label>
     <input name="adres" placeholder="Adres">
+    <label>TC Kimlik No / Vergi No (isteğe bağlı)</label>
+    <input name="tc_vergi_no" placeholder="11 haneli TC ya da vergi no" inputmode="numeric">
     <label>Not</label>
     <input name="not_alani" placeholder="Varsa özel not">
     <button class="btn mavi">Kaydet</button>
@@ -3871,7 +4000,7 @@ def tedarikci_detay(tedarikci_id):
     con = db()
     try:
         with con.cursor() as cur:
-            cur.execute("SELECT id, ad, telefon, adres, not_alani FROM tedarikci WHERE id=%s", (tedarikci_id,))
+            cur.execute("SELECT id, ad, telefon, adres, not_alani, tc_vergi_no FROM tedarikci WHERE id=%s", (tedarikci_id,))
             t = cur.fetchone()
             if not t:
                 return sayfa('<p class="hata">❌ Tedarikçi bulunamadı.</p><a class="btn gri" href="/tedarikciler">⬅ Geri Dön</a>', "Hata")
@@ -3883,7 +4012,7 @@ def tedarikci_detay(tedarikci_id):
     finally:
         con.close()
 
-    _, ad, telefon, adres, not_alani = t
+    _, ad, telefon, adres, not_alani, tc_vergi_no = t
 
     giris_html = ""
     for uad, barkod, adet, kullanici, tarih in girisler:
@@ -3901,8 +4030,14 @@ def tedarikci_detay(tedarikci_id):
     <div class="kart">
       {'<div style="margin-bottom:4px;">📞 ' + telefon + '</div>' if telefon else ''}
       {'<div style="margin-bottom:4px;">📍 ' + adres + '</div>' if adres else ''}
+      {'<div style="margin-bottom:4px;">🪪 TC/Vergi No: ' + tc_vergi_no + '</div>' if tc_vergi_no else ''}
       {'<div style="color:var(--muted);font-size:13px;margin-top:6px;">📝 ' + not_alani + '</div>' if not_alani else ''}
     </div>
+    <a href="/tedarikci_duzenle/{tedarikci_id}" class="okut-kart okut-turkuaz">
+      <div class="okut-ikon">✏️</div>
+      <div class="okut-metin"><div class="okut-baslik">Bilgileri Düzenle</div></div>
+      <div class="okut-ok">›</div>
+    </a>
     <div class="kart">
       <div class="bolum-baslik" style="margin:0 0 4px;">Son Sevkiyatlar</div>
       {giris_html}
@@ -3910,6 +4045,59 @@ def tedarikci_detay(tedarikci_id):
     <a href="/tedarikciler" class="okut-kart okut-mor"><div class="okut-ikon">🚚</div><div class="okut-metin"><div class="okut-baslik">Tüm Tedarikçilere Dön</div></div><div class="okut-ok">›</div></a>
     """
     return sayfa(icerik, ad)
+
+
+@app.route("/tedarikci_duzenle/<int:tedarikci_id>", methods=["GET", "POST"])
+@rol_gerekli("muhasebeci")
+def tedarikci_duzenle(tedarikci_id):
+    if request.method == "POST":
+        telefon = request.form.get("telefon", "").strip()
+        adres = request.form.get("adres", "").strip()
+        tc_vergi_no = request.form.get("tc_vergi_no", "").strip()
+        not_alani = request.form.get("not_alani", "").strip()
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    cur.execute("""
+                        UPDATE tedarikci SET telefon=%s, adres=%s, tc_vergi_no=%s, not_alani=%s
+                        WHERE id=%s
+                    """, (telefon, adres, tc_vergi_no, not_alani, tedarikci_id))
+        finally:
+            con.close()
+        return redirect(f"/tedarikci/{tedarikci_id}")
+
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT ad, telefon, adres, tc_vergi_no, not_alani FROM tedarikci WHERE id=%s", (tedarikci_id,))
+            t = cur.fetchone()
+    finally:
+        con.close()
+
+    if not t:
+        return sayfa('<p class="hata">❌ Tedarikçi bulunamadı.</p><a class="btn gri" href="/tedarikciler">⬅ Geri Dön</a>', "Hata")
+
+    ad, telefon, adres, tc_vergi_no, not_alani = t
+
+    icerik = f"""
+    <h2>✏️ {ad} — Düzenle</h2>
+    <form method="post">
+    <div class="kart">
+    <label>Telefon</label>
+    <input name="telefon" value="{telefon or ''}" placeholder="05xx xxx xx xx">
+    <label>Adres</label>
+    <input name="adres" value="{adres or ''}" placeholder="Adres">
+    <label>TC Kimlik No / Vergi No (isteğe bağlı)</label>
+    <input name="tc_vergi_no" value="{tc_vergi_no or ''}" placeholder="11 haneli TC ya da vergi no" inputmode="numeric">
+    <label>Not</label>
+    <input name="not_alani" value="{not_alani or ''}" placeholder="Varsa özel not">
+    <button class="btn mavi">Kaydet</button>
+    </div>
+    </form>
+    <a href="/tedarikci/{tedarikci_id}" class="okut-kart okut-mor"><div class="okut-ikon">🚚</div><div class="okut-metin"><div class="okut-baslik">Kaydetmeden Geri Dön</div></div><div class="okut-ok">›</div></a>
+    """
+    return sayfa(icerik, "Tedarikçi Düzenle")
 
 
 @app.route("/tedarikci_ara")
@@ -3979,6 +4167,7 @@ def siparis_olustur():
             con.close()
 
         toplam_kalem_adet = sum(adet for _, _, adet in kalemler)
+        log_aktivite("Sipariş Oluşturuldu", f"#{siparis_id} — {musteri or 'İsimsiz'} — {len(kalemler)} çeşit, {toplam_kalem_adet} adet")
         push_bildirim_gonder(
             "🧾 Yeni Sipariş" + (f" — {musteri}" if musteri else ""),
             f"{depo} için {len(kalemler)} çeşit ürün, {toplam_kalem_adet} adet hazırlanacak.",
@@ -3992,7 +4181,7 @@ def siparis_olustur():
     icerik = """
     <h2 style="margin-bottom:2px;">🧾 Yeni Sipariş Oluştur</h2>
     <p style="text-align:center;color:var(--muted);margin-top:0;">
-    Depocuya hazırlatılacak ürünleri seç, depocu sadece bu listedeki ürünleri çıkış yapabilir.
+    Depo Sorumlusuna hazırlatılacak ürünleri seç, Depo Sorumlusu sadece bu listedeki ürünleri çıkış yapabilir.
     </p>
 
     <form method="post" id="siparis-form">
@@ -4364,6 +4553,7 @@ def kalem_iade(kalem_id):
     finally:
         con.close()
 
+    log_aktivite("İade Alındı", f"{ad} — {miktar} adet — Sipariş #{siparis_id}" + (f" — {sebep}" if sebep else ""))
     return redirect(f"/iade_fisi/{iade_id}")
 
 
@@ -4552,6 +4742,7 @@ def siparis_iptal(siparis_id):
                 cur.execute("UPDATE siparis SET durum='iptal' WHERE id=%s", (siparis_id,))
     finally:
         con.close()
+    log_aktivite("Sipariş İptal Edildi", f"#{siparis_id}")
     return redirect(f"/siparis/{siparis_id}")
 
 
