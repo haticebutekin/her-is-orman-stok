@@ -295,7 +295,7 @@ def yedek_email_gonder():
     SMTP_PORT_STR = os.environ.get("SMTP_PORT", "587")
     SMTP_USER = os.environ.get("SMTP_USER", "")
     SMTP_PASS = os.environ.get("SMTP_PASS", "")
-    YEDEK_ALICI = os.environ.get("YEDEK_ALICI_EMAIL", "")
+    YEDEK_ALICI = os.environ.get("YEDEK_ALICI_EMAIL", "hatice-butekin@hotmail.com")
 
     eksikler = []
     if not SMTP_HOST: eksikler.append("SMTP_HOST")
@@ -1833,7 +1833,7 @@ def gunluk_yedek_kontrol_dongusu():
         threading.Event().wait(1800)  # 30 dakikada bir kontrol et
 
 
-if DATABASE_URL and os.environ.get("YEDEK_ALICI_EMAIL"):
+if DATABASE_URL:
     yedek_thread = threading.Thread(target=gunluk_yedek_kontrol_dongusu, daemon=True)
     yedek_thread.start()
 
