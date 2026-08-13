@@ -127,6 +127,31 @@ def tr_simdi():
     return datetime.now(TR_TZ).replace(tzinfo=None)
 
 
+# ==================== VERİTABANI HAZIRLIK KİLİDİ ====================
+# gunicorn birden fazla worker (süreç) ile başlıyor; her worker açılışta
+# ALTER TABLE / CREATE TABLE komutlarını aynı anda çalıştırmaya çalışırsa
+# PostgreSQL'de deadlock oluşabilir. Bu kilit, tüm tablo/kolon hazırlığının
+# aynı anda sadece TEK bir worker tarafından yapılmasını garanti eder.
+_MIGRASYON_KILIT_ID = 918273645
+
+def _migrasyon_kilidini_al():
+    if not DATABASE_URL:
+        return None
+    con = psycopg2.connect(DATABASE_URL)
+    con.autocommit = True
+    with con.cursor() as cur:
+        cur.execute("SELECT pg_advisory_lock(%s)", (_MIGRASYON_KILIT_ID,))
+    return con
+
+def _migrasyon_kilidini_birak(con):
+    if con is None:
+        return
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT pg_advisory_unlock(%s)", (_MIGRASYON_KILIT_ID,))
+    finally:
+        con.close()
+
 
 def tablolari_olustur():
     con = db()
@@ -191,7 +216,11 @@ def tablolari_olustur():
 
 
 if DATABASE_URL:
-    tablolari_olustur()
+    _kilit = _migrasyon_kilidini_al()
+    try:
+        tablolari_olustur()
+    finally:
+        _migrasyon_kilidini_birak(_kilit)
     
 def rol_gerekli(*izinli_roller):
     TAM_YETKILI = ("patron", "muhasebeci")
@@ -3876,7 +3905,11 @@ def siparis_tablolarini_olustur():
 
 
 if DATABASE_URL:
-    siparis_tablolarini_olustur()
+    _kilit = _migrasyon_kilidini_al()
+    try:
+        siparis_tablolarini_olustur()
+    finally:
+        _migrasyon_kilidini_birak(_kilit)
 def siparis_hareket_tablosu_olustur():
     con = db()
     try:
@@ -3898,7 +3931,11 @@ def siparis_hareket_tablosu_olustur():
 
 
 if DATABASE_URL:
-    siparis_hareket_tablosu_olustur()
+    _kilit = _migrasyon_kilidini_al()
+    try:
+        siparis_hareket_tablosu_olustur()
+    finally:
+        _migrasyon_kilidini_birak(_kilit)
 
 
 def siparis_iade_tablosu_olustur():
@@ -3924,7 +3961,11 @@ def siparis_iade_tablosu_olustur():
 
 
 if DATABASE_URL:
-    siparis_iade_tablosu_olustur()
+    _kilit = _migrasyon_kilidini_al()
+    try:
+        siparis_iade_tablosu_olustur()
+    finally:
+        _migrasyon_kilidini_birak(_kilit)
 
 
 def musteri_tablosu_olustur():
@@ -3954,7 +3995,11 @@ def musteri_tablosu_olustur():
 
 
 if DATABASE_URL:
-    musteri_tablosu_olustur()
+    _kilit = _migrasyon_kilidini_al()
+    try:
+        musteri_tablosu_olustur()
+    finally:
+        _migrasyon_kilidini_birak(_kilit)
 
 
 def tedarikci_tablosu_olustur():
@@ -3981,7 +4026,11 @@ def tedarikci_tablosu_olustur():
 
 
 if DATABASE_URL:
-    tedarikci_tablosu_olustur()
+    _kilit = _migrasyon_kilidini_al()
+    try:
+        tedarikci_tablosu_olustur()
+    finally:
+        _migrasyon_kilidini_birak(_kilit)
 
 def push_tablosu_olustur():
     con = db()
@@ -4003,7 +4052,11 @@ def push_tablosu_olustur():
 
 
 if DATABASE_URL:
-    push_tablosu_olustur()
+    _kilit = _migrasyon_kilidini_al()
+    try:
+        push_tablosu_olustur()
+    finally:
+        _migrasyon_kilidini_birak(_kilit)
 
 
 def aktivite_log_tablosu_olustur():
@@ -4027,7 +4080,11 @@ def aktivite_log_tablosu_olustur():
 
 
 if DATABASE_URL:
-    aktivite_log_tablosu_olustur()
+    _kilit = _migrasyon_kilidini_al()
+    try:
+        aktivite_log_tablosu_olustur()
+    finally:
+        _migrasyon_kilidini_birak(_kilit)
 
 
 def sayim_tablosu_olustur():
@@ -4062,7 +4119,11 @@ def sayim_tablosu_olustur():
 
 
 if DATABASE_URL:
-    sayim_tablosu_olustur()
+    _kilit = _migrasyon_kilidini_al()
+    try:
+        sayim_tablosu_olustur()
+    finally:
+        _migrasyon_kilidini_birak(_kilit)
 
 
 def log_aktivite(eylem, detay=""):
