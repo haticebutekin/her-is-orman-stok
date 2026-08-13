@@ -5835,17 +5835,15 @@ arayuzuGuncelle(aktifTip);
 
 function hintOlustur(){
     const hints = new Map();
-    // Hem sistemin ürettiği barkodları (CODE_128) hem de dışarıdan gelen
-    // (satın alınmış) ürünlerin barkodlarını (EAN/UPC/CODE39 vb.) okuyabilsin.
+    // Sistemin ürettiği barkodlar CODE_128'dir; en yaygın 1D formatları da
+    // ekliyoruz ama format listesini dar tutuyoruz (çok geniş liste ZXing'in
+    // karar mekanizmasını yavaşlatıp taramayı bozabiliyor).
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
         ZXing.BarcodeFormat.CODE_128,
         ZXing.BarcodeFormat.EAN_13,
         ZXing.BarcodeFormat.EAN_8,
         ZXing.BarcodeFormat.UPC_A,
-        ZXing.BarcodeFormat.UPC_E,
         ZXing.BarcodeFormat.CODE_39,
-        ZXing.BarcodeFormat.ITF,
-        ZXing.BarcodeFormat.QR_CODE,
     ]);
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
     return hints;
