@@ -247,11 +247,11 @@ def barkod_png_bytes(kod):
     from barcode.writer import ImageWriter
     CODE128 = barcode.get_barcode_class("code128")
     yazici_ayarlari = {
-        "module_width": 0.32,     # XP-470B termal kafası için biraz kalın (net basım)
-        "module_height": 14.0,    # 40mm etiket yüksekliğine göre optimize
+        "module_width": 0.32,     # 34-36mm genişliğe göre optimize (40mm etiket, kenar boşluklu)
+        "module_height": 16.0,    # 58mm dikey etikette daha fazla yer olduğu için biraz büyütüldü
         "quiet_zone": 3.0,
-        "font_size": 7,
-        "text_distance": 2.5,
+        "font_size": 8,
+        "text_distance": 3.0,
         "write_text": True,
         "dpi": 203,               # XP-470B çözünürlüğü genelde 203 dpi
     }
@@ -3653,7 +3653,7 @@ def etiket(barkod):
     <title>Etiket - {ad}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        @page {{ size: 58mm 40mm; margin: 0mm; }}
+        @page {{ size: 40mm 58mm; margin: 0mm; }}
         * {{ box-sizing: border-box; }}
         body {{
             font-family: Arial, sans-serif; margin:0; padding:0;
@@ -3661,11 +3661,13 @@ def etiket(barkod):
         }}
         .etiket {{
             width: 36mm; padding: 1.5mm; text-align:center; margin:0 auto;
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            height: 58mm;
         }}
-        .ad {{ font-size: 11px; font-weight:800; margin-bottom:1mm; line-height:1.15; }}
-        .ozellik {{ font-size: 7.5px; color:#333; margin-bottom:1mm; line-height:1.25; }}
-        .depo {{ font-size: 7.5px; color:#555; margin-bottom:1mm; }}
-        img.barkod {{ width: 100%; max-width: 34mm; }}
+        .ad {{ font-size: 13px; font-weight:800; margin-bottom:2mm; line-height:1.2; }}
+        .ozellik {{ font-size: 9px; color:#333; margin-bottom:2mm; line-height:1.3; }}
+        .depo {{ font-size: 9px; color:#555; margin-bottom:2mm; }}
+        img.barkod {{ width: 100%; max-width: 34mm; margin-top: 2mm; }}
         .yazdir-btn {{
             display:block; margin: 6mm auto 0; padding:14px 24px;
             background:#2196F3; color:white; border:none; border-radius:10px;
@@ -3686,7 +3688,6 @@ def etiket(barkod):
             <img class="barkod" src="/barkod/{barkod}.png">
         </div>
         <button class="yazdir-btn" onclick="window.print()">🖨️ Yazdır</button>
-        <div class="label" style="border:1px solid red;"></div>
     </body>
     </html>
     """
@@ -3742,7 +3743,7 @@ def etiketler():
     <title>Etiketler ({len(satirlar)} adet)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        @page {{ size: 58mm 40mm; margin: 0mm; }}
+        @page {{ size: 40mm 58mm; margin: 0mm; }}
         * {{ box-sizing: border-box; }}
         body {{
             font-family: Arial, sans-serif; margin:0; padding:0;
@@ -3771,12 +3772,14 @@ def etiketler():
             background: white;
             page-break-after: always;
             break-after: page;
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            height: 58mm;
         }}
         .etiket:last-child {{ page-break-after: auto; break-after: auto; }}
-        .ad {{ font-size: 11px; font-weight:800; margin-bottom:1mm; line-height:1.15; }}
-        .ozellik {{ font-size: 7.5px; color:#333; margin-bottom:1mm; line-height:1.25; }}
-        .depo {{ font-size: 7.5px; color:#555; margin-bottom:1mm; }}
-        img.barkod {{ width: 100%; max-width: 34mm; }}
+        .ad {{ font-size: 13px; font-weight:800; margin-bottom:2mm; line-height:1.2; }}
+        .ozellik {{ font-size: 9px; color:#333; margin-bottom:2mm; line-height:1.3; }}
+        .depo {{ font-size: 9px; color:#555; margin-bottom:2mm; }}
+        img.barkod {{ width: 100%; max-width: 34mm; margin-top: 2mm; }}
         @media print {{
             .ust-arac {{ display:none; }}
             body {{ background:white; margin:0; }}
