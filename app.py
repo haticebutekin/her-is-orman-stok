@@ -608,6 +608,10 @@ a { color: inherit; }
 }
 .topbar-title { font-weight:700; font-size:14.5px; color:#eee; letter-spacing:.2px; display:flex; align-items:center; gap:7px; }
 .topbar-logo { height:26px; width:26px; border-radius:6px; object-fit:contain; background:white; padding:2px; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+@media (max-width: 380px) {
+  .topbar-title-metin { display:none; }
+  .topbar-btn { padding:8px 9px; }
+}
 
 .sayfa {
   max-width: 520px; margin: 0 auto;
@@ -759,6 +763,12 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
   content:""; flex:1; height:1px;
   background: linear-gradient(90deg, var(--border), transparent);
 }
+.bolum-tiklanabilir { cursor:pointer; user-select:none; }
+.bolum-ok { transition: transform .2s ease; font-size:11px; flex:none !important; }
+.bolum-ok::after { content:none; }
+.bolum-baslik.kapali .bolum-ok { transform: rotate(-90deg); }
+.bolum-govde { display:block; overflow:hidden; }
+.bolum-govde.kapali { display:none; }
 .rapor-satir { display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
 .rapor-pil {
   flex:1; min-width:110px; text-align:center; padding:12px 6px; border-radius:999px;
@@ -957,8 +967,9 @@ UYGULAMA_ADI = "HER-İŞ ORMAN ÜRÜNLERİ STOK TAKİP SİSTEMİ"
 
 UST_BAR = f"""
 <div class="topbar">
+  <button type="button" class="topbar-btn" title="Geri" onclick="if(document.referrer && document.referrer.indexOf(window.location.host)>-1){{history.back();}}else{{window.location.href='/';}}">⬅</button>
   <a href="/" class="topbar-btn" title="Ana Sayfa">🏠</a>
-  <span class="topbar-title"><img src="{LOGO_URL}" class="topbar-logo" alt="logo">HER-İŞ STOK TAKİP</span>
+  <span class="topbar-title"><img src="{LOGO_URL}" class="topbar-logo" alt="logo"><span class="topbar-title-metin">HER-İŞ STOK TAKİP</span></span>
   <button type="button" class="topbar-btn" title="Tema Değiştir" onclick="temaDegistir()" id="tema-btn">🌙</button>
   <a href="/kullanici_degistir" class="topbar-btn" title="Kullanıcı Değiştir">🔁</a>
 </div>
@@ -974,6 +985,32 @@ function temaDegistir(){{
     temaGuncelle();
 }}
 temaGuncelle();
+
+// Ana menüdeki bölüm başlıklarını aç/kapa (tercih hatırlanır)
+function bolumAcKapa(baslikEl){{
+    var govde = baslikEl.nextElementSibling;
+    if(!govde || !govde.classList.contains('bolum-govde')) return;
+    var kapaliMi = govde.classList.toggle('kapali');
+    baslikEl.classList.toggle('kapali', kapaliMi);
+    try {{
+        var anahtar = 'heris_bolum_' + baslikEl.textContent.trim().replace(/\\s+/g,'_');
+        localStorage.setItem(anahtar, kapaliMi ? '1' : '0');
+    }} catch(e) {{}}
+}}
+document.addEventListener('DOMContentLoaded', function(){{
+    document.querySelectorAll('.bolum-tiklanabilir').forEach(function(baslikEl){{
+        try {{
+            var anahtar = 'heris_bolum_' + baslikEl.textContent.trim().replace(/\\s+/g,'_');
+            if(localStorage.getItem(anahtar) === '1'){{
+                var govde = baslikEl.nextElementSibling;
+                if(govde && govde.classList.contains('bolum-govde')){{
+                    govde.classList.add('kapali');
+                    baslikEl.classList.add('kapali');
+                }}
+            }}
+        }} catch(e) {{}}
+    }});
+}});
 </script>
 """
 
@@ -1624,7 +1661,57 @@ def index():
         """
     if rol in ("muhasebeci", "patron"):
         butonlar += """
-        <div class="bolum-baslik">Sipariş</div>
+        <div class="bolum-baslik bolum-tiklanabilir" onclick="bolumAcKapa(this)">📦 Stok İşlemleri <span class="bolum-ok">▾</span></div>
+        <div class="bolum-govde">
+        <a href="/liste" class="okut-kart okut-mor">
+          <div class="okut-ikon">📦</div>
+          <div class="okut-metin"><div class="okut-baslik">Stok Listesi</div><div class="okut-alt">Ürünleri görüntüle, etiket bas</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/ekle" class="okut-kart okut-mavi">
+          <div class="okut-ikon">➕</div>
+          <div class="okut-metin"><div class="okut-baslik">Ürün Ekle</div><div class="okut-alt">Yeni ürün kaydı oluştur</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/toplu_yukle" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">📥</div>
+          <div class="okut-metin"><div class="okut-baslik">Excel'den Toplu Yükle</div><div class="okut-alt">Excel yükle → otomatik barkod → toplu etiket</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/palet_giris" class="okut-kart okut-mor">
+          <div class="okut-ikon">🧱</div>
+          <div class="okut-metin"><div class="okut-baslik">Palet Girişi</div><div class="okut-alt">Farklı adetli paletleri tek seferde gir</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/depo_stok" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">🏭</div>
+          <div class="okut-metin"><div class="okut-baslik">Depo Stok Durumu</div><div class="okut-alt">Hangi depoda ne kadar ürün var</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/transfer" class="okut-kart okut-mavi">
+          <div class="okut-ikon">🔁</div>
+          <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/transfer_gecmisi" class="okut-kart okut-mor">
+          <div class="okut-ikon">📜</div>
+          <div class="okut-metin"><div class="okut-baslik">Transfer Geçmişi</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/sayimlar" class="okut-kart okut-turuncu">
+          <div class="okut-ikon">📋</div>
+          <div class="okut-metin"><div class="okut-baslik">Stok Sayımı</div><div class="okut-alt">Fiziksel sayımla stoğu karşılaştır</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/hareketler" class="okut-kart okut-kirmizi">
+          <div class="okut-ikon">📊</div>
+          <div class="okut-metin"><div class="okut-baslik">Hareketler</div><div class="okut-alt">Tüm giriş/çıkış geçmişi</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        </div>
+
+        <div class="bolum-baslik bolum-tiklanabilir" onclick="bolumAcKapa(this)">🧾 Sipariş & Kişiler <span class="bolum-ok">▾</span></div>
+        <div class="bolum-govde">
         <a href="/siparis_olustur" class="okut-kart okut-yesil">
           <div class="okut-ikon">🧾</div>
           <div class="okut-metin"><div class="okut-baslik">Yeni Sipariş Oluştur</div><div class="okut-alt">Depo Sorumlusuna hazırlatılacak ürünleri seç</div></div>
@@ -1645,54 +1732,10 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Tedarikçiler</div><div class="okut-alt">Malzeme hangi tedarikçiden geldi</div></div>
           <div class="okut-ok">›</div>
         </a>
-        <a href="/sayimlar" class="okut-kart okut-turuncu">
-          <div class="okut-ikon">📋</div>
-          <div class="okut-metin"><div class="okut-baslik">Stok Sayımı</div><div class="okut-alt">Fiziksel sayımla stoğu karşılaştır</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <div class="bolum-baslik">İşlemler</div>
-        <a href="/ekle" class="okut-kart okut-mavi">
-          <div class="okut-ikon">➕</div>
-          <div class="okut-metin"><div class="okut-baslik">Ürün Ekle</div><div class="okut-alt">Yeni ürün kaydı oluştur</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <a href="/toplu_yukle" class="okut-kart okut-turkuaz">
-          <div class="okut-ikon">📥</div>
-          <div class="okut-metin"><div class="okut-baslik">Excel'den Toplu Yükle</div><div class="okut-alt">Excel yükle → otomatik barkod → toplu etiket</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <a href="/liste" class="okut-kart okut-mor">
-          <div class="okut-ikon">📦</div>
-          <div class="okut-metin"><div class="okut-baslik">Stok Listesi</div><div class="okut-alt">Ürünleri görüntüle, etiket bas</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <a href="/depo_stok" class="okut-kart okut-turkuaz">
-          <div class="okut-ikon">🏭</div>
-          <div class="okut-metin"><div class="okut-baslik">Depo Stok Durumu</div><div class="okut-alt">Hangi depoda ne kadar ürün var</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <a href="/transfer" class="okut-kart okut-mavi">
-          <div class="okut-ikon">🔁</div>
-          <div class="okut-metin"><div class="okut-baslik">Depolar Arası Transfer</div><div class="okut-alt">Ürünü bir depodan diğerine taşı</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <a href="/transfer_gecmisi" class="okut-kart okut-mor">
-          <div class="okut-ikon">📜</div>
-          <div class="okut-metin"><div class="okut-baslik">Transfer Geçmişi</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <a href="/palet_giris" class="okut-kart okut-mor">
-          <div class="okut-ikon">🧱</div>
-          <div class="okut-metin"><div class="okut-baslik">Palet Girişi</div><div class="okut-alt">Farklı adetli paletleri tek seferde gir</div></div>
-          <div class="okut-ok">›</div>
-        </a>
-        <a href="/hareketler" class="okut-kart okut-kirmizi">
-          <div class="okut-ikon">📊</div>
-          <div class="okut-metin"><div class="okut-baslik">Hareketler</div><div class="okut-alt">Tüm giriş/çıkış geçmişi</div></div>
-          <div class="okut-ok">›</div>
-        </a>
+        </div>
 
-        <div class="bolum-baslik">Raporlar</div>
+        <div class="bolum-baslik bolum-tiklanabilir" onclick="bolumAcKapa(this)">📥 Raporlar <span class="bolum-ok">▾</span></div>
+        <div class="bolum-govde">
         <div class="rapor-satir">
           <a href="/rapor/pdf" class="rapor-pil">📄 Stok PDF</a>
           <a href="/rapor/pdf?tur=siparisler" class="rapor-pil">🧾 Sipariş PDF</a>
@@ -1700,10 +1743,12 @@ def index():
           <a href="/rapor/xls" class="rapor-pil">📥 XLS</a>
           <a href="/rapor/csv" class="rapor-pil">📥 CSV</a>
         </div>
+        </div>
         """
     if rol == "patron":
         butonlar += """
-        <div class="bolum-baslik">Yönetim</div>
+        <div class="bolum-baslik bolum-tiklanabilir" onclick="bolumAcKapa(this)">⚙️ Yönetim <span class="bolum-ok">▾</span></div>
+        <div class="bolum-govde">
         <a href="/dashboard" class="okut-kart okut-yesil">
           <div class="okut-ikon">📊</div>
           <div class="okut-metin"><div class="okut-baslik">Yönetim Paneli</div><div class="okut-alt">Genel durum, grafikler, özet</div></div>
@@ -1714,7 +1759,6 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Aktivite Logu</div><div class="okut-alt">Kim, ne zaman, ne yaptı</div></div>
           <div class="okut-ok">›</div>
         </a>
-        <div class="bolum-baslik">Yedekleme</div>
         <a href="/yedek_al" class="okut-kart okut-turkuaz">
           <div class="okut-ikon">💾</div>
           <div class="okut-metin"><div class="okut-baslik">Yedek Al (JSON)</div><div class="okut-alt">Tüm stok ve hareket verisini indir</div></div>
@@ -1730,6 +1774,7 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Çöp Kutusu</div><div class="okut-alt">Silinen ürünleri geri getir</div></div>
           <div class="okut-ok">›</div>
         </a>
+        </div>
         """
     rol_rozet_renk = {"depocu": "kisi-yesil", "muhasebeci": "kisi-mavi", "patron": "kisi-mor"}.get(rol, "kisi-mavi")
     rol_etiket_gosterim = {"depocu": "Depo Sorumlusu", "muhasebeci": "Muhasebe Personeli", "patron": "Patron"}.get(rol, rol)
@@ -2571,9 +2616,11 @@ def sayim_detay(sayim_id):
         con.close()
 
     _, depo, baslatan, tarih, durum = s
+    tarih_str = tarih.strftime('%d.%m.%Y %H:%M') if hasattr(tarih, 'strftime') else str(tarih)
     toplam = len(kalemler)
     sayilan = sum(1 for k in kalemler if k[5])
     farkli = [k for k in kalemler if k[5] and k[4] != k[3]]
+    yuzde = round((sayilan / toplam) * 100) if toplam else 0
 
     kalem_html = ""
     for kid, barkod, ad, sistem_adet, sayilan_adet, sayildi in kalemler:
@@ -2620,11 +2667,19 @@ def sayim_detay(sayim_id):
     icerik = f"""
     <h2>📋 {depo}</h2>
     <p style="text-align:center;color:var(--muted);margin-top:-6px;font-size:13px;">
-    {baslatan} • {tarih} • {"✅ Tamamlandı" if durum == "tamamlandi" else "🔄 Devam Ediyor"}
+    {baslatan} • {tarih_str} • {"✅ Tamamlandı" if durum == "tamamlandi" else "🔄 Devam Ediyor"}
     </p>
     <div class="dash-kart-satir">
       <div class="dash-kart"><div class="dash-kart-sayi">{sayilan}/{toplam}</div><div class="dash-kart-etiket">Sayıldı</div></div>
       <div class="dash-kart dash-kart-turuncu"><div class="dash-kart-sayi">{len(farkli)}</div><div class="dash-kart-etiket">Farklı Çıkan</div></div>
+    </div>
+    <div class="kart" style="padding:12px 16px;">
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:4px;">
+        <span>SAYIM İLERLEMESİ</span><span>%{yuzde}</span>
+      </div>
+      <div style="background:var(--bg2);border-radius:999px;height:9px;overflow:hidden;">
+        <div style="width:{yuzde}%;height:100%;background:linear-gradient(90deg,#2196F3,#00BCD4);transition:width .4s ease;"></div>
+      </div>
     </div>
     {tamamla_buton}
     {kalem_html}
