@@ -2,7 +2,7 @@ from functools import wraps
 from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file, Response
 import psycopg2
 import os, random, io, json, threading, traceback
-import smtplib
+import smtplib  # artık kullanılmıyor ama zararsız, gelecekte gerekirse dursun
 from email.message import EmailMessage
 from datetime import timedelta
 
@@ -290,17 +290,14 @@ def yedek_json_olustur():
 
 
 def yedek_email_gonder():
-    """Döndürür: (basarili: bool, mesaj: str)"""
-    SMTP_HOST = os.environ.get("SMTP_HOST", "")
-    SMTP_PORT_STR = os.environ.get("SMTP_PORT", "587")
-    SMTP_USER = os.environ.get("SMTP_USER", "")
-    SMTP_PASS = os.environ.get("SMTP_PASS", "")
+    """Döndürür: (basarili: bool, mesaj: str). Resend API üzerinden gönderir
+    (HTTPS/443 kullanır, Render'ın engellediği SMTP portlarına ihtiyaç duymaz)."""
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+    RESEND_FROM = os.environ.get("RESEND_FROM", "onboarding@resend.dev")
     YEDEK_ALICI = os.environ.get("YEDEK_ALICI_EMAIL", "hatice-butekin@hotmail.com")
 
     eksikler = []
-    if not SMTP_HOST: eksikler.append("SMTP_HOST")
-    if not SMTP_USER: eksikler.append("SMTP_USER")
-    if not SMTP_PASS: eksikler.append("SMTP_PASS")
+    if not RESEND_API_KEY: eksikler.append("RESEND_API_KEY")
     if not YEDEK_ALICI: eksikler.append("YEDEK_ALICI_EMAIL")
 
     if eksikler:
@@ -309,51 +306,41 @@ def yedek_email_gonder():
         return False, mesaj
 
     try:
-        SMTP_PORT = int(SMTP_PORT_STR)
-    except ValueError:
-        mesaj = f"SMTP_PORT sayısal değil: '{SMTP_PORT_STR}'"
-        print("YEDEK E-POSTA HATASI:", mesaj)
-        return False, mesaj
+        import requests
+        import base64
 
-    try:
         veri = yedek_json_olustur()
         dosya_adi = f"yedek_{tr_simdi().strftime('%Y%m%d_%H%M')}.json"
+        veri_b64 = base64.b64encode(veri).decode("ascii")
 
-        msg = EmailMessage()
-        msg["Subject"] = f"HER-İŞ Stok Yedek - {tr_simdi().strftime('%d.%m.%Y')}"
-        msg["From"] = SMTP_USER
-        msg["To"] = YEDEK_ALICI
-        msg.set_content("Otomatik stok yedeği ekte. Bu e-postayı sil, arşivle veya güvenli bir yerde tut.")
-        msg.add_attachment(veri, maintype="application", subtype="json", filename=dosya_adi)
-
-        smtp = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
-        try:
-            smtp.starttls()
-            smtp.login(SMTP_USER, SMTP_PASS)
-            smtp.send_message(msg)
-        finally:
-            try:
-                smtp.quit()
-            except Exception:
-                pass
-
-        print(f"Yedek e-postası gönderildi: {dosya_adi}")
-        return True, "Gönderildi"
-    except smtplib.SMTPAuthenticationError as e:
-        mesaj = f"Kullanıcı adı/şifre reddedildi (SMTPAuthenticationError): {e.smtp_error.decode(errors='replace') if hasattr(e.smtp_error, 'decode') else e.smtp_error}"
-        print("YEDEK E-POSTA HATASI:", mesaj)
-        return False, mesaj
-    except smtplib.SMTPException as e:
-        mesaj = f"SMTP hatası: {e}"
-        print("YEDEK E-POSTA HATASI:", mesaj)
-        return False, mesaj
-    except (OSError, TimeoutError) as e:
-        mesaj = (
-            f"Sunucuya {SMTP_HOST}:{SMTP_PORT} adresine 10 saniye içinde bağlanılamadı ({e}). "
-            "Bu genelde Render'ın outbound SMTP portunu (587) engellediği anlamına gelir — "
-            "bulut sağlayıcılarının çoğu ücretsiz planda bu portu kısıtlar. "
-            "Çözüm için SendGrid, Mailgun veya Resend gibi bir e-posta API servisi kullanmanız gerekebilir."
+        yanit = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": RESEND_FROM,
+                "to": [YEDEK_ALICI],
+                "subject": f"HER-İŞ Stok Yedek - {tr_simdi().strftime('%d.%m.%Y')}",
+                "text": "Otomatik stok yedeği ekte. Bu e-postayı sil, arşivle veya güvenli bir yerde tut.",
+                "attachments": [
+                    {"filename": dosya_adi, "content": veri_b64}
+                ],
+            },
+            timeout=15,
         )
+
+        if yanit.status_code in (200, 201, 202):
+            print(f"Yedek e-postası gönderildi (Resend): {dosya_adi}")
+            return True, "Gönderildi"
+        else:
+            mesaj = f"Resend API hatası (HTTP {yanit.status_code}): {yanit.text[:300]}"
+            print("YEDEK E-POSTA HATASI:", mesaj)
+            return False, mesaj
+
+    except ImportError:
+        mesaj = "'requests' kütüphanesi kurulu değil. requirements.txt dosyasına 'requests' ekleyip tekrar deploy edin."
         print("YEDEK E-POSTA HATASI:", mesaj)
         return False, mesaj
     except Exception as e:
@@ -397,6 +384,15 @@ BASE_HEAD_EXTRA = """
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
+<script>
+(function(){
+  try {
+    if (localStorage.getItem('heris_tema') === 'acik') {
+      document.documentElement.classList.add('acik-tema');
+    }
+  } catch(e) {}
+})();
+</script>
 """
 
 ORTAK_CSS = """
@@ -491,6 +487,7 @@ h3.alt { color: var(--muted); font-weight:500; margin-top:-6px; font-size:14px; 
   transition: transform .1s ease, filter .15s ease; margin-right:8px; margin-top:4px;
 }
 .btn-kucuk:active { filter:brightness(0.85); transform: scale(0.96); }
+.carpan-btn.aktif-carpan { background: linear-gradient(135deg, #2196F3, #00BCD4) !important; box-shadow: 0 2px 8px rgba(33,150,243,.4); }
 
 .kart {
   background: linear-gradient(180deg, var(--card2), var(--card));
@@ -828,7 +825,30 @@ def yedek_al():
 @app.route("/yedek_email_test")
 @rol_gerekli("patron")
 def yedek_email_test():
-    basarili, mesaj = yedek_email_gonder()
+    sonuc_kutusu = {"tamam": None}
+
+    def calistir():
+        sonuc_kutusu["tamam"] = yedek_email_gonder()
+
+    t = threading.Thread(target=calistir, daemon=True)
+    t.start()
+    t.join(timeout=15)  # en fazla 15 saniye bekle, sonra kullanıcıyı bekletme
+
+    if sonuc_kutusu["tamam"] is None:
+        # Thread hâlâ arka planda çalışıyor olabilir (SMTP takılmış), ama kullanıcıyı bekletmiyoruz
+        return sayfa(
+            '<p class="hata">❌ E-posta gönderilemedi.</p>'
+            '<div class="kart" style="font-size:13px;color:var(--muted);">'
+            '<b style="color:var(--text);">Sebep:</b> Sunucudan 15 saniye içinde yanıt alınamadı. '
+            'Bu genelde Render\'ın outbound SMTP (587) portunu engellediği anlamına gelir — '
+            'sunucu sağlayıcı seviyesinde bir kısıtlama, ayarlarınızda bir hata değil. '
+            'Çözüm için SMTP yerine bir e-posta API servisi (SendGrid, Resend, Mailgun gibi) kullanmanız gerekir.'
+            '</div>'
+            '<a class="btn gri" href="/">🏠 Ana Sayfaya Dön</a>',
+            "Zaman Aşımı"
+        )
+
+    basarili, mesaj = sonuc_kutusu["tamam"]
     if basarili:
         return sayfa(
             '<div style="text-align:center;font-size:52px;">✅</div>'
@@ -3309,6 +3329,12 @@ def hizli_islem():
     barkod = data.get("barkod")
     tip = data.get("tip")
     siparis_id = data.get("siparis_id")
+    try:
+        miktar = int(data.get("miktar", 1))
+    except (TypeError, ValueError):
+        miktar = 1
+    if miktar < 1:
+        miktar = 1
     kullanici = session.get("kullanici", "Bilinmiyor")
     rol = session.get("rol")
 
@@ -3342,14 +3368,20 @@ def hizli_islem():
                     kalem_id, istenen, verilen = kalem
                     if verilen >= istenen:
                         return jsonify({"ok": False, "msg": f"'{ad}' için istenen {istenen} adet zaten tamamlandı.", "tamamlandi_uyari": True})
+                    kalan = istenen - verilen
+                    if miktar > kalan:
+                        miktar = kalan  # sipariş fazlasını çıkış yapma
 
                 if tip == "cikis" and adet <= 0:
                     return jsonify({"ok": False, "msg": "Stok yok"})
 
+                if tip == "cikis" and miktar > adet:
+                    miktar = adet  # stoktan fazlasını düşme
+
                 if tip == "giris":
-                    adet += 1
+                    adet += miktar
                 else:
-                    adet -= 1
+                    adet -= miktar
                 if adet < 0:
                     adet = 0
 
@@ -3359,15 +3391,15 @@ def hizli_islem():
                 cur.execute("""
                 INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
                 VALUES (%s, %s, %s, %s, %s, %s)
-                """, (barkod, ad, tip, 1, kullanici, tr_simdi()))
+                """, (barkod, ad, tip, miktar, kullanici, tr_simdi()))
 
                 siparis_ilerleme = None
                 if kalem_id:
-                    cur.execute("UPDATE siparis_kalem SET verilen = verilen + 1 WHERE id=%s", (kalem_id,))
+                    cur.execute("UPDATE siparis_kalem SET verilen = verilen + %s WHERE id=%s", (miktar, kalem_id))
                     cur.execute("""
                         INSERT INTO siparis_hareket (siparis_id, barkod, ad, adet, kullanici, tarih)
-                        VALUES (%s,%s,%s,1,%s,%s)
-                    """, (siparis_id, barkod, ad, kullanici, tr_simdi()))
+                        VALUES (%s,%s,%s,%s,%s,%s)
+                    """, (siparis_id, barkod, ad, miktar, kullanici, tr_simdi()))
                     cur.execute("SELECT SUM(istenen), SUM(verilen) FROM siparis_kalem WHERE siparis_id=%s", (siparis_id,))
                     top_ist, top_ver = cur.fetchone()
                     siparis_ilerleme = {"istenen": top_ist, "verilen": top_ver}
@@ -3383,7 +3415,7 @@ def hizli_islem():
                     toplam = 0
 
                 return jsonify({
-                    "ok": True, "ad": ad, "adet": adet, "toplam": toplam,
+                    "ok": True, "ad": ad, "adet": adet, "toplam": toplam, "miktar": miktar,
                     "cins": cins, "ebat": ebat, "yuzey": yuzey, "sinif": sinif,
                     "renk": renk, "depo": depo, "siparis_ilerleme": siparis_ilerleme,
                 })
@@ -5383,7 +5415,7 @@ def kamera(tip):
       display:flex; align-items:center; justify-content:center;
     }
     .tarama-kutu {
-      width:72%; height:42%; border:3px solid rgba(255,255,255,.85);
+      width:82%; height:48%; border:3px solid rgba(255,255,255,.85);
       border-radius:14px; box-shadow: 0 0 0 999px rgba(0,0,0,.28);
     }
     .tarama-kutu.basarili {
@@ -5450,6 +5482,22 @@ def kamera(tip):
       </div>
     </div>
 
+    <div class="kart" id="carpan-kart" style="display:none;padding:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <label style="margin:0;font-size:12.5px;">🔢 Her okutmada ekle</label>
+        <span id="carpan-goster" style="font-weight:800;font-size:16px;">1 adet</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button type="button" class="btn-kucuk gri carpan-btn" data-deger="1" onclick="carpanSec(1, this)" style="flex:1;">1</button>
+        <button type="button" class="btn-kucuk gri carpan-btn" data-deger="5" onclick="carpanSec(5, this)" style="flex:1;">5</button>
+        <button type="button" class="btn-kucuk gri carpan-btn" data-deger="10" onclick="carpanSec(10, this)" style="flex:1;">10</button>
+        <button type="button" class="btn-kucuk gri carpan-btn" data-deger="20" onclick="carpanSec(20, this)" style="flex:1;">20</button>
+        <input type="number" id="carpan-ozel" placeholder="Özel" min="1"
+               style="flex:1;margin:0;padding:8px;text-align:center;"
+               onchange="carpanSec(parseInt(this.value)||1, null)">
+      </div>
+    </div>
+
     <div class="kamera-baslat-alan" id="baslat-alan">
       <button class="btn yesil" style="max-width:320px;margin:0 auto;" onclick="baslat()">📷 Kamerayı Başlat</button>
     </div>
@@ -5497,9 +5545,9 @@ function kuyrukOku(){
 function kuyrukYaz(liste){
     try { localStorage.setItem(BEKLEYEN_KUYRUK_ANAHTARI, JSON.stringify(liste)); } catch(e) {}
 }
-function kuyrugaEkle(barkod){
+function kuyrugaEkle(barkod, miktar){
     const liste = kuyrukOku();
-    liste.push({ barkod: barkod, tip: aktifTip, siparis_id: siparisId, zaman: Date.now() });
+    liste.push({ barkod: barkod, tip: aktifTip, siparis_id: siparisId, miktar: miktar || 1, zaman: Date.now() });
     kuyrukYaz(liste);
     baglantiDurumuGoster();
 }
@@ -5522,11 +5570,11 @@ function kuyruguSenkronEt(){
         fetch("/hizli_islem", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ barkod: kalem.barkod, tip: kalem.tip, siparis_id: kalem.siparis_id })
+            body: JSON.stringify({ barkod: kalem.barkod, tip: kalem.tip, siparis_id: kalem.siparis_id, miktar: kalem.miktar || 1 })
         })
         .then(r => r.json())
         .then(d => {
-            oturumGuncelle(kalem.barkod, d.ad || kalem.barkod, 1);
+            oturumGuncelle(kalem.barkod, d.ad || kalem.barkod, kalem.miktar || 1);
             isle(i + 1);
         })
         .catch(() => {
@@ -5629,6 +5677,9 @@ async function baslat(){
     bipSes = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
     document.getElementById('baslat-alan').style.display = 'none';
     document.getElementById('kamera-cerceve').style.display = 'block';
+    document.getElementById('carpan-kart').style.display = 'block';
+    const ilkCarpanBtn = document.querySelector('.carpan-btn[data-deger="1"]');
+    if(ilkCarpanBtn) carpanSec(1, ilkCarpanBtn);
 
     codeReader = new ZXing.BrowserMultiFormatReader(hintOlustur());
 
@@ -5770,12 +5821,24 @@ function elleGonder(){
     setTimeout(() => kutu.focus(), 50);
 }
 
+let aktifCarpan = 1;
+
+function carpanSec(deger, btn){
+    if(!deger || deger < 1) deger = 1;
+    aktifCarpan = deger;
+    document.getElementById('carpan-goster').textContent = deger + ' adet';
+    document.querySelectorAll('.carpan-btn').forEach(b => b.classList.remove('aktif-carpan'));
+    if(btn) btn.classList.add('aktif-carpan');
+    if(!btn){ document.getElementById('carpan-ozel').value = deger; }
+    else { document.getElementById('carpan-ozel').value = ''; }
+}
+
 function isleGonder(barkod){
     if(bipSes){ bipSes.currentTime = 0; bipSes.play().catch(e => {}); }
     if(navigator.vibrate) navigator.vibrate(70);
 
     if(!navigator.onLine){
-        kuyrugaEkle(barkod);
+        kuyrugaEkle(barkod, aktifCarpan);
         sonucGosterCevrimdisi(barkod);
         kilit = false;
         return;
@@ -5784,13 +5847,13 @@ function isleGonder(barkod){
     fetch("/hizli_islem", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ barkod: barkod, tip: aktifTip, siparis_id: siparisId })
+        body: JSON.stringify({ barkod: barkod, tip: aktifTip, siparis_id: siparisId, miktar: aktifCarpan })
     })
     .then(r => r.json())
     .then(d => sonucGoster(d, barkod))
     .catch(() => {
         // Bağlantı koptu / istek gitmedi -> kuyruğa al, veri kaybolmasın
-        kuyrugaEkle(barkod);
+        kuyrugaEkle(barkod, aktifCarpan);
         sonucGosterCevrimdisi(barkod);
     })
     .finally(() => { kilit = false; });
@@ -5813,7 +5876,7 @@ function sonucGoster(d, barkod){
 
     if (d.ok) {
         sonIslem = { barkod: barkod, tip: aktifTip, siparis_id: siparisId };
-        oturumGuncelle(barkod, d.ad, 1);
+        oturumGuncelle(barkod, d.ad, d.miktar || 1);
         const baslikRengi = aktifTip === 'giris' ? '✅' : '📤';
         let siparisSatiri = '';
         if(d.siparis_ilerleme){
