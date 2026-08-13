@@ -5611,7 +5611,7 @@ def kamera(tip):
       display:flex; align-items:center; justify-content:center;
     }
     .tarama-kutu {
-      width:88%; height:30%; border:3px solid rgba(255,255,255,.85);
+      width:82%; height:42%; border:3px solid rgba(255,255,255,.85);
       border-radius:14px; box-shadow: 0 0 0 999px rgba(0,0,0,.28);
     }
     .tarama-kutu.basarili {
@@ -5869,10 +5869,9 @@ function hintOlustur(){
         ZXing.BarcodeFormat.UPC_A,
         ZXing.BarcodeFormat.CODE_39,
     ]);
-    // TRY_HARDER her kareyi daha kapsamlı ama daha YAVAŞ analiz eder;
-    // sürekli/canlı taramada kapalı tutmak, saniyede daha çok kare
-    // denenmesini sağlayıp barkodu yakalamayı kolaylaştırır.
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, false);
+    // TRY_HARDER daha kapsamlı analiz yapar; basılı/gerçek dünya barkodları
+    // için genelde daha güvenilir sonuç verir, tekrar açık tutuyoruz.
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
     return hints;
 }
 
