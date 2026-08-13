@@ -1386,6 +1386,13 @@ def pin_gir(isim):
     .tuş:active { transform: scale(0.92); filter:brightness(1.3); background:var(--accent); }
     .tuş.bos { background:transparent; border:none; cursor:default; }
     .tuş.bos:active { transform:none; filter:none; background:transparent; }
+    .pin-noktalar.titret { animation: pinTitret .4s ease; }
+    @keyframes pinTitret {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+    .pin-noktalar.titret .pin-nokta.dolu { background:#e74c3c; border-color:#e74c3c; }
     </style>
 
     <div class="pin-avatar">{{isim[0]|upper}}</div>
@@ -1443,6 +1450,18 @@ def pin_gir(isim):
       girilenPin = girilenPin.slice(0, -1);
       noktalariGuncelle();
     }
+    {% if hata %}
+    (function(){
+      document.querySelectorAll('.pin-nokta').forEach(n => n.classList.add('dolu'));
+      var kutu = document.getElementById('noktalar');
+      kutu.classList.add('titret');
+      if(navigator.vibrate) navigator.vibrate([60,40,60]);
+      setTimeout(() => {
+        kutu.classList.remove('titret');
+        document.querySelectorAll('.pin-nokta').forEach(n => n.classList.remove('dolu'));
+      }, 500);
+    })();
+    {% endif %}
     </script>
     """
     return render_template_string(sayfa(icerik, "Giriş"), isim=isim, hata=hata)
@@ -4722,12 +4741,20 @@ def musteri_detay(musteri_id):
         urun_ozet_html = '<p style="color:var(--muted);font-size:13px;">Henüz teslim edilmiş ürün yok.</p>'
 
     icerik = f"""
-    <h2>🏢 {ad}</h2>
+    <div style="display:flex;justify-content:center;">
+      <div class="kisi-avatar kisi-mavi" style="width:64px;height:64px;font-size:24px;margin-bottom:8px;">{ad[0].upper() if ad else '?'}</div>
+    </div>
+    <h2 style="margin-top:0;">🏢 {ad}</h2>
+    <div class="dash-kart-satir">
+      <div class="dash-kart"><div class="dash-kart-sayi">{len(siparisler)}</div><div class="dash-kart-etiket">Toplam Sipariş</div></div>
+      <div class="dash-kart"><div class="dash-kart-sayi">{sum(t for _, t in urun_ozet)}</div><div class="dash-kart-etiket">Toplam Alım (Adet)</div></div>
+    </div>
     <div class="kart">
       {'<div style="margin-bottom:4px;">📞 ' + telefon + '</div>' if telefon else ''}
       {'<div style="margin-bottom:4px;">📍 ' + adres + '</div>' if adres else ''}
       {'<div style="margin-bottom:4px;">🪪 TC/Vergi No: ' + tc_vergi_no + '</div>' if tc_vergi_no else ''}
       {'<div style="color:var(--muted);font-size:13px;margin-top:6px;">📝 ' + not_alani + '</div>' if not_alani else ''}
+      {'<p style="color:var(--muted);font-size:13px;margin:0;">Henüz iletişim bilgisi eklenmemiş.</p>' if not (telefon or adres or tc_vergi_no) else ''}
     </div>
     <a href="/musteri_duzenle/{musteri_id}" class="okut-kart okut-turkuaz">
       <div class="okut-ikon">✏️</div>
@@ -4948,23 +4975,34 @@ def tedarikci_detay(tedarikci_id):
     _, ad, telefon, adres, not_alani, tc_vergi_no = t
 
     giris_html = ""
+    toplam_sevkiyat_adet = 0
     for uad, barkod, adet, kullanici, tarih in girisler:
+        toplam_sevkiyat_adet += adet
+        tarih_str = tarih.strftime('%d.%m.%Y %H:%M') if hasattr(tarih, 'strftime') else str(tarih)
         giris_html += f"""
         <div class="dash-liste-satir">
           <span>{uad} <span style="color:var(--muted);">({adet} adet)</span></span>
-          <span class="dash-liste-deger">{tarih}</span>
+          <span class="dash-liste-deger">{tarih_str}</span>
         </div>
         """
     if not girisler:
         giris_html = '<p style="color:var(--muted);font-size:13px;">Henüz bu tedarikçiden kayıtlı giriş yok.</p>'
 
     icerik = f"""
-    <h2>🚚 {ad}</h2>
+    <div style="display:flex;justify-content:center;">
+      <div class="kisi-avatar kisi-yesil" style="width:64px;height:64px;font-size:24px;margin-bottom:8px;">{ad[0].upper() if ad else '?'}</div>
+    </div>
+    <h2 style="margin-top:0;">🚚 {ad}</h2>
+    <div class="dash-kart-satir">
+      <div class="dash-kart"><div class="dash-kart-sayi">{len(girisler)}</div><div class="dash-kart-etiket">Son Sevkiyat Sayısı</div></div>
+      <div class="dash-kart"><div class="dash-kart-sayi">{toplam_sevkiyat_adet}</div><div class="dash-kart-etiket">Toplam Adet</div></div>
+    </div>
     <div class="kart">
       {'<div style="margin-bottom:4px;">📞 ' + telefon + '</div>' if telefon else ''}
       {'<div style="margin-bottom:4px;">📍 ' + adres + '</div>' if adres else ''}
       {'<div style="margin-bottom:4px;">🪪 TC/Vergi No: ' + tc_vergi_no + '</div>' if tc_vergi_no else ''}
       {'<div style="color:var(--muted);font-size:13px;margin-top:6px;">📝 ' + not_alani + '</div>' if not_alani else ''}
+      {'<p style="color:var(--muted);font-size:13px;margin:0;">Henüz iletişim bilgisi eklenmemiş.</p>' if not (telefon or adres or tc_vergi_no) else ''}
     </div>
     <a href="/tedarikci_duzenle/{tedarikci_id}" class="okut-kart okut-turkuaz">
       <div class="okut-ikon">✏️</div>
@@ -5531,48 +5569,72 @@ def iade_fisi(iade_id):
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         @page {{ size: A4; margin: 12mm; }}
-        body {{ font-family: Arial, sans-serif; color:#111; margin:0; }}
-        .fis {{ max-width: 760px; margin: 0 auto; padding: 12px; }}
-        .fis-baslik {{ display:flex; align-items:center; gap:12px; border-bottom:2px solid #B388FF; padding-bottom:10px; margin-bottom:14px; }}
-        .fis-baslik img {{ width:52px; height:52px; border-radius:8px; background:#fff; }}
-        .fis-baslik h1 {{ font-size:18px; margin:0; }}
-        .rozet-iade {{ display:inline-block; background:#B388FF; color:white; font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; margin-top:4px; }}
-        .bilgi-satir {{ display:flex; justify-content:space-between; font-size:13px; color:#333; margin-bottom:14px; flex-wrap:wrap; gap:6px; }}
-        table {{ width:100%; border-collapse:collapse; font-size:12.5px; }}
-        th, td {{ border:1px solid #ccc; padding:9px 10px; text-align:left; }}
-        th {{ background:#f0f0f0; }}
-        .toplam-satir td {{ font-weight:800; background:#f7f7f7; }}
-        .yazdir-btn {{
-            display:block; margin: 18px auto 0; padding:14px 24px;
-            background:#B388FF; color:white; border:none; border-radius:10px;
-            font-size:16px; font-weight:700; cursor:pointer;
+        * {{ box-sizing: border-box; }}
+        body {{ font-family: 'Helvetica Neue', Arial, sans-serif; color:#1a1a1a; margin:0; background:#fafafa; }}
+        .fis {{ max-width: 780px; margin: 0 auto; padding: 28px; background:#fff; box-shadow: 0 2px 20px rgba(0,0,0,.06); }}
+        .fis-baslik {{
+          display:flex; align-items:center; justify-content:space-between; gap:12px;
+          border-bottom:3px solid #B388FF; padding-bottom:16px; margin-bottom:20px;
         }}
+        .fis-baslik-sol {{ display:flex; align-items:center; gap:14px; }}
+        .fis-baslik img {{ width:56px; height:56px; border-radius:10px; background:#fff; border:1px solid #eee; }}
+        .fis-baslik h1 {{ font-size:19px; margin:0; letter-spacing:-.2px; }}
+        .fis-alt-baslik {{ font-weight:400; font-size:12.5px; color:#888; margin-top:2px; }}
+        .durum-rozet {{
+          display:inline-block; padding:5px 14px; border-radius:999px;
+          font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+          color:#fff; background:#B388FF;
+        }}
+        .bilgi-kutu {{
+          display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr));
+          gap:10px; background:#f8f9fb; border-radius:10px; padding:14px 16px; margin-bottom:18px;
+        }}
+        .bilgi-oge {{ font-size:12.5px; }}
+        .bilgi-oge b {{ display:block; font-size:10.5px; color:#999; text-transform:uppercase; letter-spacing:.4px; font-weight:600; margin-bottom:2px; }}
+        table {{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:6px; }}
+        th {{ background:#1a1a1a; color:#fff; padding:10px 8px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.3px; }}
+        td {{ border-bottom:1px solid #eee; padding:9px 8px; }}
+        tr:nth-child(even) td {{ background:#fafbfc; }}
+        .sebep-kutu {{ background:#f8f0ff; border-left:3px solid #B388FF; border-radius:6px; padding:10px 14px; font-size:12.5px; margin-bottom:16px; }}
+        .yazdir-btn {{
+            display:block; margin: 22px auto 0; padding:14px 28px;
+            background: linear-gradient(135deg, #B388FF, #7E57C2); color:white; border:none; border-radius:10px;
+            font-size:16px; font-weight:700; cursor:pointer; box-shadow: 0 4px 14px rgba(126,87,194,.35);
+        }}
+        .fis-alt {{ text-align:center; font-size:10.5px; color:#aaa; margin-top:20px; letter-spacing:.3px; }}
         .geri-link {{ display:block; text-align:center; margin-top:12px; color:#666; font-size:13px; text-decoration:none; }}
-        @media print {{ .yazdir-btn, .geri-link {{ display:none; }} }}
+        @media print {{ body {{ background:#fff; }} .fis {{ box-shadow:none; padding:0; }} .yazdir-btn, .geri-link {{ display:none; }} }}
     </style>
     </head>
     <body>
         <div class="fis">
             <div class="fis-baslik">
-                <img src="{LOGO_URL}">
-                <h1>{UYGULAMA_ADI}<br><span style="font-weight:400;font-size:13px;">İade Fişi #{iade_id}</span><br><span class="rozet-iade">↩️ İADE</span></h1>
+                <div class="fis-baslik-sol">
+                    <img src="{LOGO_URL}">
+                    <div>
+                        <h1>{UYGULAMA_ADI}</h1>
+                        <div class="fis-alt-baslik">İade Fişi #{iade_id}</div>
+                    </div>
+                </div>
+                <span class="durum-rozet">↩️ İade</span>
             </div>
-            <div class="bilgi-satir">
-                <div><b>Sipariş No:</b> #{siparis_id}</div>
-                <div><b>Müşteri:</b> {musteri or '-'}</div>
-                <div><b>Depo:</b> {depo or '-'}</div>
-                <div><b>İşlemi Yapan:</b> {kullanici}</div>
-                <div><b>Tarih:</b> {tarih}</div>
+            <div class="bilgi-kutu">
+                <div class="bilgi-oge"><b>Sipariş No</b>#{siparis_id}</div>
+                <div class="bilgi-oge"><b>Müşteri</b>{musteri or '-'}</div>
+                <div class="bilgi-oge"><b>Depo</b>{depo or '-'}</div>
+                <div class="bilgi-oge"><b>İşlemi Yapan</b>{kullanici}</div>
+                <div class="bilgi-oge"><b>Tarih</b>{tarih}</div>
             </div>
-            {'<p style="font-size:13px;"><b>İade Sebebi:</b> ' + sebep + '</p>' if sebep else ''}
+            {'<div class="sebep-kutu"><b>İade Sebebi:</b> ' + sebep + '</div>' if sebep else ''}
             <table>
                 <tr><th>Ürün</th><th>Barkod</th><th style="text-align:center;">İade Adet</th></tr>
                 <tr>
                   <td>{ad}</td>
                   <td>{barkod}</td>
-                  <td style="text-align:center;">{adet}</td>
+                  <td style="text-align:center;font-weight:800;">{adet}</td>
                 </tr>
             </table>
+            <div class="fis-alt">{UYGULAMA_ADI} tarafından otomatik oluşturulmuştur.</div>
         </div>
         <button class="yazdir-btn" onclick="window.print()">🖨️ Yazdır</button>
         <a class="geri-link" href="/siparis/{siparis_id}">⬅ Siparişe Dön</a>
