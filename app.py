@@ -567,8 +567,13 @@ ORTAK_CSS = """
   --border:#262b38; --text:#f4f5f7; --muted:#8b93a3; --accent:#2196F3;
   --radius:16px; --radius-sm:10px;
 }
+html.acik-tema {
+  --bg:#f4f5f8; --bg2:#eceef2; --card:#ffffff; --card2:#f7f8fa;
+  --border:#e0e3e9; --text:#12151c; --muted:#5c6270; --accent:#2196F3;
+}
 * { box-sizing: border-box; }
 html { scrollbar-color: #333 transparent; }
+html.acik-tema { scrollbar-color: #bbb transparent; }
 body {
   background:
     radial-gradient(1200px 600px at 50% -10%, rgba(33,150,243,.08), transparent 60%),
@@ -577,6 +582,7 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
+  transition: background-color .2s ease, color .2s ease;
 }
 input, select, button, textarea { font-size: 16px; font-family: inherit; }
 a { color: inherit; }
@@ -672,7 +678,7 @@ h3.alt { color: var(--muted); font-weight:500; margin-top:-6px; font-size:14px; 
 
 input[type=text], input[type=number], input[type=password], input[type=file], select, textarea {
   width:100%; padding:14px; margin:6px 0 14px; border-radius: var(--radius-sm);
-  border:1px solid var(--border); background:#12151c; color:white;
+  border:1px solid var(--border); background:var(--bg2); color:var(--text);
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 input:focus, select:focus, textarea:focus {
@@ -683,7 +689,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 
 .arama {
   width:100%; padding:14px 16px; margin: 4px 0 16px; border-radius:999px;
-  border:1px solid var(--border); background:#12151c; color:white;
+  border:1px solid var(--border); background:var(--bg2); color:var(--text);
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 .arama:focus { outline:none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(33,150,243,.18); }
@@ -691,7 +697,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .pin-input {
   font-size: 34px; text-align:center; width:200px; padding:12px;
   border-radius:14px; border:1px solid var(--border); letter-spacing:10px;
-  background:#12151c; color:white; display:block; margin:20px auto;
+  background:var(--bg2); color:var(--text); display:block; margin:20px auto;
 }
 .pin-input:focus { outline:none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(33,150,243,.18); }
 
@@ -720,7 +726,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 
 .okut-kart {
   display:flex; align-items:center; gap:14px;
-  text-decoration:none; color:white; border-radius: var(--radius);
+  text-decoration:none; color:var(--text); border-radius: var(--radius);
   padding: 20px 18px; margin: 12px 0; border:1px solid var(--border);
   box-shadow: 0 4px 16px rgba(0,0,0,.25);
   transition: transform .12s ease, filter .15s ease;
@@ -756,7 +762,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .rapor-satir { display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
 .rapor-pil {
   flex:1; min-width:110px; text-align:center; padding:12px 6px; border-radius:999px;
-  background:#12151c; border:1px solid var(--border); color:var(--text);
+  background:var(--bg2); border:1px solid var(--border); color:var(--text);
   text-decoration:none; font-weight:700; font-size:13px;
   transition: transform .1s ease, filter .15s ease, border-color .15s ease;
 }
@@ -766,7 +772,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 }
 
 .kisi-kart {
-  display:flex; align-items:center; gap:14px; text-decoration:none; color:white;
+  display:flex; align-items:center; gap:14px; text-decoration:none; color:var(--text);
   border-radius: var(--radius); padding:14px 16px; margin:10px 0;
   border:1px solid var(--border);
   background: linear-gradient(180deg, var(--card2), var(--card));
@@ -825,7 +831,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .filtre-satir { display:flex; gap:8px; margin: 0 0 14px; flex-wrap:wrap; }
 .filtre-cip {
   flex:1; text-align:center; padding:9px 6px; border-radius:999px;
-  background:#12151c; border:1px solid var(--border); color:var(--muted);
+  background:var(--bg2); border:1px solid var(--border); color:var(--muted);
   font-weight:700; font-size:13px; cursor:pointer; transition: all .15s ease;
   min-width: 80px;
 }
@@ -880,7 +886,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 
 /* --- Sipariş --- */
 .siparis-kart {
-  display:block; text-decoration:none; color:white;
+  display:block; text-decoration:none; color:var(--text);
   background: linear-gradient(180deg, var(--card2), var(--card));
   border:1px solid var(--border); border-radius: var(--radius);
   padding:15px 17px; margin:10px 0;
@@ -902,7 +908,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .siparis-durum.iptal { background: rgba(255,23,68,.15); color:#FF6B6B; }
 .siparis-detay { font-size:13px; color:var(--muted); margin-top:6px; line-height:1.6; }
 .siparis-ilerleme-bar {
-  height:6px; border-radius:999px; background:#12151c; margin-top:10px; overflow:hidden;
+  height:6px; border-radius:999px; background:var(--bg2); margin-top:10px; overflow:hidden;
 }
 .siparis-ilerleme-dolu { height:100%; background: linear-gradient(90deg, #2196F3, #00BCD4); }
 
@@ -920,7 +926,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 .urun-arama-sonuc {
   border:1px solid var(--border); border-radius: var(--radius-sm);
   margin-top:-8px; margin-bottom:14px; max-height:260px; overflow-y:auto;
-  background:#12151c; display:none;
+  background:var(--bg2); display:none;
 }
 .urun-arama-oge {
   padding:12px 14px; border-bottom:1px solid var(--border); cursor:pointer; font-size:13.5px;
@@ -932,7 +938,7 @@ label { color: var(--muted); font-size:13px; font-weight:600; letter-spacing:.2p
 
 .sepet-satir {
   display:flex; align-items:center; gap:8px;
-  background:#12151c; border:1px solid var(--border); border-radius: var(--radius-sm);
+  background:var(--bg2); border:1px solid var(--border); border-radius: var(--radius-sm);
   padding:10px 12px; margin-bottom:8px;
 }
 .sepet-ad { flex:1; font-size:13.5px; font-weight:600; }
@@ -953,8 +959,22 @@ UST_BAR = f"""
 <div class="topbar">
   <a href="/" class="topbar-btn" title="Ana Sayfa">🏠</a>
   <span class="topbar-title"><img src="{LOGO_URL}" class="topbar-logo" alt="logo">HER-İŞ STOK TAKİP</span>
+  <button type="button" class="topbar-btn" title="Tema Değiştir" onclick="temaDegistir()" id="tema-btn">🌙</button>
   <a href="/kullanici_degistir" class="topbar-btn" title="Kullanıcı Değiştir">🔁</a>
 </div>
+<script>
+function temaGuncelle(){{
+    var acikMi = document.documentElement.classList.contains('acik-tema');
+    var btn = document.getElementById('tema-btn');
+    if(btn) btn.textContent = acikMi ? '☀️' : '🌙';
+}}
+function temaDegistir(){{
+    var acikMi = document.documentElement.classList.toggle('acik-tema');
+    try {{ localStorage.setItem('heris_tema', acikMi ? 'acik' : 'koyu'); }} catch(e) {{}}
+    temaGuncelle();
+}}
+temaGuncelle();
+</script>
 """
 
 HOME_BTN = UST_BAR
@@ -1359,7 +1379,7 @@ def pin_gir(isim):
     .tuş-takimi { display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; max-width:280px; margin:0 auto; }
     .tuş {
       aspect-ratio:1; border-radius:50%; border:1px solid var(--border);
-      background:#12151c; color:white; font-size:22px; font-weight:700;
+      background:var(--bg2); color:var(--text); font-size:22px; font-weight:700;
       display:flex; align-items:center; justify-content:center; cursor:pointer;
       transition: transform .08s ease, filter .12s ease;
     }
@@ -2832,7 +2852,7 @@ def depo_stok():
     for d in sirali_depolar:
         cesit, toplam = satirlar.get(d, (0, 0))
         kartlar += f"""
-        <a href="/liste?depo={d}" class="depo-ozet-kart" style="text-decoration:none;color:white;">
+        <a href="/liste?depo={d}" class="depo-ozet-kart" style="text-decoration:none;color:var(--text);">
           <div class="depo-ozet-ad">🏭 {d}</div>
           <div class="depo-ozet-sayilar">
             <div class="depo-ozet-tekli"><div class="sayi">{cesit}</div><div class="etiket">Çeşit</div></div>
@@ -5592,7 +5612,7 @@ def kamera(tip):
     icerik = """
     <style>
     .mod-gecis {
-      display:flex; background:#12151c; border:1px solid var(--border);
+      display:flex; background:var(--bg2); border:1px solid var(--border);
       border-radius:999px; padding:4px; margin-bottom:16px;
     }
     .mod-btn {
