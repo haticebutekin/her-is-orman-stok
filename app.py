@@ -293,26 +293,50 @@ def yedek_json_olustur():
     con = db()
     try:
         with con.cursor() as cur:
-            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok FROM urun")
+            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok,son_tedarikci FROM urun WHERE silindi IS NOT TRUE")
             urunler = cur.fetchall()
-            cur.execute("SELECT barkod,ad,tip,adet,kullanici,tarih FROM hareket ORDER BY id")
+            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,silinme_tarihi FROM urun WHERE silindi IS TRUE")
+            silinen_urunler = cur.fetchall()
+            cur.execute("SELECT barkod,ad,tip,adet,kullanici,tarih,tedarikci FROM hareket ORDER BY id")
             hareketler = cur.fetchall()
-            cur.execute("SELECT musteri,depo,durum,olusturan,tarih,aciklama FROM siparis")
+            cur.execute("SELECT id,musteri,depo,durum,olusturan,tarih,aciklama FROM siparis ORDER BY id")
             siparisler = cur.fetchall()
             cur.execute("""
                 SELECT sk.siparis_id, sk.barkod, sk.ad, sk.istenen, sk.verilen
-                FROM siparis_kalem sk
+                FROM siparis_kalem sk ORDER BY sk.id
             """)
             siparis_kalemleri = cur.fetchall()
+            cur.execute("SELECT siparis_id,barkod,ad,adet,kullanici,tarih,sebep FROM siparis_iade ORDER BY id")
+            iadeler = cur.fetchall()
+            cur.execute("SELECT ad,telefon,adres,not_alani,tc_vergi_no,olusturulma FROM musteri ORDER BY ad")
+            musteriler = cur.fetchall()
+            cur.execute("SELECT ad,telefon,adres,not_alani,tc_vergi_no,olusturulma FROM tedarikci ORDER BY ad")
+            tedarikciler = cur.fetchall()
+            cur.execute("SELECT kullanici,eylem,detay,tarih FROM aktivite_log ORDER BY id")
+            aktivite_loglari = cur.fetchall()
+            cur.execute("SELECT depo,baslatan,baslangic_tarihi,bitis_tarihi,durum FROM sayim ORDER BY id")
+            sayimlar = cur.fetchall()
+            cur.execute("""
+                SELECT sayim_id,barkod,ad,sistem_adet,sayilan_adet,sayildi
+                FROM sayim_kalem ORDER BY id
+            """)
+            sayim_kalemleri = cur.fetchall()
     finally:
         con.close()
 
     yedek = {
         "olusturulma_tarihi": str(tr_simdi()),
         "urunler": [list(r) for r in urunler],
+        "silinen_urunler": [[str(x) for x in r] for r in silinen_urunler],
         "hareketler": [[str(x) for x in r] for r in hareketler],
         "siparisler": [[str(x) for x in r] for r in siparisler],
         "siparis_kalemleri": [list(r) for r in siparis_kalemleri],
+        "iadeler": [[str(x) for x in r] for r in iadeler],
+        "musteriler": [[str(x) for x in r] for r in musteriler],
+        "tedarikciler": [[str(x) for x in r] for r in tedarikciler],
+        "aktivite_loglari": [[str(x) for x in r] for r in aktivite_loglari],
+        "sayimlar": [[str(x) for x in r] for r in sayimlar],
+        "sayim_kalemleri": [list(r) for r in sayim_kalemleri],
     }
 
     return json.dumps(yedek, ensure_ascii=False, indent=2).encode("utf-8")
@@ -5587,7 +5611,7 @@ def kamera(tip):
       display:flex; align-items:center; justify-content:center;
     }
     .tarama-kutu {
-      width:82%; height:48%; border:3px solid rgba(255,255,255,.85);
+      width:88%; height:30%; border:3px solid rgba(255,255,255,.85);
       border-radius:14px; box-shadow: 0 0 0 999px rgba(0,0,0,.28);
     }
     .tarama-kutu.basarili {
@@ -5845,7 +5869,10 @@ function hintOlustur(){
         ZXing.BarcodeFormat.UPC_A,
         ZXing.BarcodeFormat.CODE_39,
     ]);
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    // TRY_HARDER her kareyi daha kapsamlı ama daha YAVAŞ analiz eder;
+    // sürekli/canlı taramada kapalı tutmak, saniyede daha çok kare
+    // denenmesini sağlayıp barkodu yakalamayı kolaylaştırır.
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, false);
     return hints;
 }
 
