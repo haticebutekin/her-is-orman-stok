@@ -5859,18 +5859,14 @@ arayuzuGuncelle(aktifTip);
 
 function hintOlustur(){
     const hints = new Map();
-    // Sistemin ürettiği barkodlar CODE_128'dir; en yaygın 1D formatları da
-    // ekliyoruz ama format listesini dar tutuyoruz (çok geniş liste ZXing'in
-    // karar mekanizmasını yavaşlatıp taramayı bozabiliyor).
+    // Sistemin ürettiği barkodlar CODE_128'dir; ayrıca dışarıdan alınan
+    // hazır ürünlerde en sık görülen EAN_13/UPC_A da destekleniyor.
+    // Listeyi kısa tutmak taramayı hızlandırır.
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
         ZXing.BarcodeFormat.CODE_128,
         ZXing.BarcodeFormat.EAN_13,
-        ZXing.BarcodeFormat.EAN_8,
         ZXing.BarcodeFormat.UPC_A,
-        ZXing.BarcodeFormat.CODE_39,
     ]);
-    // TRY_HARDER daha kapsamlı analiz yapar; basılı/gerçek dünya barkodları
-    // için genelde daha güvenilir sonuç verir, tekrar açık tutuyoruz.
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
     return hints;
 }
