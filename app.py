@@ -276,9 +276,13 @@ def barkod_png_bytes(kod):
     from barcode.writer import ImageWriter
     CODE128 = barcode.get_barcode_class("code128")
     yazici_ayarlari = {
-        "module_width": 0.32,     # 34-36mm genişliğe göre optimize (40mm etiket, kenar boşluklu)
-        "module_height": 16.0,    # 58mm dikey etikette daha fazla yer olduğu için biraz büyütüldü
-        "quiet_zone": 3.0,
+        # 203 dpi'da 1 nokta = 0.125mm. module_width'in bu değerin TAM KATI
+        # olması gerekiyor, yoksa çizgi genişlikleri küsuratlı yuvarlanıp
+        # kamera/okuyucunun barkodu yanlış (anlamsız karakterler) okumasına
+        # yol açabiliyor. 0.375mm = tam 3 piksel -> net, hatasız basım.
+        "module_width": 0.375,
+        "module_height": 16.0,    # 16.0/0.125 = 128 piksel, zaten tam sayı
+        "quiet_zone": 3.0,        # 3.0/0.125 = 24 piksel, zaten tam sayı
         "font_size": 8,
         "text_distance": 3.0,
         "write_text": True,
@@ -5913,15 +5917,16 @@ function kameraBaslat(){
     codeReader.decodeFromConstraints(kisitlar, 'video', (result, err) => {
         if (result && !kilit) {
             const simdi = Date.now();
+            const okunanMetin = (result.text || "").trim();
             // Aynı barkodu kamera sabit tutulunca 1.5sn içinde tekrar okumasın (yanlışlıkla çift sayım engeli)
-            if (result.text === sonOkunanBarkod && (simdi - sonOkumaZamani) < 1500) {
+            if (okunanMetin === sonOkunanBarkod && (simdi - sonOkumaZamani) < 1500) {
                 return;
             }
-            sonOkunanBarkod = result.text;
+            sonOkunanBarkod = okunanMetin;
             sonOkumaZamani = simdi;
             kilit = true;
             basariliGoruntu();
-            isleGonder(result.text);
+            isleGonder(okunanMetin);
         }
         if (err && !(err instanceof ZXing.NotFoundException)) {
             console.log(err);
@@ -5936,12 +5941,13 @@ function kameraBaslat(){
         codeReader.decodeFromConstraints(basitKisitlar, 'video', (result, err) => {
             if (result && !kilit) {
                 const simdi = Date.now();
-                if (result.text === sonOkunanBarkod && (simdi - sonOkumaZamani) < 1500) return;
-                sonOkunanBarkod = result.text;
+                const okunanMetin = (result.text || "").trim();
+                if (okunanMetin === sonOkunanBarkod && (simdi - sonOkumaZamani) < 1500) return;
+                sonOkunanBarkod = okunanMetin;
                 sonOkumaZamani = simdi;
                 kilit = true;
                 basariliGoruntu();
-                isleGonder(result.text);
+                isleGonder(okunanMetin);
             }
         }).then(() => {
             odakAyarla();
