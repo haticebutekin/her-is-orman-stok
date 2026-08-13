@@ -5910,8 +5910,8 @@ function kameraBaslat(){
 
     const kisitlar = {
         video: secilenId
-            ? { deviceId: { exact: secilenId }, width: { ideal: 1920 }, height: { ideal: 1080 }, focusMode: { ideal: "continuous" } }
-            : { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 }, focusMode: { ideal: "continuous" } }
+            ? { deviceId: { exact: secilenId }, width: { ideal: 1280 }, height: { ideal: 720 }, focusMode: { ideal: "continuous" } }
+            : { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 }, focusMode: { ideal: "continuous" } }
     };
 
     codeReader.decodeFromConstraints(kisitlar, 'video', (result, err) => {
