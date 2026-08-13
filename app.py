@@ -5613,6 +5613,8 @@ def siparis_fis(siparis_id):
         toplam_istenen += istenen
         toplam_verilen += verilen
         ozellikler = " / ".join([x for x in [cins, ebat, kalinlik, yuzey, sinif, renk] if x]) or "-"
+        yuzde = min(100, round((verilen / istenen) * 100)) if istenen else 0
+        satir_renk = "#27ae60" if verilen >= istenen else "#e67e22"
         satirlar += f"""
         <tr>
           <td>{ad}</td>
@@ -5620,8 +5622,15 @@ def siparis_fis(siparis_id):
           <td>{ozellikler}</td>
           <td style="text-align:center;">{istenen}</td>
           <td style="text-align:center;">{verilen}</td>
+          <td style="min-width:70px;">
+            <div style="background:#eee;border-radius:999px;height:6px;overflow:hidden;">
+              <div style="width:{yuzde}%;height:100%;background:{satir_renk};"></div>
+            </div>
+          </td>
         </tr>
         """
+
+    genel_yuzde = min(100, round((toplam_verilen / toplam_istenen) * 100)) if toplam_istenen else 0
 
     DURUM_RENK_FIS = {"acik": "#e67e22", "tamamlandi": "#27ae60", "iptal": "#c0392b"}
     durum_renk = DURUM_RENK_FIS.get(durum, "#555")
@@ -5689,11 +5698,19 @@ def siparis_fis(siparis_id):
                 <div class="bilgi-oge"><b>Oluşturan</b>{olusturan}</div>
                 <div class="bilgi-oge"><b>Tarih</b>{tarih}</div>
             </div>
-            {'<p style="font-size:13px;color:#555;"><b>Not:</b> ' + aciklama + '</p>' if aciklama else ''}
+            <div style="margin-bottom:16px;">
+                <div style="display:flex;justify-content:space-between;font-size:11.5px;color:#888;margin-bottom:4px;">
+                    <span>TAMAMLANMA DURUMU</span><span>{toplam_verilen} / {toplam_istenen} adet — %{genel_yuzde}</span>
+                </div>
+                <div style="background:#eee;border-radius:999px;height:9px;overflow:hidden;">
+                    <div style="width:{genel_yuzde}%;height:100%;background:linear-gradient(90deg,#2196F3,#00BCD4);"></div>
+                </div>
+            </div>
+            {'<p style="font-size:13px;color:#555;margin-top:0;"><b>Not:</b> ' + aciklama + '</p>' if aciklama else ''}
             <table>
-                <tr><th>Ürün</th><th>Barkod</th><th>Özellikler</th><th style="text-align:center;">İstenen</th><th style="text-align:center;">Verilen</th></tr>
+                <tr><th>Ürün</th><th>Barkod</th><th>Özellikler</th><th style="text-align:center;">İstenen</th><th style="text-align:center;">Verilen</th><th>İlerleme</th></tr>
                 {satirlar}
-                <tr class="toplam-satir"><td colspan="3">TOPLAM</td><td style="text-align:center;">{toplam_istenen}</td><td style="text-align:center;">{toplam_verilen}</td></tr>
+                <tr class="toplam-satir"><td colspan="3">TOPLAM</td><td style="text-align:center;">{toplam_istenen}</td><td style="text-align:center;">{toplam_verilen}</td><td></td></tr>
             </table>
             <div class="fis-alt">{UYGULAMA_ADI} tarafından otomatik oluşturulmuştur.</div>
         </div>
