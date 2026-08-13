@@ -1656,7 +1656,7 @@ def ekle2():
         except (TypeError, ValueError):
             return sayfa('<p class="hata">❌ Adet sayısal olmalı.</p><a class="btn gri" href="/ekle">⬅ Geri Dön</a>', "Hata")
 
-        barkod = request.form.get("barkod")
+        barkod = request.form.get("barkod", "").strip()
         if not barkod:
             barkod = barkod_uret()
 
@@ -3487,7 +3487,7 @@ def rapor_csv():
 @rol_gerekli("depocu")
 def hizli_islem():
     data = request.get_json()
-    barkod = data.get("barkod")
+    barkod = (data.get("barkod") or "").strip()
     tip = data.get("tip")
     siparis_id = data.get("siparis_id")
     try:
