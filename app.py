@@ -289,6 +289,98 @@ def yedek_json_olustur():
     return json.dumps(yedek, ensure_ascii=False, indent=2).encode("utf-8")
 
 
+def yedek_pdf_olustur():
+    """Yedeklenen stok verisini düzenli, okunabilir bir PDF olarak üretir."""
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_RIGHT
+
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT ad,cins,ebat,adet,depo,barkod,min_stok FROM urun
+                WHERE silindi IS NOT TRUE ORDER BY depo, ad
+            """)
+            urunler = cur.fetchall()
+            cur.execute("SELECT COUNT(*) FROM hareket")
+            hareket_sayisi = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM siparis WHERE durum='acik'")
+            acik_siparis = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM siparis")
+            toplam_siparis = cur.fetchone()[0]
+    finally:
+        con.close()
+
+    bio = io.BytesIO()
+    doc = SimpleDocTemplate(
+        bio, pagesize=landscape(A4),
+        topMargin=14*mm, bottomMargin=14*mm, leftMargin=14*mm, rightMargin=14*mm
+    )
+    stiller = getSampleStyleSheet()
+    baslik_stil = ParagraphStyle("baslik", parent=stiller["Title"], fontSize=18, spaceAfter=2, textColor=colors.HexColor("#111111"))
+    alt_stil = ParagraphStyle("alt", parent=stiller["Normal"], fontSize=9.5, textColor=colors.HexColor("#555555"), spaceAfter=10)
+    ozet_stil = ParagraphStyle("ozet", parent=stiller["Normal"], fontSize=10, alignment=TA_RIGHT, textColor=colors.HexColor("#333333"))
+
+    elemanlar = []
+    elemanlar.append(Paragraph(UYGULAMA_ADI, baslik_stil))
+    elemanlar.append(Paragraph(
+        f"Otomatik Yedek Raporu &nbsp;•&nbsp; Oluşturulma: {tr_simdi().strftime('%d.%m.%Y %H:%M')}",
+        alt_stil
+    ))
+
+    toplam_urun = len(urunler)
+    toplam_adet = sum(u[3] for u in urunler)
+    kritik_sayisi = sum(1 for u in urunler if u[3] <= (u[6] if u[6] is not None else 5))
+    elemanlar.append(Paragraph(
+        f"{toplam_urun} çeşit ürün &nbsp;•&nbsp; {toplam_adet} toplam adet &nbsp;•&nbsp; "
+        f"{kritik_sayisi} kritik stok &nbsp;•&nbsp; {hareket_sayisi} hareket kaydı &nbsp;•&nbsp; "
+        f"{acik_siparis}/{toplam_siparis} açık sipariş",
+        ozet_stil
+    ))
+    elemanlar.append(Spacer(1, 8))
+
+    veri = [["Ürün Adı", "Cins", "Ebat", "Adet", "Depo", "Barkod"]]
+    for ad, cins, ebat, adet, depo, barkod, min_stok in urunler:
+        veri.append([ad or "-", cins or "-", ebat or "-", str(adet), depo or "-", barkod or "-"])
+
+    tablo = Table(veri, colWidths=[70*mm, 35*mm, 30*mm, 20*mm, 55*mm, 45*mm], repeatRows=1)
+    stil_komutlari = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111111")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTSIZE", (0, 0), (-1, 0), 10),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 1), (-1, -1), 9),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f4f4f4")]),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("ALIGN", (3, 0), (3, -1), "CENTER"),
+    ]
+    for i, (ad, cins, ebat, adet, depo, barkod, min_stok) in enumerate(urunler, start=1):
+        if adet <= (min_stok if min_stok is not None else 5):
+            stil_komutlari.append(("TEXTCOLOR", (3, i), (3, i), colors.HexColor("#c0392b")))
+            stil_komutlari.append(("FONTNAME", (3, i), (3, i), "Helvetica-Bold"))
+    tablo.setStyle(TableStyle(stil_komutlari))
+    elemanlar.append(tablo)
+
+    def alt_bilgi(canvas, doc_):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#999999"))
+        canvas.drawRightString(landscape(A4)[0] - 14*mm, 8*mm, f"Sayfa {doc_.page}")
+        canvas.drawString(14*mm, 8*mm, UYGULAMA_ADI + " — Otomatik Yedek")
+        canvas.restoreState()
+
+    doc.build(elemanlar, onFirstPage=alt_bilgi, onLaterPages=alt_bilgi)
+    bio.seek(0)
+    return bio.read()
+
+
 def yedek_email_gonder():
     """Döndürür: (basarili: bool, mesaj: str). Resend API üzerinden gönderir
     (HTTPS/443 kullanır, Render'ın engellediği SMTP portlarına ihtiyaç duymaz)."""
@@ -309,9 +401,22 @@ def yedek_email_gonder():
         import requests
         import base64
 
-        veri = yedek_json_olustur()
-        dosya_adi = f"yedek_{tr_simdi().strftime('%Y%m%d_%H%M')}.json"
-        veri_b64 = base64.b64encode(veri).decode("ascii")
+        json_veri = yedek_json_olustur()
+        json_dosya_adi = f"yedek_veri_{tr_simdi().strftime('%Y%m%d_%H%M')}.json"
+        json_b64 = base64.b64encode(json_veri).decode("ascii")
+
+        try:
+            pdf_veri = yedek_pdf_olustur()
+            pdf_dosya_adi = f"yedek_rapor_{tr_simdi().strftime('%Y%m%d_%H%M')}.pdf"
+            pdf_b64 = base64.b64encode(pdf_veri).decode("ascii")
+            ekler = [
+                {"filename": pdf_dosya_adi, "content": pdf_b64},
+                {"filename": json_dosya_adi, "content": json_b64},
+            ]
+        except Exception:
+            # PDF üretimi başarısız olursa (örn. reportlab kurulu değilse) en azından JSON gitsin
+            traceback.print_exc()
+            ekler = [{"filename": json_dosya_adi, "content": json_b64}]
 
         yanit = requests.post(
             "https://api.resend.com/emails",
@@ -323,16 +428,19 @@ def yedek_email_gonder():
                 "from": RESEND_FROM,
                 "to": [YEDEK_ALICI],
                 "subject": f"HER-İŞ Stok Yedek - {tr_simdi().strftime('%d.%m.%Y')}",
-                "text": "Otomatik stok yedeği ekte. Bu e-postayı sil, arşivle veya güvenli bir yerde tut.",
-                "attachments": [
-                    {"filename": dosya_adi, "content": veri_b64}
-                ],
+                "text": (
+                    "Otomatik stok yedeği ekte.\n\n"
+                    "📄 PDF dosyası: düzenli, okunabilir stok raporu (göz atmak için).\n"
+                    "🗂️ JSON dosyası: sistemin tam yedeği (gerektiğinde geri yükleme için, silmeyin).\n\n"
+                    "Bu e-postayı arşivleyin veya güvenli bir yerde saklayın."
+                ),
+                "attachments": ekler,
             },
             timeout=15,
         )
 
         if yanit.status_code in (200, 201, 202):
-            print(f"Yedek e-postası gönderildi (Resend): {dosya_adi}")
+            print(f"Yedek e-postası gönderildi (Resend): {json_dosya_adi}")
             return True, "Gönderildi"
         else:
             mesaj = f"Resend API hatası (HTTP {yanit.status_code}): {yanit.text[:300]}"
@@ -5663,11 +5771,17 @@ arayuzuGuncelle(aktifTip);
 
 function hintOlustur(){
     const hints = new Map();
-    // Sadece üretilen barkod tiplerini arıyoruz (CODE_128) 
-    // Format daraltmak taramayı belirgin şekilde hızlandırır.
+    // Hem sistemin ürettiği barkodları (CODE_128) hem de dışarıdan gelen
+    // (satın alınmış) ürünlerin barkodlarını (EAN/UPC/CODE39 vb.) okuyabilsin.
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
         ZXing.BarcodeFormat.CODE_128,
         ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E,
+        ZXing.BarcodeFormat.CODE_39,
+        ZXing.BarcodeFormat.ITF,
+        ZXing.BarcodeFormat.QR_CODE,
     ]);
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
     return hints;
@@ -5708,8 +5822,8 @@ function kameraBaslat(){
 
     const kisitlar = {
         video: secilenId
-            ? { deviceId: { exact: secilenId }, width: { ideal: 1280 }, height: { ideal: 720 } }
-            : { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+            ? { deviceId: { exact: secilenId }, width: { ideal: 1920 }, height: { ideal: 1080 }, focusMode: { ideal: "continuous" } }
+            : { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 }, focusMode: { ideal: "continuous" } }
     };
 
     codeReader.decodeFromConstraints(kisitlar, 'video', (result, err) => {
@@ -5732,12 +5846,30 @@ function kameraBaslat(){
         odakAyarla();
         fenerKontrolEt();
     }).catch(e => {
-        console.log(e);
-        document.getElementById('sonuc-alan').innerHTML = `
-          <div class="sonuc-kart sonuc-hata">
-            <div class="sonuc-ust"><span class="sonuc-ikon">📵</span><span class="sonuc-ad">Kamera açılamadı</span></div>
-            <div class="sonuc-satirlar">Tarayıcının kamera iznini kontrol et, ya da elle barkod gir.</div>
-          </div>`;
+        console.log('Yüksek çözünürlük başarısız, düşük çözünürlükle tekrar deneniyor:', e);
+        // Bazı eski cihazlar/kameralar 1920x1080 veya focusMode kısıtını desteklemez -> daha basit ayarlarla tekrar dene
+        const basitKisitlar = { video: secilenId ? { deviceId: { exact: secilenId } } : { facingMode: "environment" } };
+        codeReader.decodeFromConstraints(basitKisitlar, 'video', (result, err) => {
+            if (result && !kilit) {
+                const simdi = Date.now();
+                if (result.text === sonOkunanBarkod && (simdi - sonOkumaZamani) < 1500) return;
+                sonOkunanBarkod = result.text;
+                sonOkumaZamani = simdi;
+                kilit = true;
+                basariliGoruntu();
+                isleGonder(result.text);
+            }
+        }).then(() => {
+            odakAyarla();
+            fenerKontrolEt();
+        }).catch(e2 => {
+            console.log(e2);
+            document.getElementById('sonuc-alan').innerHTML = `
+              <div class="sonuc-kart sonuc-hata">
+                <div class="sonuc-ust"><span class="sonuc-ikon">📵</span><span class="sonuc-ad">Kamera açılamadı</span></div>
+                <div class="sonuc-satirlar">Tarayıcının kamera iznini kontrol et, ya da elle barkod gir.</div>
+              </div>`;
+        });
     });
 }
 
