@@ -1478,10 +1478,36 @@ def index():
             </a>
             """
 
+        giris_ozet_html = ""
+        if DATABASE_URL:
+            try:
+                con = db()
+                try:
+                    with con.cursor() as cur:
+                        cur.execute("SELECT COUNT(*), COALESCE(SUM(adet),0) FROM urun WHERE silindi IS NOT TRUE")
+                        toplam_urun, toplam_adet = cur.fetchone()
+                finally:
+                    con.close()
+                giris_ozet_html = f"""
+                <div class="giris-ozet-satir">
+                  <div class="giris-ozet-kutu">
+                    <div class="giris-ozet-sayi" data-sayac="{toplam_urun}">0</div>
+                    <div class="giris-ozet-etiket">Ürün Çeşidi</div>
+                  </div>
+                  <div class="giris-ozet-kutu">
+                    <div class="giris-ozet-sayi" data-sayac="{toplam_adet}">0</div>
+                    <div class="giris-ozet-etiket">Toplam Adet</div>
+                  </div>
+                </div>
+                """
+            except Exception:
+                giris_ozet_html = ""
+
         icerik = (
             f'<div style="text-align:center;margin-bottom:6px;"><img src="{LOGO_URL}" style="width:110px;height:auto;border-radius:14px;background:white;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"></div>'
             + f'<h1 style="font-size:19px;line-height:1.35;margin-bottom:2px;">{UYGULAMA_ADI}</h1>'
             + '<h3 class="alt">Devam etmek için ismini seç</h3>'
+            + giris_ozet_html
             + secim_html
             + """
             <style>
@@ -1490,14 +1516,47 @@ def index():
               position:fixed; top:-120px; right:-100px; width:320px; height:320px;
               background: radial-gradient(circle, rgba(33,150,243,.16), transparent 70%);
               border-radius:50%; z-index:-1; pointer-events:none;
+              animation: yumusakYuz 8s ease-in-out infinite alternate;
             }
             body::after {
               content:"";
               position:fixed; bottom:-140px; left:-110px; width:340px; height:340px;
               background: radial-gradient(circle, rgba(94,53,177,.14), transparent 70%);
               border-radius:50%; z-index:-1; pointer-events:none;
+              animation: yumusakYuz 9s ease-in-out infinite alternate-reverse;
             }
+            @keyframes yumusakYuz {
+              from { transform: translate(0,0) scale(1); }
+              to { transform: translate(-16px, 12px) scale(1.08); }
+            }
+            .giris-ozet-satir { display:flex; gap:10px; margin: 4px 0 18px; }
+            .giris-ozet-kutu {
+              flex:1; text-align:center; padding:14px 8px; border-radius:16px;
+              background: linear-gradient(180deg, var(--card2), var(--card));
+              border:1px solid var(--border);
+            }
+            .giris-ozet-sayi {
+              font-size:24px; font-weight:800;
+              background: linear-gradient(90deg, #2196F3, #00BCD4);
+              -webkit-background-clip: text; background-clip: text; color: transparent;
+            }
+            .giris-ozet-etiket { font-size:11px; color:var(--muted); margin-top:2px; text-transform:uppercase; letter-spacing:.4px; }
             </style>
+            <script>
+            document.querySelectorAll('.giris-ozet-sayi[data-sayac]').forEach(function(el){
+              var hedef = parseInt(el.getAttribute('data-sayac'), 10) || 0;
+              var sure = 900, basla = null;
+              function adim(zaman){
+                if(!basla) basla = zaman;
+                var ilerleme = Math.min((zaman - basla) / sure, 1);
+                var deger = Math.floor(ilerleme * hedef);
+                el.textContent = deger.toLocaleString('tr-TR');
+                if(ilerleme < 1) requestAnimationFrame(adim);
+                else el.textContent = hedef.toLocaleString('tr-TR');
+              }
+              requestAnimationFrame(adim);
+            });
+            </script>
             """
         )
         return sayfa(icerik, "Giriş - " + UYGULAMA_ADI)
@@ -2659,6 +2718,14 @@ def dashboard():
     kritik_sayisi = sum(1 for u in urunler if u[0] <= (u[1] if u[1] is not None else 5))
     depo_sayisi = len(set(u[2] for u in urunler if u[2]))
 
+    # Depo bazlı adet dağılımı (donut grafik için)
+    depo_dagilim = {}
+    for adet, min_stok, depo in urunler:
+        if depo:
+            depo_dagilim[depo] = depo_dagilim.get(depo, 0) + adet
+    depo_dagilim_sirali = sorted(depo_dagilim.items(), key=lambda x: x[1], reverse=True)[:6]
+    donut_renkler = ["#2196F3", "#00BCD4", "#64DD17", "#FFB74D", "#B388FF", "#FF6B6B"]
+
     bugun_giris = bugun_ozet.get("giris", 0)
     bugun_cikis = bugun_ozet.get("cikis", 0)
 
@@ -2700,20 +2767,56 @@ def dashboard():
     else:
         aktif_kullanici_html = '<p style="color:var(--muted);font-size:13px;">Bu hafta hareket yok.</p>'
 
+    # Donut grafik: depo bazlı stok dağılımı
+    donut_html = ""
+    donut_lejant_html = ""
+    if depo_dagilim_sirali:
+        toplam_donut = sum(v for _, v in depo_dagilim_sirali) or 1
+        gradient_parcalari = []
+        aci_baslangic = 0.0
+        for i, (depo_ad, deger) in enumerate(depo_dagilim_sirali):
+            renk = donut_renkler[i % len(donut_renkler)]
+            aci_pay = (deger / toplam_donut) * 360
+            aci_bitis = aci_baslangic + aci_pay
+            gradient_parcalari.append(f"{renk} {aci_baslangic:.1f}deg {aci_bitis:.1f}deg")
+            yuzde = round((deger / toplam_donut) * 100)
+            donut_lejant_html += f"""
+            <div class="donut-lejant-satir">
+              <span class="donut-lejant-nokta" style="background:{renk};"></span>
+              <span class="donut-lejant-ad">{depo_ad.split(' ')[0].title()}</span>
+              <span class="donut-lejant-yuzde">{yuzde}%</span>
+            </div>
+            """
+            aci_baslangic = aci_bitis
+        gradient_css = ", ".join(gradient_parcalari)
+        donut_html = f"""
+        <div class="donut-alan">
+          <div class="donut-cember" style="background: conic-gradient({gradient_css});">
+            <div class="donut-ic">
+              <div class="donut-ic-sayi">{toplam_adet}</div>
+              <div class="donut-ic-etiket">Toplam Adet</div>
+            </div>
+          </div>
+          <div class="donut-lejant">{donut_lejant_html}</div>
+        </div>
+        """
+    else:
+        donut_html = '<p style="color:var(--muted);font-size:13px;text-align:center;">Henüz depo verisi yok.</p>'
+
     icerik = f"""
     <h2 style="margin-bottom:2px;">📊 Yönetim Paneli</h2>
     <p style="text-align:center;color:var(--muted);margin-top:0;">Genel durum özeti</p>
 
     <div class="dash-kart-satir">
-      <div class="dash-kart"><div class="dash-kart-sayi">{toplam_urun}</div><div class="dash-kart-etiket">Ürün Çeşidi</div></div>
-      <div class="dash-kart"><div class="dash-kart-sayi">{toplam_adet}</div><div class="dash-kart-etiket">Toplam Adet</div></div>
-      <div class="dash-kart dash-kart-kirmizi"><div class="dash-kart-sayi">{kritik_sayisi}</div><div class="dash-kart-etiket">Kritik Stok</div></div>
-      <div class="dash-kart"><div class="dash-kart-sayi">{depo_sayisi}</div><div class="dash-kart-etiket">Aktif Depo</div></div>
+      <div class="dash-kart"><div class="dash-kart-sayi" data-sayac="{toplam_urun}">0</div><div class="dash-kart-etiket">Ürün Çeşidi</div></div>
+      <div class="dash-kart"><div class="dash-kart-sayi" data-sayac="{toplam_adet}">0</div><div class="dash-kart-etiket">Toplam Adet</div></div>
+      <div class="dash-kart dash-kart-kirmizi"><div class="dash-kart-sayi" data-sayac="{kritik_sayisi}">0</div><div class="dash-kart-etiket">Kritik Stok</div></div>
+      <div class="dash-kart"><div class="dash-kart-sayi" data-sayac="{depo_sayisi}">0</div><div class="dash-kart-etiket">Aktif Depo</div></div>
     </div>
 
     <div class="dash-kart-satir">
-      <div class="dash-kart dash-kart-yesil"><div class="dash-kart-sayi">+{bugun_giris}</div><div class="dash-kart-etiket">Bugün Giriş</div></div>
-      <div class="dash-kart dash-kart-turuncu"><div class="dash-kart-sayi">-{bugun_cikis}</div><div class="dash-kart-etiket">Bugün Çıkış</div></div>
+      <div class="dash-kart dash-kart-yesil"><div class="dash-kart-sayi" data-sayac="{bugun_giris}" data-onek="+">+0</div><div class="dash-kart-etiket">Bugün Giriş</div></div>
+      <div class="dash-kart dash-kart-turuncu"><div class="dash-kart-sayi" data-sayac="{bugun_cikis}" data-onek="-">-0</div><div class="dash-kart-etiket">Bugün Çıkış</div></div>
     </div>
 
     <div class="kart">
@@ -2723,6 +2826,11 @@ def dashboard():
         <span><span class="dash-lejant-nokta dash-lejant-yesil"></span> Giriş</span>
         <span><span class="dash-lejant-nokta dash-lejant-turuncu"></span> Çıkış</span>
       </div>
+    </div>
+
+    <div class="kart">
+      <label>🏭 Depo Bazlı Stok Dağılımı</label>
+      {donut_html}
     </div>
 
     <div class="kart">
@@ -2743,19 +2851,31 @@ def dashboard():
 
     <style>
     .dash-kart-satir {{ display:flex; gap:8px; margin-bottom:10px; }}
-    .dash-kart {{ flex:1; background:var(--kart-bg,#1a1c22); border:1px solid var(--border); border-radius:14px; padding:14px 8px; text-align:center; }}
+    .dash-kart {{
+      flex:1; background: linear-gradient(180deg, var(--card2), var(--card));
+      border:1px solid var(--border); border-radius:14px; padding:14px 8px; text-align:center;
+      transition: transform .15s ease, box-shadow .15s ease;
+    }}
+    @media (hover: hover) {{
+      .dash-kart:hover {{ transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,.22); }}
+    }}
     .dash-kart-sayi {{ font-size:22px; font-weight:800; color:var(--text); }}
     .dash-kart-etiket {{ font-size:11.5px; color:var(--muted); margin-top:2px; }}
     .dash-kart-kirmizi .dash-kart-sayi {{ color:#e74c3c; }}
     .dash-kart-yesil .dash-kart-sayi {{ color:#2ecc71; }}
     .dash-kart-turuncu .dash-kart-sayi {{ color:#e67e22; }}
-    .dash-grafik {{ display:flex; justify-content:space-between; align-items:flex-end; height:120px; padding:8px 4px 0; }}
+    .dash-grafik {{ display:flex; justify-content:space-between; align-items:flex-end; height:160px; padding:8px 4px 0; }}
     .dash-gun {{ display:flex; flex-direction:column; align-items:center; flex:1; }}
-    .dash-cubuk-grup {{ display:flex; align-items:flex-end; gap:3px; height:100px; }}
-    .dash-cubuk {{ width:9px; border-radius:3px 3px 0 0; }}
-    .dash-cubuk-giris {{ background:#2ecc71; }}
-    .dash-cubuk-cikis {{ background:#e67e22; }}
-    .dash-gun-etiket {{ font-size:11px; color:var(--muted); margin-top:6px; }}
+    .dash-cubuk-grup {{ display:flex; align-items:flex-end; gap:4px; height:135px; }}
+    .dash-cubuk {{
+      width:12px; border-radius:4px 4px 0 0; transform: scaleY(0); transform-origin:bottom;
+      animation: cubukAcil .7s cubic-bezier(.2,.8,.3,1) forwards;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    }}
+    .dash-cubuk-giris {{ background: linear-gradient(180deg, #64DD17, #2ecc71); }}
+    .dash-cubuk-cikis {{ background: linear-gradient(180deg, #FFB74D, #e67e22); }}
+    @keyframes cubukAcil {{ to {{ transform: scaleY(1); }} }}
+    .dash-gun-etiket {{ font-size:12px; color:var(--muted); margin-top:8px; font-weight:600; }}
     .dash-lejant {{ display:flex; justify-content:center; gap:16px; margin-top:8px; font-size:12px; color:var(--muted); }}
     .dash-lejant-nokta {{ display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:4px; }}
     .dash-lejant-yesil {{ background:#2ecc71; }}
@@ -2763,7 +2883,44 @@ def dashboard():
     .dash-liste-satir {{ display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--border); font-size:13.5px; }}
     .dash-liste-satir:last-child {{ border-bottom:none; }}
     .dash-liste-deger {{ color:var(--muted); font-weight:600; }}
+
+    .donut-alan {{ display:flex; align-items:center; gap:20px; padding:8px 4px; flex-wrap:wrap; justify-content:center; }}
+    .donut-cember {{
+      width:130px; height:130px; border-radius:50%; flex-shrink:0;
+      display:flex; align-items:center; justify-content:center;
+      box-shadow: 0 4px 20px rgba(0,0,0,.2);
+      animation: donutAcil .8s cubic-bezier(.2,.8,.3,1);
+    }}
+    @keyframes donutAcil {{ from {{ transform: scale(0.5) rotate(-90deg); opacity:0; }} to {{ transform: scale(1) rotate(0deg); opacity:1; }} }}
+    .donut-ic {{
+      width:88px; height:88px; border-radius:50%; background:var(--card);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      box-shadow: inset 0 0 0 1px var(--border);
+    }}
+    .donut-ic-sayi {{ font-size:19px; font-weight:800; color:var(--text); }}
+    .donut-ic-etiket {{ font-size:9.5px; color:var(--muted); text-align:center; }}
+    .donut-lejant {{ display:flex; flex-direction:column; gap:8px; min-width:140px; }}
+    .donut-lejant-satir {{ display:flex; align-items:center; gap:8px; font-size:13px; }}
+    .donut-lejant-nokta {{ width:10px; height:10px; border-radius:3px; flex-shrink:0; }}
+    .donut-lejant-ad {{ flex:1; color:var(--text); }}
+    .donut-lejant-yuzde {{ color:var(--muted); font-weight:700; font-size:12px; }}
     </style>
+    <script>
+    document.querySelectorAll('.dash-kart-sayi[data-sayac]').forEach(function(el){{
+      var hedef = parseInt(el.getAttribute('data-sayac'), 10) || 0;
+      var onek = el.getAttribute('data-onek') || '';
+      var sure = 800, basla = null;
+      function adim(zaman){{
+        if(!basla) basla = zaman;
+        var ilerleme = Math.min((zaman - basla) / sure, 1);
+        var deger = Math.floor(ilerleme * hedef);
+        el.textContent = onek + deger.toLocaleString('tr-TR');
+        if(ilerleme < 1) requestAnimationFrame(adim);
+        else el.textContent = onek + hedef.toLocaleString('tr-TR');
+      }}
+      requestAnimationFrame(adim);
+    }});
+    </script>
     """
     return sayfa(icerik, "Yönetim Paneli")
 
@@ -5466,6 +5623,9 @@ def siparis_fis(siparis_id):
         </tr>
         """
 
+    DURUM_RENK_FIS = {"acik": "#e67e22", "tamamlandi": "#27ae60", "iptal": "#c0392b"}
+    durum_renk = DURUM_RENK_FIS.get(durum, "#555")
+
     html = f"""
     <!DOCTYPE html>
     <html lang="tr">
@@ -5475,43 +5635,67 @@ def siparis_fis(siparis_id):
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         @page {{ size: A4; margin: 12mm; }}
-        body {{ font-family: Arial, sans-serif; color:#111; margin:0; }}
-        .fis {{ max-width: 760px; margin: 0 auto; padding: 12px; }}
-        .fis-baslik {{ display:flex; align-items:center; gap:12px; border-bottom:2px solid #111; padding-bottom:10px; margin-bottom:14px; }}
-        .fis-baslik img {{ width:52px; height:52px; border-radius:8px; background:#fff; }}
-        .fis-baslik h1 {{ font-size:18px; margin:0; }}
-        .bilgi-satir {{ display:flex; justify-content:space-between; font-size:13px; color:#333; margin-bottom:14px; flex-wrap:wrap; gap:6px; }}
-        table {{ width:100%; border-collapse:collapse; font-size:12.5px; }}
-        th, td {{ border:1px solid #ccc; padding:7px 8px; text-align:left; }}
-        th {{ background:#f0f0f0; }}
-        .toplam-satir td {{ font-weight:800; background:#f7f7f7; }}
-        .yazdir-btn {{
-            display:block; margin: 18px auto 0; padding:14px 24px;
-            background:#2196F3; color:white; border:none; border-radius:10px;
-            font-size:16px; font-weight:700; cursor:pointer;
+        * {{ box-sizing: border-box; }}
+        body {{ font-family: 'Helvetica Neue', Arial, sans-serif; color:#1a1a1a; margin:0; background:#fafafa; }}
+        .fis {{ max-width: 780px; margin: 0 auto; padding: 28px; background:#fff; box-shadow: 0 2px 20px rgba(0,0,0,.06); }}
+        .fis-baslik {{
+          display:flex; align-items:center; justify-content:space-between; gap:12px;
+          border-bottom:3px solid #2196F3; padding-bottom:16px; margin-bottom:20px;
         }}
-        @media print {{ .yazdir-btn {{ display:none; }} }}
+        .fis-baslik-sol {{ display:flex; align-items:center; gap:14px; }}
+        .fis-baslik img {{ width:56px; height:56px; border-radius:10px; background:#fff; border:1px solid #eee; }}
+        .fis-baslik h1 {{ font-size:19px; margin:0; letter-spacing:-.2px; }}
+        .fis-alt-baslik {{ font-weight:400; font-size:12.5px; color:#888; margin-top:2px; }}
+        .durum-rozet {{
+          display:inline-block; padding:5px 14px; border-radius:999px;
+          font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+          color:#fff; background:{durum_renk};
+        }}
+        .bilgi-kutu {{
+          display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
+          gap:10px; background:#f8f9fb; border-radius:10px; padding:14px 16px; margin-bottom:18px;
+        }}
+        .bilgi-oge {{ font-size:12.5px; }}
+        .bilgi-oge b {{ display:block; font-size:10.5px; color:#999; text-transform:uppercase; letter-spacing:.4px; font-weight:600; margin-bottom:2px; }}
+        table {{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:6px; }}
+        th {{ background:#1a1a1a; color:#fff; padding:10px 8px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.3px; }}
+        td {{ border-bottom:1px solid #eee; padding:9px 8px; }}
+        tr:nth-child(even) td {{ background:#fafbfc; }}
+        .toplam-satir td {{ font-weight:800; background:#f0f4f8 !important; border-top:2px solid #1a1a1a; font-size:13px; }}
+        .yazdir-btn {{
+            display:block; margin: 22px auto 0; padding:14px 28px;
+            background: linear-gradient(135deg, #2196F3, #00BCD4); color:white; border:none; border-radius:10px;
+            font-size:16px; font-weight:700; cursor:pointer; box-shadow: 0 4px 14px rgba(33,150,243,.35);
+        }}
+        .fis-alt {{ text-align:center; font-size:10.5px; color:#aaa; margin-top:20px; letter-spacing:.3px; }}
+        @media print {{ body {{ background:#fff; }} .fis {{ box-shadow:none; padding:0; }} .yazdir-btn {{ display:none; }} }}
     </style>
     </head>
     <body>
         <div class="fis">
             <div class="fis-baslik">
-                <img src="{LOGO_URL}">
-                <h1>{UYGULAMA_ADI}<br><span style="font-weight:400;font-size:13px;">Sipariş Fişi #{siparis_id}</span></h1>
+                <div class="fis-baslik-sol">
+                    <img src="{LOGO_URL}">
+                    <div>
+                        <h1>{UYGULAMA_ADI}</h1>
+                        <div class="fis-alt-baslik">Sipariş Fişi #{siparis_id}</div>
+                    </div>
+                </div>
+                <span class="durum-rozet">{durum}</span>
             </div>
-            <div class="bilgi-satir">
-                <div><b>Müşteri:</b> {musteri or '-'}</div>
-                <div><b>Depo:</b> {depo}</div>
-                <div><b>Durum:</b> {durum}</div>
-                <div><b>Oluşturan:</b> {olusturan}</div>
-                <div><b>Tarih:</b> {tarih}</div>
+            <div class="bilgi-kutu">
+                <div class="bilgi-oge"><b>Müşteri</b>{musteri or '-'}</div>
+                <div class="bilgi-oge"><b>Depo</b>{depo}</div>
+                <div class="bilgi-oge"><b>Oluşturan</b>{olusturan}</div>
+                <div class="bilgi-oge"><b>Tarih</b>{tarih}</div>
             </div>
-            {'<p style="font-size:13px;"><b>Not:</b> ' + aciklama + '</p>' if aciklama else ''}
+            {'<p style="font-size:13px;color:#555;"><b>Not:</b> ' + aciklama + '</p>' if aciklama else ''}
             <table>
-                <tr><th>Ürün</th><th>Barkod</th><th>Özellikler</th><th>İstenen</th><th>Verilen</th></tr>
+                <tr><th>Ürün</th><th>Barkod</th><th>Özellikler</th><th style="text-align:center;">İstenen</th><th style="text-align:center;">Verilen</th></tr>
                 {satirlar}
                 <tr class="toplam-satir"><td colspan="3">TOPLAM</td><td style="text-align:center;">{toplam_istenen}</td><td style="text-align:center;">{toplam_verilen}</td></tr>
             </table>
+            <div class="fis-alt">{UYGULAMA_ADI} tarafından otomatik oluşturulmuştur.</div>
         </div>
         <button class="yazdir-btn" onclick="window.print()">🖨️ Yazdır</button>
     </body>
