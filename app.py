@@ -318,10 +318,9 @@ def excel_satirlarini_oku(dosya_storage):
     """Yüklenen bir Excel dosyasını (.xlsx veya eski .xls) okuyup satırların
     listesini (her satır bir tuple) döndürür. .xls dosyaları LibreOffice ile
     arka planda .xlsx'e çevrilir. openpyxl bozuk/harici bağlantılı dosyalarda
-    başarısız olursa pandas ile tekrar denenir (daha toleranslı). Tüm yollar
-    başarısız olursa None döner."""
+    başarısız olursa pandas ile tekrar denenir (kurulu ve daha toleranlıysa).
+    Tüm yollar başarısız olursa None döner."""
     from openpyxl import load_workbook
-    import pandas as pd
 
     def _openpyxl_dene(kaynak):
         try:
@@ -332,6 +331,12 @@ def excel_satirlarini_oku(dosya_storage):
             return None
 
     def _pandas_dene(kaynak):
+        try:
+            import pandas as pd
+        except ImportError:
+            # pandas sunucuda kurulu değil; bu yedek yolu sessizce atla,
+            # openpyxl'in sonucu (varsa) veya None ile devam edilir.
+            return None
         try:
             df = pd.read_excel(kaynak, sheet_name=0, header=None)
             return [tuple(satir) for satir in df.itertuples(index=False, name=None)]
