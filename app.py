@@ -187,6 +187,24 @@ def tablolari_olustur():
                 ALTER TABLE urun ADD COLUMN IF NOT EXISTS silinme_tarihi TIMESTAMP
                 """)
                 cur.execute("""
+                ALTER TABLE urun ADD COLUMN IF NOT EXISTS fiyat_pesin NUMERIC(12,2)
+                """)
+                cur.execute("""
+                ALTER TABLE urun ADD COLUMN IF NOT EXISTS fiyat_kkart NUMERIC(12,2)
+                """)
+                cur.execute("""
+                ALTER TABLE urun ADD COLUMN IF NOT EXISTS fiyat_3taksit NUMERIC(12,2)
+                """)
+                cur.execute("""
+                ALTER TABLE urun ADD COLUMN IF NOT EXISTS fiyat_aysonu NUMERIC(12,2)
+                """)
+                cur.execute("""
+                ALTER TABLE urun ADD COLUMN IF NOT EXISTS paket_m2 NUMERIC(10,4)
+                """)
+                cur.execute("""
+                ALTER TABLE urun ADD COLUMN IF NOT EXISTS paket_metre NUMERIC(10,4)
+                """)
+                cur.execute("""
                 CREATE TABLE IF NOT EXISTS urun_barkod(
                     id SERIAL PRIMARY KEY,
                     urun_id INTEGER REFERENCES urun(id) ON DELETE CASCADE,
@@ -256,6 +274,26 @@ def bugunku_ozet(kullanici):
     finally:
         con.close()
     return satirlar.get("giris", 0), satirlar.get("cikis", 0)
+
+
+def fiyat_ayristir(deger):
+    """'2.500,00' veya '2500.00' veya '2500' gibi girdileri ondalık sayıya çevirir.
+    Boş/geçersiz girdide None döner."""
+    if deger is None:
+        return None
+    metin = str(deger).strip()
+    if not metin:
+        return None
+    metin = metin.replace(" TL", "").replace("₺", "").strip()
+    # Türkçe format: binlik nokta, ondalık virgül -> önce noktaları sil, virgülü noktaya çevir
+    if "," in metin and "." in metin:
+        metin = metin.replace(".", "").replace(",", ".")
+    elif "," in metin:
+        metin = metin.replace(",", ".")
+    try:
+        return round(float(metin), 2)
+    except ValueError:
+        return None
 
 
 def barkod_uret():
@@ -1732,6 +1770,11 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Tedarikçiler</div><div class="okut-alt">Malzeme hangi tedarikçiden geldi</div></div>
           <div class="okut-ok">›</div>
         </a>
+        <a href="/laminant_hesap" class="okut-kart okut-yesil">
+          <div class="okut-ikon">📐</div>
+          <div class="okut-metin"><div class="okut-baslik">Laminant Hesap</div><div class="okut-alt">Oda ölçüsünden paket ve fiyat hesapla</div></div>
+          <div class="okut-ok">›</div>
+        </a>
         </div>
 
         <div class="bolum-baslik bolum-tiklanabilir" onclick="bolumAcKapa(this)">📥 Raporlar <span class="bolum-ok">▾</span></div>
@@ -1739,6 +1782,7 @@ def index():
         <div class="rapor-satir">
           <a href="/rapor/pdf" class="rapor-pil">📄 Stok PDF</a>
           <a href="/rapor/pdf?tur=siparisler" class="rapor-pil">🧾 Sipariş PDF</a>
+          <a href="/rapor/pdf?tur=fiyat" class="rapor-pil">💰 Fiyat Listesi</a>
           <a href="/rapor/excel" class="rapor-pil">📥 XLSX</a>
           <a href="/rapor/xls" class="rapor-pil">📥 XLS</a>
           <a href="/rapor/csv" class="rapor-pil">📥 CSV</a>
@@ -1813,6 +1857,12 @@ def ekle2():
             min_stok = 5
 
         tedarikci = request.form.get("tedarikci", "").strip()
+        fiyat_pesin = fiyat_ayristir(request.form.get("fiyat_pesin", ""))
+        fiyat_kkart = fiyat_ayristir(request.form.get("fiyat_kkart", ""))
+        fiyat_3taksit = fiyat_ayristir(request.form.get("fiyat_3taksit", ""))
+        fiyat_aysonu = fiyat_ayristir(request.form.get("fiyat_aysonu", ""))
+        paket_m2 = fiyat_ayristir(request.form.get("paket_m2", ""))
+        paket_metre = fiyat_ayristir(request.form.get("paket_metre", ""))
 
         con = db()
         try:
@@ -1825,8 +1875,8 @@ def ekle2():
                             ON CONFLICT (ad) DO NOTHING
                         """, (tedarikci, tr_simdi()))
                     cur.execute("""
-                    INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok,son_tedarikci)
-                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok,son_tedarikci,fiyat_pesin,fiyat_kkart,fiyat_3taksit,fiyat_aysonu,paket_m2,paket_metre)
+                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """, (
                         ad,
                         request.form.get("cins", ""),
@@ -1840,6 +1890,8 @@ def ekle2():
                         barkod,
                         min_stok,
                         tedarikci or None,
+                        fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu,
+                        paket_m2, paket_metre,
                     ))
                     cur.execute("""
                     INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih, tedarikci)
@@ -1922,6 +1974,24 @@ def ekle2():
     <div class="urun-arama-kutu">
       <input name="tedarikci" id="tedarikci-arama" placeholder="Örn: XYZ Ahşap Sanayi" autocomplete="off" oninput="tedarikciAra()">
       <div class="urun-arama-sonuc" id="tedarikci-arama-sonuc"></div>
+    </div>
+    </div>
+
+    <div class="kart">
+    <label>Fiyatlar (isteğe bağlı, TL)</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px;">
+      <div><label style="margin-top:0;">Peşin</label><input name="fiyat_pesin" placeholder="Örn: 2.500,00" inputmode="decimal"></div>
+      <div><label style="margin-top:0;">Kredi Kartı</label><input name="fiyat_kkart" placeholder="Örn: 2.575,48" inputmode="decimal"></div>
+      <div><label style="margin-top:0;">3 Taksit</label><input name="fiyat_3taksit" placeholder="Örn: 2.715,33" inputmode="decimal"></div>
+      <div><label style="margin-top:0;">Ay Sonu</label><input name="fiyat_aysonu" placeholder="Örn: 2.625,00" inputmode="decimal"></div>
+    </div>
+    </div>
+
+    <div class="kart">
+    <label>Laminant Hesap Bilgisi (isteğe bağlı — sadece laminant/süpürgelik ürünlerinde doldurun)</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px;">
+      <div><label style="margin-top:0;">1 Paket Kaç M²</label><input name="paket_m2" placeholder="Örn: 2,26" inputmode="decimal"></div>
+      <div><label style="margin-top:0;">1 Paket/Kutu Kaç Metre</label><input name="paket_metre" placeholder="Örn: 16,8 (süpürgelik için)" inputmode="decimal"></div>
     </div>
     </div>
 
@@ -2222,6 +2292,13 @@ def duzenle(eski_barkod):
         except (TypeError, ValueError):
             min_stok = 5
 
+        fiyat_pesin = fiyat_ayristir(request.form.get("fiyat_pesin", ""))
+        fiyat_kkart = fiyat_ayristir(request.form.get("fiyat_kkart", ""))
+        fiyat_3taksit = fiyat_ayristir(request.form.get("fiyat_3taksit", ""))
+        fiyat_aysonu = fiyat_ayristir(request.form.get("fiyat_aysonu", ""))
+        paket_m2 = fiyat_ayristir(request.form.get("paket_m2", ""))
+        paket_metre = fiyat_ayristir(request.form.get("paket_metre", ""))
+
         con = db()
         try:
             with con:
@@ -2236,7 +2313,8 @@ def duzenle(eski_barkod):
                             )
                     cur.execute("""
                         UPDATE urun
-                        SET ad=%s, cins=%s, ebat=%s, kalinlik=%s, yuzey=%s, sinif=%s, renk=%s, adet=%s, depo=%s, barkod=%s, min_stok=%s
+                        SET ad=%s, cins=%s, ebat=%s, kalinlik=%s, yuzey=%s, sinif=%s, renk=%s, adet=%s, depo=%s, barkod=%s, min_stok=%s,
+                            fiyat_pesin=%s, fiyat_kkart=%s, fiyat_3taksit=%s, fiyat_aysonu=%s, paket_m2=%s, paket_metre=%s
                         WHERE barkod=%s
                     """, (
                         ad,
@@ -2250,6 +2328,8 @@ def duzenle(eski_barkod):
                         request.form.get("depo", ""),
                         yeni_barkod,
                         min_stok,
+                        fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu,
+                        paket_m2, paket_metre,
                         eski_barkod,
                     ))
         finally:
@@ -2279,7 +2359,7 @@ def duzenle(eski_barkod):
     con = db()
     try:
         with con.cursor() as cur:
-            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok FROM urun WHERE barkod=%s", (eski_barkod,))
+            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok,fiyat_pesin,fiyat_kkart,fiyat_3taksit,fiyat_aysonu,paket_m2,paket_metre FROM urun WHERE barkod=%s", (eski_barkod,))
             row = cur.fetchone()
     finally:
         con.close()
@@ -2287,7 +2367,12 @@ def duzenle(eski_barkod):
     if not row:
         return sayfa('<p class="hata">❌ Ürün bulunamadı.</p><a class="btn gri" href="/liste">⬅ Stok Listesine Dön</a>', "Hata")
 
-    ad, cins, ebat, kalinlik, yuzey, sinif, renk, adet, depo, barkod, min_stok = row
+    ad, cins, ebat, kalinlik, yuzey, sinif, renk, adet, depo, barkod, min_stok, fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu, paket_m2, paket_metre = row
+
+    def _fmt(f):
+        return "" if f is None else f"{f:.2f}".replace(".", ",")
+    def _fmt4(f):
+        return "" if f is None else (f"{f:.4f}".rstrip("0").rstrip(".")).replace(".", ",")
 
     icerik = """
     <h2 style="margin-bottom:2px;">✏️ Ürün Düzenle</h2>
@@ -2337,6 +2422,24 @@ def duzenle(eski_barkod):
     </select>
     <label>Kritik Stok Eşiği</label>
     <input name="min_stok" type="number" value="{{min_stok}}" placeholder="5">
+    </div>
+
+    <div class="kart">
+    <label>Fiyatlar (isteğe bağlı, TL)</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px;">
+      <div><label style="margin-top:0;">Peşin</label><input name="fiyat_pesin" value="{{fiyat_pesin}}" placeholder="Örn: 2.500,00" inputmode="decimal"></div>
+      <div><label style="margin-top:0;">Kredi Kartı</label><input name="fiyat_kkart" value="{{fiyat_kkart}}" placeholder="Örn: 2.575,48" inputmode="decimal"></div>
+      <div><label style="margin-top:0;">3 Taksit</label><input name="fiyat_3taksit" value="{{fiyat_3taksit}}" placeholder="Örn: 2.715,33" inputmode="decimal"></div>
+      <div><label style="margin-top:0;">Ay Sonu</label><input name="fiyat_aysonu" value="{{fiyat_aysonu}}" placeholder="Örn: 2.625,00" inputmode="decimal"></div>
+    </div>
+    </div>
+
+    <div class="kart">
+    <label>Laminant Hesap Bilgisi (isteğe bağlı — sadece laminant/süpürgelik ürünlerinde doldurun)</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px;">
+      <div><label style="margin-top:0;">1 Paket Kaç M²</label><input name="paket_m2" value="{{paket_m2}}" placeholder="Örn: 2,26" inputmode="decimal"></div>
+      <div><label style="margin-top:0;">1 Paket/Kutu Kaç Metre</label><input name="paket_metre" value="{{paket_metre}}" placeholder="Örn: 16,8 (süpürgelik için)" inputmode="decimal"></div>
+    </div>
     <button class="btn mavi">Kaydet</button>
     </div>
     </form>
@@ -2348,7 +2451,10 @@ def duzenle(eski_barkod):
     return render_template_string(
         sayfa(icerik, "Ürün Düzenle"),
         ad=ad, cins=cins, ebat=ebat, kalinlik=kalinlik, yuzey=yuzey,
-        sinif=sinif, renk=renk, adet=adet, depo=depo, barkod=barkod, min_stok=min_stok, depolar=DEPOLAR
+        sinif=sinif, renk=renk, adet=adet, depo=depo, barkod=barkod, min_stok=min_stok, depolar=DEPOLAR,
+        fiyat_pesin=_fmt(fiyat_pesin), fiyat_kkart=_fmt(fiyat_kkart),
+        fiyat_3taksit=_fmt(fiyat_3taksit), fiyat_aysonu=_fmt(fiyat_aysonu),
+        paket_m2=_fmt4(paket_m2), paket_metre=_fmt4(paket_metre),
     )
 
 
@@ -3388,6 +3494,10 @@ def rapor_pdf():
         return _siparis_listesi_pdf(A4, landscape, mm, colors, SimpleDocTemplate, Table, TableStyle,
                                       Paragraph, Spacer, getSampleStyleSheet, ParagraphStyle, TA_RIGHT)
 
+    if tur == "fiyat":
+        return _fiyat_listesi_pdf(A4, landscape, mm, colors, SimpleDocTemplate, Table, TableStyle,
+                                    Paragraph, Spacer, getSampleStyleSheet, ParagraphStyle, TA_RIGHT)
+
     depo_filtre = request.args.get("depo", "")
 
     con = db()
@@ -3570,6 +3680,98 @@ def _siparis_listesi_pdf(A4, landscape, mm, colors, SimpleDocTemplate, Table, Ta
     bio.seek(0)
 
     dosya_adi = f"siparis_listesi_{tr_simdi().strftime('%Y%m%d_%H%M')}.pdf"
+    return send_file(bio, as_attachment=True, download_name=dosya_adi, mimetype="application/pdf")
+
+
+def _tl_goster(f):
+    if f is None:
+        return "-"
+    return f"{f:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _fiyat_listesi_pdf(A4, landscape, mm, colors, SimpleDocTemplate, Table, TableStyle,
+                        Paragraph, Spacer, getSampleStyleSheet, ParagraphStyle, TA_RIGHT):
+    depo_filtre = request.args.get("depo", "")
+
+    con = db()
+    try:
+        with con.cursor() as cur:
+            if depo_filtre:
+                cur.execute("""
+                    SELECT ad, cins, ebat, kalinlik, depo, fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu
+                    FROM urun
+                    WHERE silindi IS NOT TRUE AND depo=%s
+                    AND (fiyat_pesin IS NOT NULL OR fiyat_kkart IS NOT NULL OR fiyat_3taksit IS NOT NULL OR fiyat_aysonu IS NOT NULL)
+                    ORDER BY cins, ad
+                """, (depo_filtre,))
+            else:
+                cur.execute("""
+                    SELECT ad, cins, ebat, kalinlik, depo, fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu
+                    FROM urun
+                    WHERE silindi IS NOT TRUE
+                    AND (fiyat_pesin IS NOT NULL OR fiyat_kkart IS NOT NULL OR fiyat_3taksit IS NOT NULL OR fiyat_aysonu IS NOT NULL)
+                    ORDER BY cins, ad
+                """)
+            urunler = cur.fetchall()
+    finally:
+        con.close()
+
+    bio = io.BytesIO()
+    doc = SimpleDocTemplate(
+        bio, pagesize=landscape(A4),
+        topMargin=14*mm, bottomMargin=14*mm, leftMargin=14*mm, rightMargin=14*mm
+    )
+    stiller = getSampleStyleSheet()
+    baslik_stil = ParagraphStyle("baslik", parent=stiller["Title"], fontSize=18, spaceAfter=2, textColor=colors.HexColor("#111111"))
+    alt_stil = ParagraphStyle("alt", parent=stiller["Normal"], fontSize=9.5, textColor=colors.HexColor("#555555"), spaceAfter=10)
+    ozet_stil = ParagraphStyle("ozet", parent=stiller["Normal"], fontSize=10, alignment=TA_RIGHT, textColor=colors.HexColor("#333333"))
+
+    elemanlar = []
+    elemanlar.append(Paragraph(UYGULAMA_ADI, baslik_stil))
+    alt_baslik = "Fiyat Listesi"
+    if depo_filtre:
+        alt_baslik += f" — {depo_filtre}"
+    elemanlar.append(Paragraph(alt_baslik + f" &nbsp;•&nbsp; Oluşturulma: {tr_simdi().strftime('%d.%m.%Y %H:%M')}", alt_stil))
+    elemanlar.append(Paragraph(f"Toplam {len(urunler)} ürün", ozet_stil))
+    elemanlar.append(Spacer(1, 8))
+
+    veri = [["Ürün Adı", "Cins", "Ebat/Kalınlık", "Peşin", "K.Kartı", "3 Taksit", "Ay Sonu"]]
+    for ad, cins, ebat, kalinlik, depo, f_pesin, f_kkart, f_3tak, f_aysonu in urunler:
+        ebat_kalinlik = " / ".join([x for x in [ebat, kalinlik] if x]) or "-"
+        veri.append([
+            ad or "-", cins or "-", ebat_kalinlik,
+            _tl_goster(f_pesin), _tl_goster(f_kkart), _tl_goster(f_3tak), _tl_goster(f_aysonu),
+        ])
+
+    tablo = Table(veri, colWidths=[65*mm, 35*mm, 35*mm, 27*mm, 27*mm, 27*mm, 27*mm], repeatRows=1)
+    stil_komutlari = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111111")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTSIZE", (0, 0), (-1, 0), 10),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 1), (-1, -1), 9),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f4f4f4")]),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("ALIGN", (3, 0), (6, -1), "RIGHT"),
+    ]
+    tablo.setStyle(TableStyle(stil_komutlari))
+    elemanlar.append(tablo)
+
+    def alt_bilgi(canvas, doc_):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#999999"))
+        canvas.drawRightString(landscape(A4)[0] - 14*mm, 8*mm, f"Sayfa {doc_.page}")
+        canvas.drawString(14*mm, 8*mm, UYGULAMA_ADI)
+        canvas.restoreState()
+
+    doc.build(elemanlar, onFirstPage=alt_bilgi, onLaterPages=alt_bilgi)
+    bio.seek(0)
+
+    dosya_adi = f"fiyat_listesi_{tr_simdi().strftime('%Y%m%d_%H%M')}.pdf"
     return send_file(bio, as_attachment=True, download_name=dosya_adi, mimetype="application/pdf")
 
 
@@ -3824,11 +4026,10 @@ def hizli_islem():
                         siparis_ilerleme["tamamlandi"] = True
 
                 cur.execute("""
-                SELECT SUM(adet) FROM hareket WHERE kullanici=%s AND tip='cikis'
-                """, (kullanici,))
+                SELECT COALESCE(SUM(adet), 0) FROM hareket
+                WHERE kullanici=%s AND tip=%s AND tarih::date = %s
+                """, (kullanici, tip, tr_simdi().date()))
                 toplam = cur.fetchone()[0]
-                if not toplam:
-                    toplam = 0
 
                 return jsonify({
                     "ok": True, "ad": ad, "adet": adet, "toplam": toplam, "miktar": miktar,
@@ -4566,6 +4767,179 @@ def urun_ara():
         {"ad": s[0], "barkod": s[1], "adet": s[2], "depo": s[3] or "", "cins": s[4] or "", "ebat": s[5] or ""}
         for s in satirlar
     ])
+
+
+@app.route("/laminant_hesap")
+@rol_gerekli("muhasebeci")
+def laminant_hesap():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT ad, barkod, paket_m2, paket_metre, fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu
+                FROM urun
+                WHERE silindi IS NOT TRUE AND (paket_m2 IS NOT NULL OR paket_metre IS NOT NULL)
+                ORDER BY ad
+            """)
+            urunler = cur.fetchall()
+    finally:
+        con.close()
+
+    urunler_json = json.dumps([
+        {
+            "ad": ad, "barkod": barkod,
+            "paket_m2": float(paket_m2) if paket_m2 is not None else None,
+            "paket_metre": float(paket_metre) if paket_metre is not None else None,
+            "fiyat_pesin": float(f_pesin) if f_pesin is not None else None,
+            "fiyat_kkart": float(f_kkart) if f_kkart is not None else None,
+            "fiyat_3taksit": float(f_3tak) if f_3tak is not None else None,
+            "fiyat_aysonu": float(f_aysonu) if f_aysonu is not None else None,
+        }
+        for ad, barkod, paket_m2, paket_metre, f_pesin, f_kkart, f_3tak, f_aysonu in urunler
+    ], ensure_ascii=False)
+
+    if not urunler:
+        icerik = (
+            '<h2>📐 Laminant Hesap</h2>'
+            '<p class="hata">❌ Henüz "1 Paket Kaç M²" veya "1 Paket Kaç Metre" bilgisi girilmiş ürün yok.'
+            '<br><br>Önce Ürün Ekle/Düzenle sayfasından ilgili laminant/süpürgelik ürünlerine bu bilgiyi girin.</p>'
+            '<a class="btn gri" href="/liste">⬅ Stok Listesine Dön</a>'
+        )
+        return sayfa(icerik, "Laminant Hesap")
+
+    icerik = """
+    <h2 style="margin-bottom:2px;">📐 Laminant Hesap</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">Oda ölçüsünden paket ve fiyat hesapla</p>
+
+    <div class="kart">
+      <label>Oda Eni (cm)</label>
+      <input type="number" id="oda-eni" placeholder="Örn: 400" oninput="hesapla()">
+      <label>Oda Boyu (cm)</label>
+      <input type="number" id="oda-boyu" placeholder="Örn: 500" oninput="hesapla()">
+      <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:13px;color:var(--muted);">
+        <span>Alan: <b id="oda-m2" style="color:var(--text);">0</b> m²</span>
+        <span>Çevre: <b id="oda-cevre" style="color:var(--text);">0</b> m</span>
+      </div>
+    </div>
+
+    <div class="kart">
+      <label>Ödeme Türü</label>
+      <select id="odeme-turu" onchange="hesapla()">
+        <option value="fiyat_pesin">Peşin</option>
+        <option value="fiyat_kkart">Kredi Kartı</option>
+        <option value="fiyat_3taksit">3 Taksit</option>
+        <option value="fiyat_aysonu">Ay Sonu</option>
+      </select>
+    </div>
+
+    <div class="kart" id="urun-satirlari">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <label style="margin:0;">Ürünler</label>
+        <button type="button" class="btn-kucuk mavi" onclick="urunSatiriEkle()" style="margin:0;">➕ Ürün Ekle</button>
+      </div>
+      <div id="satir-liste"></div>
+    </div>
+
+    <div class="kart" id="sonuc-kart" style="display:none;">
+      <label>Sonuç</label>
+      <div id="sonuc-liste"></div>
+      <div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-weight:800;font-size:16px;">
+        <span>TOPLAM</span><span id="sonuc-toplam">0 TL</span>
+      </div>
+    </div>
+
+    <script>
+    const URUNLER = __URUNLER_JSON__;
+    let satirSayisi = 0;
+
+    function urunSatiriEkle(){
+        satirSayisi++;
+        const id = 'satir-' + satirSayisi;
+        const secenekler = URUNLER.map((u, i) => `<option value="${i}">${u.ad}</option>`).join('');
+        const div = document.createElement('div');
+        div.id = id;
+        div.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;align-items:center;';
+        div.innerHTML = `
+            <select onchange="hesapla()" style="margin:0;flex:2;">${secenekler}</select>
+            <button type="button" onclick="document.getElementById('${id}').remove(); hesapla();" style="background:#e74c3c;color:white;border:none;border-radius:8px;padding:10px 12px;cursor:pointer;">✕</button>
+        `;
+        document.getElementById('satir-liste').appendChild(div);
+        hesapla();
+    }
+
+    function hesapla(){
+        const eni = parseFloat(document.getElementById('oda-eni').value) || 0;
+        const boyu = parseFloat(document.getElementById('oda-boyu').value) || 0;
+        const m2 = (eni * boyu) / 10000;
+        const cevre = 2 * (eni + boyu) / 100;
+        document.getElementById('oda-m2').textContent = m2.toFixed(2).replace('.', ',');
+        document.getElementById('oda-cevre').textContent = cevre.toFixed(2).replace('.', ',');
+
+        const odemeTuru = document.getElementById('odeme-turu').value;
+        const satirlar = document.querySelectorAll('#satir-liste > div');
+        let sonucHtml = '';
+        let genelToplam = 0;
+        let gecerliVarMi = false;
+
+        satirlar.forEach(satir => {
+            const select = satir.querySelector('select');
+            const urun = URUNLER[parseInt(select.value)];
+            if(!urun) return;
+
+            let gerekliMiktar, birimBasi, birim;
+            if(urun.paket_m2){
+                gerekliMiktar = m2;
+                birimBasi = urun.paket_m2;
+                birim = 'm²';
+            } else if(urun.paket_metre){
+                gerekliMiktar = cevre;
+                birimBasi = urun.paket_metre;
+                birim = 'm';
+            } else {
+                return;
+            }
+
+            if(gerekliMiktar <= 0 || !birimBasi){
+                sonucHtml += `<div class="dash-liste-satir"><span>${urun.ad}</span><span class="dash-liste-deger">Oda ölçüsü girin</span></div>`;
+                return;
+            }
+
+            const hamPaket = gerekliMiktar / birimBasi;
+            const paketSayisi = Math.ceil(hamPaket - 1e-9);  // yukarı yuvarla (ondalık hata payı ile)
+            const birimFiyat = urun[odemeTuru];
+
+            if(!birimFiyat){
+                sonucHtml += `<div class="dash-liste-satir"><span>${urun.ad}</span><span class="dash-liste-deger">Bu ödeme türü için fiyat yok</span></div>`;
+                return;
+            }
+
+            const tutar = paketSayisi * birimBasi * birimFiyat;
+            genelToplam += tutar;
+            gecerliVarMi = true;
+
+            sonucHtml += `
+              <div class="dash-liste-satir" style="flex-direction:column;align-items:flex-start;gap:2px;padding:10px 0;">
+                <div style="display:flex;justify-content:space-between;width:100%;">
+                  <b>${urun.ad}</b><b>${tutar.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL</b>
+                </div>
+                <div style="font-size:12px;color:var(--muted);">
+                  ${gerekliMiktar.toFixed(2).replace('.', ',')} ${birim} ihtiyaç → ${paketSayisi} paket
+                  (paket başı ${birimBasi} ${birim} × ${birimFiyat.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL)
+                </div>
+              </div>`;
+        });
+
+        document.getElementById('sonuc-liste').innerHTML = sonucHtml || '<p style="color:var(--muted);font-size:13px;">Bir ürün seçin.</p>';
+        document.getElementById('sonuc-toplam').textContent = genelToplam.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' TL';
+        document.getElementById('sonuc-kart').style.display = gecerliVarMi ? 'block' : (satirlar.length ? 'block' : 'none');
+    }
+
+    // Sayfa açılışında bir satır ekli gelsin
+    urunSatiriEkle();
+    </script>
+    """
+    icerik = icerik.replace("__URUNLER_JSON__", urunler_json)
+    return sayfa(icerik, "Laminant Hesap")
 
 
 @app.route("/musteri_urun_raporu")
@@ -6437,6 +6811,8 @@ function sonucGoster(d, barkod){
     if (d.ok) {
         sonIslem = { barkod: barkod, tip: aktifTip, siparis_id: siparisId };
         oturumGuncelle(barkod, d.ad, d.miktar || 1);
+        const oturumToplamAdet = Object.values(oturumListesi).reduce((t, k) => t + k.toplamAdet, 0);
+        const oturumUrunSayisi = Object.keys(oturumListesi).length;
         const baslikRengi = aktifTip === 'giris' ? '✅' : '📤';
         let siparisSatiri = '';
         if(d.siparis_ilerleme){
@@ -6446,11 +6822,14 @@ function sonucGoster(d, barkod){
         alan.innerHTML = `
           <div class="sonuc-kart sonuc-basari">
             <div class="sonuc-ust"><span class="sonuc-ikon">${baslikRengi}</span><span class="sonuc-ad">${d.ad}</span></div>
+            <div style="background:rgba(33,150,243,.12);border-radius:10px;padding:8px 12px;margin:8px 0;font-size:13.5px;font-weight:700;text-align:center;">
+              📋 Bu oturumda toplam <b>${oturumToplamAdet} adet</b> okuttunuz (${oturumUrunSayisi} farklı ürün)
+            </div>
             <div class="sonuc-satirlar">
               🏷️ Cins: <b>${d.cins || '-'}</b> &nbsp; 🔖 Sınıf: <b>${d.sinif || '-'}</b><br>
               ✨ Yüzey: <b>${d.yuzey || '-'}</b> &nbsp; 🎨 Renk: <b>${d.renk || '-'}</b><br>
               📏 Ebat: <b>${d.ebat || '-'}</b> &nbsp; 🏭 Depo: <b>${d.depo || '-'}</b><br>
-              📦 Kalan Stok: <b>${d.adet}</b> &nbsp; 📊 Bugünkü Toplam: <b>${d.toplam}</b>${siparisSatiri}
+              📦 Kalan Stok: <b>${d.adet}</b> &nbsp; 📊 Bugünkü ${aktifTip === 'giris' ? 'Giriş' : 'Çıkış'} Toplamı: <b>${d.toplam}</b>${siparisSatiri}
             </div>
             <button class="geri-al-btn" onclick="geriAl()">↩️ Bu işlemi geri al</button>
           </div>`;
