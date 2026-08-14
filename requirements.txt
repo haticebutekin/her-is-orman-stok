@@ -8,3 +8,4 @@ xlwt
 pywebpush
 gunicorn
 reportlab
+pandas
