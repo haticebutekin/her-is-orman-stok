@@ -314,6 +314,60 @@ def fiyat_ayristir(deger):
         return None
 
 
+def excel_satirlarini_oku(dosya_storage):
+    """Yüklenen bir Excel dosyasını (.xlsx veya eski .xls) okuyup satırların
+    listesini (her satır bir tuple) döndürür. .xls dosyaları LibreOffice ile
+    arka planda .xlsx'e çevrilir. openpyxl bozuk/harici bağlantılı dosyalarda
+    başarısız olursa pandas ile tekrar denenir (daha toleranslı). Tüm yollar
+    başarısız olursa None döner."""
+    from openpyxl import load_workbook
+    import pandas as pd
+
+    def _openpyxl_dene(kaynak):
+        try:
+            wb = load_workbook(kaynak, data_only=True)
+            ws = wb.active
+            return [tuple(satir) for satir in ws.iter_rows(values_only=True)]
+        except Exception:
+            return None
+
+    def _pandas_dene(kaynak):
+        try:
+            df = pd.read_excel(kaynak, sheet_name=0, header=None)
+            return [tuple(satir) for satir in df.itertuples(index=False, name=None)]
+        except Exception:
+            return None
+
+    dosya_adi = (dosya_storage.filename or "").lower()
+
+    if dosya_adi.endswith(".xls") and not dosya_adi.endswith(".xlsx"):
+        # Eski Excel 97-2003 formatı: LibreOffice ile geçici olarak .xlsx'e çevir
+        import subprocess, tempfile, os as os_modul
+        with tempfile.TemporaryDirectory() as gecici_klasor:
+            xls_yolu = os_modul.path.join(gecici_klasor, "kaynak.xls")
+            dosya_storage.save(xls_yolu)
+            try:
+                subprocess.run(
+                    ["soffice", "--headless", "--convert-to", "xlsx", "--outdir", gecici_klasor, xls_yolu],
+                    check=True, timeout=60, capture_output=True,
+                )
+            except Exception:
+                return None
+            xlsx_yolu = os_modul.path.join(gecici_klasor, "kaynak.xlsx")
+            if not os_modul.path.exists(xlsx_yolu):
+                return None
+            satirlar = _openpyxl_dene(xlsx_yolu)
+            if satirlar is None:
+                satirlar = _pandas_dene(xlsx_yolu)
+            return satirlar
+    else:
+        satirlar = _openpyxl_dene(dosya_storage)
+        if satirlar is None:
+            dosya_storage.stream.seek(0)
+            satirlar = _pandas_dene(dosya_storage)
+        return satirlar
+
+
 def barkod_uret():
     while True:
         kod = str(random.randint(100000000000, 999999999999))
@@ -2101,14 +2155,12 @@ def toplu_yukle():
         if not dosya or dosya.filename == "":
             return sayfa('<p class="hata">❌ Dosya seçilmedi.</p><a class="btn gri" href="/toplu_yukle">⬅ Geri Dön</a>', "Hata")
 
-        from openpyxl import load_workbook
-        try:
-            wb = load_workbook(dosya, data_only=True)
-        except Exception:
-            return sayfa('<p class="hata">❌ Dosya okunamadı. Geçerli bir .xlsx dosyası yükleyin.</p><a class="btn gri" href="/toplu_yukle">⬅ Geri Dön</a>', "Hata")
+        satirlar = excel_satirlarini_oku(dosya)
+        if satirlar is None:
+            return sayfa(
+                '<p class="hata">❌ Dosya okunamadı. .xlsx veya eski .xls (Excel 97-2003) formatında bir dosya yükleyin.</p>'
+                '<a class="btn gri" href="/toplu_yukle">⬅ Geri Dön</a>', "Hata")
 
-        ws = wb.active
-        satirlar = list(ws.iter_rows(values_only=True))
         if not satirlar:
             return sayfa('<p class="hata">❌ Excel dosyası boş.</p><a class="btn gri" href="/toplu_yukle">⬅ Geri Dön</a>', "Hata")
 
@@ -2231,7 +2283,7 @@ def toplu_yukle():
     <div class="yukleme-alan">
       <div class="yukleme-ikon">📊</div>
       <p style="margin:6px 0;color:var(--muted);font-size:14px;">.xlsx dosyanı seç</p>
-      <input type="file" name="dosya" accept=".xlsx" required>
+      <input type="file" name="dosya" accept=".xlsx,.xls" required>
     </div>
     <button class="btn turkuaz">Yükle ve Ürünleri Ekle</button>
     </form>
@@ -4800,14 +4852,12 @@ def fiyat_toplu_yukle():
         if not dosya or dosya.filename == "":
             return sayfa('<p class="hata">❌ Dosya seçilmedi.</p><a class="btn gri" href="/fiyat_toplu_yukle">⬅ Geri Dön</a>', "Hata")
 
-        from openpyxl import load_workbook
-        try:
-            wb = load_workbook(dosya, data_only=True)
-        except Exception:
-            return sayfa('<p class="hata">❌ Dosya okunamadı. Geçerli bir .xlsx dosyası yükleyin.</p><a class="btn gri" href="/fiyat_toplu_yukle">⬅ Geri Dön</a>', "Hata")
+        satirlar = excel_satirlarini_oku(dosya)
+        if satirlar is None:
+            return sayfa(
+                '<p class="hata">❌ Dosya okunamadı. .xlsx veya eski .xls (Excel 97-2003) formatında bir dosya yükleyin.</p>'
+                '<a class="btn gri" href="/fiyat_toplu_yukle">⬅ Geri Dön</a>', "Hata")
 
-        ws = wb.active
-        satirlar = list(ws.iter_rows(values_only=True))
         if not satirlar:
             return sayfa('<p class="hata">❌ Excel dosyası boş.</p><a class="btn gri" href="/fiyat_toplu_yukle">⬅ Geri Dön</a>', "Hata")
 
@@ -4934,7 +4984,7 @@ def fiyat_toplu_yukle():
     <form method="post" enctype="multipart/form-data">
     <div class="kart">
       <label>Excel Dosyası (.xlsx)</label>
-      <input type="file" name="dosya" accept=".xlsx" required>
+      <input type="file" name="dosya" accept=".xlsx,.xls" required>
       <button class="btn mavi" style="margin-top:10px;">Yükle ve Fiyatları Güncelle</button>
     </div>
     </form>
@@ -4982,18 +5032,7 @@ def laminant_hesap():
 
     icerik = """
     <h2 style="margin-bottom:2px;">📐 Laminant Hesap</h2>
-    <p style="text-align:center;color:var(--muted);margin-top:0;">Oda ölçüsünden paket ve fiyat hesapla</p>
-
-    <div class="kart">
-      <label>Oda Eni (cm)</label>
-      <input type="number" id="oda-eni" placeholder="Örn: 400" oninput="hesapla()">
-      <label>Oda Boyu (cm)</label>
-      <input type="number" id="oda-boyu" placeholder="Örn: 500" oninput="hesapla()">
-      <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:13px;color:var(--muted);">
-        <span>Alan: <b id="oda-m2" style="color:var(--text);">0</b> m²</span>
-        <span>Çevre: <b id="oda-cevre" style="color:var(--text);">0</b> m</span>
-      </div>
-    </div>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">Birden fazla oda ekleyip toplu hesaplayabilirsiniz</p>
 
     <div class="kart">
       <label>Ödeme Türü</label>
@@ -5005,16 +5044,20 @@ def laminant_hesap():
       </select>
     </div>
 
-    <div class="kart" id="urun-satirlari">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <label style="margin:0;">Ürünler</label>
-        <button type="button" class="btn-kucuk mavi" onclick="urunSatiriEkle()" style="margin:0;">➕ Ürün Ekle</button>
-      </div>
-      <div id="satir-liste"></div>
+    <div id="oda-liste"></div>
+
+    <button type="button" class="okut-kart okut-mavi" style="border:none;width:100%;cursor:pointer;" onclick="odaEkle()">
+      <div class="okut-ikon">➕</div>
+      <div class="okut-metin"><div class="okut-baslik">Oda Ekle</div></div>
+    </button>
+
+    <div class="kart" id="ozet-kart" style="display:none;">
+      <label>📦 Ürün Bazlı Toplam Paket Özeti</label>
+      <div id="ozet-liste"></div>
     </div>
 
     <div class="kart" id="sonuc-kart" style="display:none;">
-      <label>Sonuç</label>
+      <label>Genel Toplam</label>
       <div id="sonuc-liste"></div>
       <div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-weight:800;font-size:16px;">
         <span>TOPLAM</span><span id="sonuc-toplam">0 TL</span>
@@ -5023,92 +5066,149 @@ def laminant_hesap():
 
     <script>
     const URUNLER = __URUNLER_JSON__;
-    let satirSayisi = 0;
+    let odaSayisi = 0;
 
-    function urunSatiriEkle(){
-        satirSayisi++;
-        const id = 'satir-' + satirSayisi;
+    function odaEkle(){
+        odaSayisi++;
+        const odaId = odaSayisi;
         const secenekler = URUNLER.map((u, i) => `<option value="${i}">${u.ad}</option>`).join('');
         const div = document.createElement('div');
-        div.id = id;
-        div.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;align-items:center;';
+        div.className = 'kart';
+        div.id = 'oda-' + odaId;
+        div.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <label style="margin:0;">🚪 Oda ${odaId}</label>
+              <button type="button" onclick="document.getElementById('oda-${odaId}').remove(); hesapla();" style="background:#e74c3c;color:white;border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;">✕ Odayı Sil</button>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <div style="flex:1;"><label style="margin-top:0;">Eni (cm)</label><input type="number" class="oda-eni" placeholder="Örn: 400" oninput="hesapla()"></div>
+              <div style="flex:1;"><label style="margin-top:0;">Boyu (cm)</label><input type="number" class="oda-boyu" placeholder="Örn: 500" oninput="hesapla()"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin:4px 0 10px;font-size:12.5px;color:var(--muted);">
+              <span>Alan: <b class="oda-m2-goster" style="color:var(--text);">0</b> m²</span>
+              <span>Çevre: <b class="oda-cevre-goster" style="color:var(--text);">0</b> m</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <label style="margin:0;font-size:12px;">Bu Odaya Ürün Ekle</label>
+              <button type="button" class="btn-kucuk mavi" onclick="urunSatiriEkle(${odaId})" style="margin:0;">➕</button>
+            </div>
+            <div class="satir-liste" id="satir-liste-${odaId}"></div>
+        `;
+        document.getElementById('oda-liste').appendChild(div);
+        urunSatiriEkle(odaId);
+    }
+
+    function urunSatiriEkle(odaId){
+        const satirListe = document.getElementById('satir-liste-' + odaId);
+        const satirId = 'satir-' + odaId + '-' + Date.now();
+        const secenekler = URUNLER.map((u, i) => `<option value="${i}">${u.ad}</option>`).join('');
+        const div = document.createElement('div');
+        div.id = satirId;
+        div.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;align-items:center;';
         div.innerHTML = `
             <select onchange="hesapla()" style="margin:0;flex:2;">${secenekler}</select>
-            <button type="button" onclick="document.getElementById('${id}').remove(); hesapla();" style="background:#e74c3c;color:white;border:none;border-radius:8px;padding:10px 12px;cursor:pointer;">✕</button>
+            <button type="button" onclick="document.getElementById('${satirId}').remove(); hesapla();" style="background:#e74c3c;color:white;border:none;border-radius:8px;padding:10px 12px;cursor:pointer;">✕</button>
         `;
-        document.getElementById('satir-liste').appendChild(div);
+        satirListe.appendChild(div);
         hesapla();
     }
 
     function hesapla(){
-        const eni = parseFloat(document.getElementById('oda-eni').value) || 0;
-        const boyu = parseFloat(document.getElementById('oda-boyu').value) || 0;
-        const m2 = (eni * boyu) / 10000;
-        const cevre = 2 * (eni + boyu) / 100;
-        document.getElementById('oda-m2').textContent = m2.toFixed(2).replace('.', ',');
-        document.getElementById('oda-cevre').textContent = cevre.toFixed(2).replace('.', ',');
-
         const odemeTuru = document.getElementById('odeme-turu').value;
-        const satirlar = document.querySelectorAll('#satir-liste > div');
+        const odalar = document.querySelectorAll('#oda-liste > div');
         let sonucHtml = '';
         let genelToplam = 0;
         let gecerliVarMi = false;
+        const urunOzet = {};  // urun adi -> {paket: 0, birim: 'm²'/'m', tutar: 0}
 
-        satirlar.forEach(satir => {
-            const select = satir.querySelector('select');
-            const urun = URUNLER[parseInt(select.value)];
-            if(!urun) return;
+        odalar.forEach(odaDiv => {
+            const eni = parseFloat(odaDiv.querySelector('.oda-eni').value) || 0;
+            const boyu = parseFloat(odaDiv.querySelector('.oda-boyu').value) || 0;
+            const m2 = (eni * boyu) / 10000;
+            const cevre = 2 * (eni + boyu) / 100;
+            odaDiv.querySelector('.oda-m2-goster').textContent = m2.toFixed(2).replace('.', ',');
+            odaDiv.querySelector('.oda-cevre-goster').textContent = cevre.toFixed(2).replace('.', ',');
 
-            let gerekliMiktar, birimBasi, birim;
-            if(urun.paket_m2){
-                gerekliMiktar = m2;
-                birimBasi = urun.paket_m2;
-                birim = 'm²';
-            } else if(urun.paket_metre){
-                gerekliMiktar = cevre;
-                birimBasi = urun.paket_metre;
-                birim = 'm';
-            } else {
-                return;
+            const odaBaslik = odaDiv.querySelector('label').textContent.trim();
+            const satirlar = odaDiv.querySelectorAll('.satir-liste > div');
+            let odaToplam = 0;
+            let odaHtml = '';
+
+            satirlar.forEach(satir => {
+                const select = satir.querySelector('select');
+                const urun = URUNLER[parseInt(select.value)];
+                if(!urun) return;
+
+                let gerekliMiktar, birimBasi, birim;
+                if(urun.paket_m2){
+                    gerekliMiktar = m2;
+                    birimBasi = urun.paket_m2;
+                    birim = 'm²';
+                } else if(urun.paket_metre){
+                    gerekliMiktar = cevre;
+                    birimBasi = urun.paket_metre;
+                    birim = 'm';
+                } else {
+                    return;
+                }
+
+                if(gerekliMiktar <= 0 || !birimBasi){
+                    odaHtml += `<div class="dash-liste-satir"><span>${urun.ad}</span><span class="dash-liste-deger">Oda ölçüsü girin</span></div>`;
+                    return;
+                }
+
+                const hamPaket = gerekliMiktar / birimBasi;
+                const paketSayisi = Math.ceil(hamPaket - 1e-9);
+                const birimFiyat = urun[odemeTuru];
+
+                if(!birimFiyat){
+                    odaHtml += `<div class="dash-liste-satir"><span>${urun.ad}</span><span class="dash-liste-deger">Bu ödeme türü için fiyat yok</span></div>`;
+                    return;
+                }
+
+                const tutar = paketSayisi * birimBasi * birimFiyat;
+                odaToplam += tutar;
+                genelToplam += tutar;
+                gecerliVarMi = true;
+
+                if(!urunOzet[urun.ad]) urunOzet[urun.ad] = {paket: 0, birim: birim, tutar: 0};
+                urunOzet[urun.ad].paket += paketSayisi;
+                urunOzet[urun.ad].tutar += tutar;
+
+                odaHtml += `
+                  <div class="dash-liste-satir" style="flex-direction:column;align-items:flex-start;gap:2px;padding:8px 0;">
+                    <div style="display:flex;justify-content:space-between;width:100%;">
+                      <b>${urun.ad}</b><b>${tutar.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL</b>
+                    </div>
+                    <div style="font-size:11.5px;color:var(--muted);">
+                      ${gerekliMiktar.toFixed(2).replace('.', ',')} ${birim} ihtiyaç → <b>${paketSayisi} paket</b>
+                      (paket başı ${birimBasi} ${birim} × ${birimFiyat.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL)
+                    </div>
+                  </div>`;
+            });
+
+            if(odaHtml){
+                sonucHtml += `<div style="margin-bottom:10px;"><div style="font-weight:700;font-size:13px;margin-bottom:4px;">${odaBaslik} — ${odaToplam.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL</div>${odaHtml}</div>`;
             }
-
-            if(gerekliMiktar <= 0 || !birimBasi){
-                sonucHtml += `<div class="dash-liste-satir"><span>${urun.ad}</span><span class="dash-liste-deger">Oda ölçüsü girin</span></div>`;
-                return;
-            }
-
-            const hamPaket = gerekliMiktar / birimBasi;
-            const paketSayisi = Math.ceil(hamPaket - 1e-9);  // yukarı yuvarla (ondalık hata payı ile)
-            const birimFiyat = urun[odemeTuru];
-
-            if(!birimFiyat){
-                sonucHtml += `<div class="dash-liste-satir"><span>${urun.ad}</span><span class="dash-liste-deger">Bu ödeme türü için fiyat yok</span></div>`;
-                return;
-            }
-
-            const tutar = paketSayisi * birimBasi * birimFiyat;
-            genelToplam += tutar;
-            gecerliVarMi = true;
-
-            sonucHtml += `
-              <div class="dash-liste-satir" style="flex-direction:column;align-items:flex-start;gap:2px;padding:10px 0;">
-                <div style="display:flex;justify-content:space-between;width:100%;">
-                  <b>${urun.ad}</b><b>${tutar.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL</b>
-                </div>
-                <div style="font-size:12px;color:var(--muted);">
-                  ${gerekliMiktar.toFixed(2).replace('.', ',')} ${birim} ihtiyaç → ${paketSayisi} paket
-                  (paket başı ${birimBasi} ${birim} × ${birimFiyat.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL)
-                </div>
-              </div>`;
         });
 
-        document.getElementById('sonuc-liste').innerHTML = sonucHtml || '<p style="color:var(--muted);font-size:13px;">Bir ürün seçin.</p>';
+        // Ürün bazlı genel özet (kaç paket laminant, kaç paket süpürgelik vb.)
+        const ozetAnahtarlari = Object.keys(urunOzet);
+        let ozetHtml = '';
+        ozetAnahtarlari.forEach(ad => {
+            const o = urunOzet[ad];
+            ozetHtml += `<div class="dash-liste-satir"><span>${ad}</span><span class="dash-liste-deger"><b>${o.paket} paket</b> — ${o.tutar.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL</span></div>`;
+        });
+        document.getElementById('ozet-liste').innerHTML = ozetHtml;
+        document.getElementById('ozet-kart').style.display = ozetAnahtarlari.length ? 'block' : 'none';
+
+        document.getElementById('sonuc-liste').innerHTML = sonucHtml || '<p style="color:var(--muted);font-size:13px;">Bir oda ve ürün ekleyin.</p>';
         document.getElementById('sonuc-toplam').textContent = genelToplam.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' TL';
-        document.getElementById('sonuc-kart').style.display = gecerliVarMi ? 'block' : (satirlar.length ? 'block' : 'none');
+        document.getElementById('sonuc-kart').style.display = (gecerliVarMi || odalar.length) ? 'block' : 'none';
     }
 
-    // Sayfa açılışında bir satır ekli gelsin
-    urunSatiriEkle();
+    // Sayfa açılışında bir oda ekli gelsin
+    odaEkle();
     </script>
     """
     icerik = icerik.replace("__URUNLER_JSON__", urunler_json)
