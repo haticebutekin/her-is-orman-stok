@@ -2817,8 +2817,12 @@ def sayim_detay(sayim_id):
             fark = sayilan_adet - sistem_adet
             fark_renk = "color:#2ecc71;" if fark == 0 else ("color:#e74c3c;" if fark < 0 else "color:#f39c12;")
             fark_metin = "Fark yok" if fark == 0 else (f"{fark:+d} fark")
+            duzenle_dugmesi = (
+                f'<button class="btn-kucuk gri" style="margin-top:8px;" onclick="sayimDuzenleAc({kid}, \'{ad}\', {sayilan_adet})">✏️ Düzenle</button>'
+                if durum == "devam" else ""
+            )
             kalem_html += f"""
-            <div class="hareket-kart hareket-giris" style="opacity:.85;">
+            <div class="hareket-kart hareket-giris" style="opacity:.85;" id="kalem-goster-{kid}">
               <div class="hareket-ikon">✅</div>
               <div class="hareket-govde">
                 <div class="hareket-ust">
@@ -2826,7 +2830,16 @@ def sayim_detay(sayim_id):
                   <div class="hareket-adet" style="{fark_renk}">{sayilan_adet}</div>
                 </div>
                 <div class="hareket-alt">Sistem: {sistem_adet} &nbsp;•&nbsp; <span style="{fark_renk}">{fark_metin}</span></div>
+                {duzenle_dugmesi}
               </div>
+            </div>
+            <div class="kart" style="padding:12px 16px;display:none;" id="kalem-duzenle-{kid}">
+              <div style="font-weight:700;margin-bottom:8px;">{ad} — Sayımı Düzenle</div>
+              <form onsubmit="sayimKaydet(event, {kid})" style="display:flex;gap:6px;">
+                <input type="number" name="sayilan" value="{sayilan_adet}" required style="margin:0;">
+                <button type="submit" class="btn-kucuk yesil" style="margin:0;">✅ Güncelle</button>
+                <button type="button" class="btn-kucuk gri" style="margin:0;" onclick="sayimDuzenleKapat({kid})">✕</button>
+              </form>
             </div>
             """
         else:
@@ -2906,6 +2919,15 @@ def sayim_detay(sayim_id):
         headers: {{'Content-Type': 'application/x-www-form-urlencoded'}},
         body: 'sayilan=' + encodeURIComponent(sayilan)
       }}).then(() => location.reload());
+    }}
+
+    function sayimDuzenleAc(kalemId){{
+      document.getElementById('kalem-goster-' + kalemId).style.display = 'none';
+      document.getElementById('kalem-duzenle-' + kalemId).style.display = 'block';
+    }}
+    function sayimDuzenleKapat(kalemId){{
+      document.getElementById('kalem-goster-' + kalemId).style.display = 'block';
+      document.getElementById('kalem-duzenle-' + kalemId).style.display = 'none';
     }}
 
     let sayimUrunAramaZamanlayici;
