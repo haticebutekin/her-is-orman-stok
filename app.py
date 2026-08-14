@@ -2706,9 +2706,17 @@ def sayimlar():
 
     kartlar = ""
     for sid, depo, baslatan, tarih, durum, toplam, sayilan in kayitlar:
-        durum_etiket = "✅ Tamamlandı" if durum == "tamamlandi" else "🔄 Devam Ediyor"
+        if durum == "tamamlandi":
+            durum_etiket = "✅ Tamamlandı"
+            renk_sinifi = "okut-yesil"
+        elif durum == "iptal":
+            durum_etiket = "🗑️ İptal Edildi"
+            renk_sinifi = "okut-kirmizi"
+        else:
+            durum_etiket = "🔄 Devam Ediyor"
+            renk_sinifi = "okut-turuncu"
         kartlar += f"""
-        <a href="/sayim/{sid}" class="okut-kart {'okut-yesil' if durum == 'tamamlandi' else 'okut-turuncu'}">
+        <a href="/sayim/{sid}" class="okut-kart {renk_sinifi}">
           <div class="okut-ikon">📋</div>
           <div class="okut-metin">
             <div class="okut-baslik">{depo}</div>
@@ -2845,10 +2853,32 @@ def sayim_detay(sayim_id):
         </form>
         """
 
+    ust_aksiyon_html = ""
+    if durum == "devam":
+        ust_aksiyon_html = f"""
+        <div class="kart" style="padding:14px 16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <label style="margin:0;">🔍 Sayıma Ürün Ekle</label>
+          </div>
+          <div class="urun-arama-kutu">
+            <input id="sayim-urun-arama" placeholder="Ürün adı veya barkod ara..." autocomplete="off" oninput="sayimUrunAra()">
+            <div class="urun-arama-sonuc" id="sayim-urun-arama-sonuc"></div>
+          </div>
+          <form id="sayim-urun-ekle-form" method="post" action="/sayim_urun_ekle/{sayim_id}" style="margin-top:6px;">
+            <input type="hidden" name="barkod" id="sayim-urun-barkod">
+          </form>
+        </div>
+        <form method="post" action="/sayim_iptal/{sayim_id}" onsubmit="return confirm('Bu sayım tamamen iptal edilsin mi? Stokta hiçbir değişiklik yapılmayacak.');" style="margin-bottom:12px;">
+          <button type="submit" class="btn" style="background:#e74c3c;color:white;">🗑️ Sayımı İptal Et</button>
+        </form>
+        """
+    elif durum == "iptal":
+        ust_aksiyon_html = '<p style="text-align:center;color:#e74c3c;font-weight:700;">🗑️ Bu sayım iptal edildi. Stokta değişiklik yapılmadı.</p>'
+
     icerik = f"""
     <h2>📋 {depo}</h2>
     <p style="text-align:center;color:var(--muted);margin-top:-6px;font-size:13px;">
-    {baslatan} • {tarih_str} • {"✅ Tamamlandı" if durum == "tamamlandi" else "🔄 Devam Ediyor"}
+    {baslatan} • {tarih_str} • {"✅ Tamamlandı" if durum == "tamamlandi" else ("🗑️ İptal Edildi" if durum == "iptal" else "🔄 Devam Ediyor")}
     </p>
     <div class="dash-kart-satir">
       <div class="dash-kart"><div class="dash-kart-sayi">{sayilan}/{toplam}</div><div class="dash-kart-etiket">Sayıldı</div></div>
@@ -2862,6 +2892,7 @@ def sayim_detay(sayim_id):
         <div style="width:{yuzde}%;height:100%;background:linear-gradient(90deg,#2196F3,#00BCD4);transition:width .4s ease;"></div>
       </div>
     </div>
+    {ust_aksiyon_html}
     {tamamla_buton}
     {kalem_html}
     <a href="/sayimlar" class="okut-kart okut-mor"><div class="okut-ikon">📋</div><div class="okut-metin"><div class="okut-baslik">Tüm Sayımlara Dön</div></div><div class="okut-ok">›</div></a>
@@ -2876,6 +2907,39 @@ def sayim_detay(sayim_id):
         body: 'sayilan=' + encodeURIComponent(sayilan)
       }}).then(() => location.reload());
     }}
+
+    let sayimUrunAramaZamanlayici;
+    function sayimUrunAra(){{
+        clearTimeout(sayimUrunAramaZamanlayici);
+        const q = document.getElementById('sayim-urun-arama').value.trim();
+        const sonucKutu = document.getElementById('sayim-urun-arama-sonuc');
+        if(q.length < 1){{ sonucKutu.style.display = 'none'; return; }}
+        sayimUrunAramaZamanlayici = setTimeout(() => {{
+            fetch('/urun_ara?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(d => {{
+                    if(!d.length){{ sonucKutu.style.display = 'none'; return; }}
+                    sonucKutu.innerHTML = d.map(u =>
+                        `<div class="urun-arama-satir" onclick="sayimUrunSec('${{u.barkod}}', '${{u.ad.replace(/'/g, "\\'")}}')">
+                            <b>${{u.ad}}</b> <span style="color:var(--muted);">(${{u.adet}} adet)</span>
+                        </div>`
+                    ).join('');
+                    sonucKutu.style.display = 'block';
+                }});
+        }}, 200);
+    }}
+    function sayimUrunSec(barkod, ad){{
+        document.getElementById('sayim-urun-barkod').value = barkod;
+        document.getElementById('sayim-urun-arama').value = ad;
+        document.getElementById('sayim-urun-arama-sonuc').style.display = 'none';
+        document.getElementById('sayim-urun-ekle-form').submit();
+    }}
+    document.addEventListener('click', function(e){{
+      const kutu = document.getElementById('sayim-urun-arama-sonuc');
+      if(kutu && !kutu.contains(e.target) && e.target.id !== 'sayim-urun-arama'){{
+        kutu.style.display = 'none';
+      }}
+    }});
     </script>
     """
     return sayfa(icerik, "Sayım Detayı")
@@ -2924,6 +2988,65 @@ def sayim_tamamla(sayim_id):
     finally:
         con.close()
     log_aktivite("Stok Sayımı Tamamlandı", f"Sayım #{sayim_id} — {len(farklar)} üründe düzeltme yapıldı")
+    return redirect(f"/sayim/{sayim_id}")
+
+
+@app.route("/sayim_iptal/<int:sayim_id>", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def sayim_iptal(sayim_id):
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("SELECT depo, durum FROM sayim WHERE id=%s", (sayim_id,))
+                row = cur.fetchone()
+                if not row:
+                    return redirect("/sayimlar")
+                depo, durum = row
+                if durum != "devam":
+                    return redirect(f"/sayim/{sayim_id}")
+                cur.execute("UPDATE sayim SET durum='iptal', bitis_tarihi=%s WHERE id=%s", (tr_simdi(), sayim_id))
+    finally:
+        con.close()
+    log_aktivite("Stok Sayımı İptal Edildi", f"Sayım #{sayim_id} — {depo}")
+    return redirect(f"/sayim/{sayim_id}")
+
+
+@app.route("/sayim_urun_ekle/<int:sayim_id>", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def sayim_urun_ekle(sayim_id):
+    barkod = request.form.get("barkod", "").strip()
+    if not barkod:
+        return redirect(f"/sayim/{sayim_id}")
+
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("SELECT depo, durum FROM sayim WHERE id=%s", (sayim_id,))
+                sayim_row = cur.fetchone()
+                if not sayim_row or sayim_row[1] != "devam":
+                    return redirect(f"/sayim/{sayim_id}")
+                depo = sayim_row[0]
+
+                cur.execute("SELECT ad, adet FROM urun WHERE barkod=%s AND silindi IS NOT TRUE", (barkod,))
+                urun_row = cur.fetchone()
+                if not urun_row:
+                    return redirect(f"/sayim/{sayim_id}")
+                ad, sistem_adet = urun_row
+
+                cur.execute("SELECT id FROM sayim_kalem WHERE sayim_id=%s AND barkod=%s", (sayim_id, barkod))
+                if cur.fetchone():
+                    # Zaten bu sayımda var, tekrar eklenmesin
+                    return redirect(f"/sayim/{sayim_id}")
+
+                cur.execute("""
+                    INSERT INTO sayim_kalem (sayim_id, barkod, ad, sistem_adet, sayilan_adet, sayildi)
+                    VALUES (%s,%s,%s,%s,NULL,FALSE)
+                """, (sayim_id, barkod, ad, sistem_adet))
+    finally:
+        con.close()
+    log_aktivite("Sayıma Ürün Eklendi", f"Sayım #{sayim_id} — {ad}")
     return redirect(f"/sayim/{sayim_id}")
 
 
@@ -5005,6 +5128,18 @@ def laminant_hesap():
                 ORDER BY ad
             """)
             urunler = cur.fetchall()
+
+            # Süpürgelik/kabron gibi laminant ile ilişkili ama paket bilgisi
+            # hâlâ girilmemiş ürünleri bulup kullanıcıya net şekilde gösteriyoruz
+            # (yanlış tahmin yapıp otomatik doldurmak yerine).
+            cur.execute("""
+                SELECT ad, barkod, cins FROM urun
+                WHERE silindi IS NOT TRUE
+                AND paket_m2 IS NULL AND paket_metre IS NULL
+                AND (cins ILIKE %s OR cins ILIKE %s OR cins ILIKE %s OR cins ILIKE %s OR cins ILIKE %s)
+                ORDER BY ad
+            """, ('%süpürgelik%', '%supurgelik%', '%kabron%', '%laminant%', '%laminat%'))
+            eksik_urunler = cur.fetchall()
     finally:
         con.close()
 
@@ -5021,16 +5156,38 @@ def laminant_hesap():
         for ad, barkod, paket_m2, paket_metre, f_pesin, f_kkart, f_3tak, f_aysonu in urunler
     ], ensure_ascii=False)
 
+    eksik_html = ""
+    if eksik_urunler:
+        eksik_satirlar = "".join(
+            f'<a href="/duzenle/{barkod}" class="dash-liste-satir" style="text-decoration:none;color:inherit;">'
+            f'<span>{ad} <span style="color:var(--muted);font-size:11.5px;">({cins or "-"})</span></span>'
+            f'<span class="dash-liste-deger">Doldur ✏️</span></a>'
+            for ad, barkod, cins in eksik_urunler
+        )
+        eksik_html = f"""
+        <div class="kart" style="border-color:rgba(230,126,34,.4);">
+          <label style="color:#e67e22;">⚠️ Paket Bilgisi Eksik Olan Ürünler ({len(eksik_urunler)})</label>
+          <p style="font-size:12.5px;color:var(--muted);margin-top:0;">
+            Bu ürünler süpürgelik/kabron/laminant kategorisinde ama "1 Paket Kaç M²" veya
+            "1 Paket Kaç Metre" bilgisi girilmediği için hesap makinesinde <b>seçilemiyor</b>.
+            Doldurmak için üstüne tıklayın.
+          </p>
+          {eksik_satirlar}
+        </div>
+        """
+
     if not urunler:
         icerik = (
             '<h2>📐 Laminant Hesap</h2>'
-            '<p class="hata">❌ Henüz "1 Paket Kaç M²" veya "1 Paket Kaç Metre" bilgisi girilmiş ürün yok.'
+            + eksik_html
+            + '<p class="hata">❌ Henüz "1 Paket Kaç M²" veya "1 Paket Kaç Metre" bilgisi girilmiş ürün yok.'
             '<br><br>Önce Ürün Ekle/Düzenle sayfasından ilgili laminant/süpürgelik ürünlerine bu bilgiyi girin.</p>'
             '<a class="btn gri" href="/liste">⬅ Stok Listesine Dön</a>'
         )
         return sayfa(icerik, "Laminant Hesap")
 
     icerik = """
+    """ + eksik_html + """
     <h2 style="margin-bottom:2px;">📐 Laminant Hesap</h2>
     <p style="text-align:center;color:var(--muted);margin-top:0;">Birden fazla oda ekleyip toplu hesaplayabilirsiniz</p>
 
@@ -5116,10 +5273,10 @@ def laminant_hesap():
     function hesapla(){
         const odemeTuru = document.getElementById('odeme-turu').value;
         const odalar = document.querySelectorAll('#oda-liste > div');
-        let sonucHtml = '';
-        let genelToplam = 0;
-        let gecerliVarMi = false;
-        const urunOzet = {};  // urun adi -> {paket: 0, birim: 'm²'/'m', tutar: 0}
+
+        // 1. GEÇİŞ: her odayı gezip, her ürün için HAM (yuvarlanmamış) miktarı topla.
+        // Aynı ürün birden fazla odada seçilmişse, m²/metre ihtiyaçları burada birleşir.
+        const urunToplam = {};  // urun adi -> { urun, gerekliToplam, birim, odaListesi: [{ad, miktar}] }
 
         odalar.forEach(odaDiv => {
             const eni = parseFloat(odaDiv.querySelector('.oda-eni').value) || 0;
@@ -5131,80 +5288,76 @@ def laminant_hesap():
 
             const odaBaslik = odaDiv.querySelector('label').textContent.trim();
             const satirlar = odaDiv.querySelectorAll('.satir-liste > div');
-            let odaToplam = 0;
-            let odaHtml = '';
 
             satirlar.forEach(satir => {
                 const select = satir.querySelector('select');
                 const urun = URUNLER[parseInt(select.value)];
                 if(!urun) return;
 
-                let gerekliMiktar, birimBasi, birim;
+                let gerekliMiktar, birim;
                 if(urun.paket_m2){
                     gerekliMiktar = m2;
-                    birimBasi = urun.paket_m2;
                     birim = 'm²';
                 } else if(urun.paket_metre){
                     gerekliMiktar = cevre;
-                    birimBasi = urun.paket_metre;
                     birim = 'm';
                 } else {
                     return;
                 }
 
-                if(gerekliMiktar <= 0 || !birimBasi){
-                    odaHtml += `<div class="dash-liste-satir"><span>${urun.ad}</span><span class="dash-liste-deger">Oda ölçüsü girin</span></div>`;
-                    return;
+                if(!urunToplam[urun.ad]){
+                    urunToplam[urun.ad] = { urun: urun, gerekliToplam: 0, birim: birim, odaListesi: [] };
                 }
-
-                const hamPaket = gerekliMiktar / birimBasi;
-                const paketSayisi = Math.ceil(hamPaket - 1e-9);
-                const birimFiyat = urun[odemeTuru];
-
-                if(!birimFiyat){
-                    odaHtml += `<div class="dash-liste-satir"><span>${urun.ad}</span><span class="dash-liste-deger">Bu ödeme türü için fiyat yok</span></div>`;
-                    return;
-                }
-
-                const tutar = paketSayisi * birimBasi * birimFiyat;
-                odaToplam += tutar;
-                genelToplam += tutar;
-                gecerliVarMi = true;
-
-                if(!urunOzet[urun.ad]) urunOzet[urun.ad] = {paket: 0, birim: birim, tutar: 0};
-                urunOzet[urun.ad].paket += paketSayisi;
-                urunOzet[urun.ad].tutar += tutar;
-
-                odaHtml += `
-                  <div class="dash-liste-satir" style="flex-direction:column;align-items:flex-start;gap:2px;padding:8px 0;">
-                    <div style="display:flex;justify-content:space-between;width:100%;">
-                      <b>${urun.ad}</b><b>${tutar.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL</b>
-                    </div>
-                    <div style="font-size:11.5px;color:var(--muted);">
-                      ${gerekliMiktar.toFixed(2).replace('.', ',')} ${birim} ihtiyaç → <b>${paketSayisi} paket</b>
-                      (paket başı ${birimBasi} ${birim} × ${birimFiyat.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL)
-                    </div>
-                  </div>`;
+                urunToplam[urun.ad].gerekliToplam += gerekliMiktar;
+                urunToplam[urun.ad].odaListesi.push({ ad: odaBaslik, miktar: gerekliMiktar });
             });
-
-            if(odaHtml){
-                sonucHtml += `<div style="margin-bottom:10px;"><div style="font-weight:700;font-size:13px;margin-bottom:4px;">${odaBaslik} — ${odaToplam.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL</div>${odaHtml}</div>`;
-            }
         });
 
-        // Ürün bazlı genel özet (kaç paket laminant, kaç paket süpürgelik vb.)
-        const ozetAnahtarlari = Object.keys(urunOzet);
+        // 2. GEÇİŞ: her ürün için TOPLAM miktar üzerinden TEK SEFERDE yukarı yuvarla ve fiyatlandır.
+        const urunAdlari = Object.keys(urunToplam);
+        let genelToplam = 0;
         let ozetHtml = '';
-        ozetAnahtarlari.forEach(ad => {
-            const o = urunOzet[ad];
-            ozetHtml += `<div class="dash-liste-satir"><span>${ad}</span><span class="dash-liste-deger"><b>${o.paket} paket</b> — ${o.tutar.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL</span></div>`;
-        });
-        document.getElementById('ozet-liste').innerHTML = ozetHtml;
-        document.getElementById('ozet-kart').style.display = ozetAnahtarlari.length ? 'block' : 'none';
+        let detayHtml = '';
 
-        document.getElementById('sonuc-liste').innerHTML = sonucHtml || '<p style="color:var(--muted);font-size:13px;">Bir oda ve ürün ekleyin.</p>';
+        urunAdlari.forEach(ad => {
+            const kayit = urunToplam[ad];
+            const urun = kayit.urun;
+            const birimBasi = urun.paket_m2 || urun.paket_metre;
+            const birimFiyat = urun[odemeTuru];
+
+            if(kayit.gerekliToplam <= 0){
+                ozetHtml += `<div class="dash-liste-satir"><span>${ad}</span><span class="dash-liste-deger">Oda ölçüsü girin</span></div>`;
+                return;
+            }
+            if(!birimFiyat){
+                ozetHtml += `<div class="dash-liste-satir"><span>${ad}</span><span class="dash-liste-deger">Bu ödeme türü için fiyat yok</span></div>`;
+                return;
+            }
+
+            const hamPaket = kayit.gerekliToplam / birimBasi;
+            const paketSayisi = Math.ceil(hamPaket - 1e-9);  // TOPLAM üzerinden TEK yuvarlama
+            const tutar = paketSayisi * birimBasi * birimFiyat;
+            genelToplam += tutar;
+
+            const odaDagilimi = kayit.odaListesi.map(o => `${o.ad}: ${o.miktar.toFixed(2).replace('.', ',')} ${kayit.birim}`).join(' + ');
+
+            ozetHtml += `
+              <div class="dash-liste-satir" style="flex-direction:column;align-items:flex-start;gap:2px;padding:10px 0;">
+                <div style="display:flex;justify-content:space-between;width:100%;">
+                  <b>${ad}</b><b>${tutar.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL</b>
+                </div>
+                <div style="font-size:11.5px;color:var(--muted);">
+                  ${kayit.odaListesi.length > 1 ? odaDagilimi + ' = ' : ''}${kayit.gerekliToplam.toFixed(2).replace('.', ',')} ${kayit.birim} toplam ihtiyaç → <b>${paketSayisi} paket</b>
+                  (paket başı ${birimBasi} ${kayit.birim} × ${birimFiyat.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL)
+                </div>
+              </div>`;
+        });
+
+        document.getElementById('ozet-liste').innerHTML = ozetHtml || '<p style="color:var(--muted);font-size:13px;">Bir oda ve ürün ekleyin.</p>';
+        document.getElementById('ozet-kart').style.display = 'block';
+        document.getElementById('sonuc-liste').innerHTML = '';
         document.getElementById('sonuc-toplam').textContent = genelToplam.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' TL';
-        document.getElementById('sonuc-kart').style.display = (gecerliVarMi || odalar.length) ? 'block' : 'none';
+        document.getElementById('sonuc-kart').style.display = (urunAdlari.length || odalar.length) ? 'block' : 'none';
     }
 
     // Sayfa açılışında bir oda ekli gelsin
