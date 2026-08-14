@@ -204,6 +204,33 @@ def tablolari_olustur():
                 cur.execute("""
                 ALTER TABLE urun ADD COLUMN IF NOT EXISTS paket_metre NUMERIC(10,4)
                 """)
+                # Laminant ürünlerde "Ebat" kutusuna daha önce elle paket m2 değeri
+                # yazılmış olabilir (örn. "2,26"). Bu değeri, gerçekten sayı formatındaysa
+                # (yanlışlıkla "210*280" gibi bir ölçü metnini bozmadan) otomatik olarak
+                # Paket M² alanına taşıyoruz. Sadece paket_m2 boşsa çalışır, güvenlidir,
+                # tekrar tekrar çalıştırılsa da veri bozmaz.
+                cur.execute("""
+                    UPDATE urun
+                    SET paket_m2 = CASE
+                        WHEN TRIM(ebat) ~ '^[0-9]+([.,][0-9]+)?$'
+                        THEN REPLACE(TRIM(ebat), ',', '.')::NUMERIC
+                        ELSE paket_m2
+                    END
+                    WHERE paket_m2 IS NULL
+                    AND cins ILIKE %s
+                    AND TRIM(ebat) ~ '^[0-9]+([.,][0-9]+)?$'
+                """, ('%laminant%',))
+                cur.execute("""
+                    UPDATE urun
+                    SET paket_m2 = CASE
+                        WHEN TRIM(ebat) ~ '^[0-9]+([.,][0-9]+)?$'
+                        THEN REPLACE(TRIM(ebat), ',', '.')::NUMERIC
+                        ELSE paket_m2
+                    END
+                    WHERE paket_m2 IS NULL
+                    AND cins ILIKE %s
+                    AND TRIM(ebat) ~ '^[0-9]+([.,][0-9]+)?$'
+                """, ('%laminat%',))
                 cur.execute("""
                 CREATE TABLE IF NOT EXISTS urun_barkod(
                     id SERIAL PRIMARY KEY,
