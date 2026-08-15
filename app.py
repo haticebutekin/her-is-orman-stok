@@ -222,6 +222,19 @@ def tablolari_olustur():
                         AND cins ILIKE %s
                         AND TRIM(ebat) ~ '^[0-9]+([.,][0-9]+)?$'
                     """, (_varyasyon,))
+                # Süpürgelik: 1 paket/parça = 2,8 metre (kullanıcı tarafından belirtildi)
+                for _varyasyon in ('%süpürgelik%', '%supurgelik%'):
+                    cur.execute("""
+                        UPDATE urun
+                        SET paket_metre = 2.8
+                        WHERE paket_metre IS NULL AND paket_m2 IS NULL AND cins ILIKE %s
+                    """, (_varyasyon,))
+                # Kabron: 1 birim = 1 m² (kullanıcı tarafından belirtildi)
+                cur.execute("""
+                    UPDATE urun
+                    SET paket_m2 = 1
+                    WHERE paket_m2 IS NULL AND paket_metre IS NULL AND cins ILIKE %s
+                """, ('%kabron%',))
                 cur.execute("""
                 CREATE TABLE IF NOT EXISTS urun_barkod(
                     id SERIAL PRIMARY KEY,
@@ -5228,11 +5241,12 @@ def laminant_hesap():
       </select>
     </div>
 
+    <div class="bolum-baslik">🚪 Odalar</div>
     <div id="oda-liste"></div>
 
     <button type="button" class="okut-kart okut-mavi" style="border:none;width:100%;cursor:pointer;" onclick="odaEkle()">
       <div class="okut-ikon">➕</div>
-      <div class="okut-metin"><div class="okut-baslik">Oda Ekle</div></div>
+      <div class="okut-metin"><div class="okut-baslik">Yeni Oda Ekle</div></div>
     </button>
 
     <div class="kart" id="ozet-kart" style="display:none;">
@@ -5387,7 +5401,10 @@ def laminant_hesap():
         document.getElementById('sonuc-kart').style.display = (urunAdlari.length || odalar.length) ? 'block' : 'none';
     }
 
-    // Sayfa açılışında bir oda ekli gelsin
+    // Sayfa açılışında birden fazla oda hazır gelsin (her seferinde "Oda Ekle"ye
+    // basmak zorunda kalınmasın)
+    odaEkle();
+    odaEkle();
     odaEkle();
     </script>
     """
