@@ -235,6 +235,13 @@ def tablolari_olustur():
                     SET paket_m2 = 1
                     WHERE paket_m2 IS NULL AND paket_metre IS NULL AND cins ILIKE %s
                 """, ('%kabron%',))
+                # Şilte: ekran görüntüsündeki tabloya göre kabron gibi 1 m² (TERMAL ŞİLTE, 03 MM ŞİLTE vb.)
+                for _varyasyon in ('%şilte%', '%silte%'):
+                    cur.execute("""
+                        UPDATE urun
+                        SET paket_m2 = 1
+                        WHERE paket_m2 IS NULL AND paket_metre IS NULL AND cins ILIKE %s
+                    """, (_varyasyon,))
                 cur.execute("""
                 CREATE TABLE IF NOT EXISTS urun_barkod(
                     id SERIAL PRIMARY KEY,
@@ -5037,15 +5044,22 @@ def fiyat_toplu_yukle():
         idx_kkart = sutun_bul("k.kartı", "kkarti", "k.krti", "kredi kartı", "kredi karti")
         idx_3taksit = sutun_bul("3 taksit", "3taksit", "3 tkst")
         idx_aysonu = sutun_bul("ay sonu", "aysonu")
+        idx_cins = sutun_bul("cins")
+        idx_ebat = sutun_bul("ebat")
+        idx_depo = sutun_bul("depo")
+        idx_paket_m2 = sutun_bul("paket m2", "paket m²", "paketm2")
+        idx_paket_metre = sutun_bul("paket metre", "paketmetre")
 
         if idx_ad is None:
             return sayfa(
                 '<p class="hata">❌ Excel\'de "Ad" (ürün adı) sütunu bulunamadı.</p>'
-                '<p style="text-align:center;color:var(--muted);font-size:13px;">Beklenen sütunlar: Ad, Peşin, K.Kartı, 3 Taksit, Ay Sonu</p>'
+                '<p style="text-align:center;color:var(--muted);font-size:13px;">Beklenen sütunlar: Ad, Cins, Ebat, Depo, Peşin, K.Kartı, 3 Taksit, Ay Sonu, Paket M2, Paket Metre</p>'
                 '<a class="btn gri" href="/fiyat_toplu_yukle">⬅ Geri Dön</a>', "Hata")
 
         guncellenenler = []
-        eslesmeyenler = []
+        eklenenler = []
+        atlananlar = []
+        varsayilan_depo = DEPOLAR[0] if DEPOLAR else ""
 
         con = db()
         try:
@@ -5058,8 +5072,7 @@ def fiyat_toplu_yukle():
                         def deger_al(idx):
                             if idx is None or idx >= len(satir):
                                 return None
-                            v = satir[idx]
-                            return v
+                            return satir[idx]
 
                         ad_ham = deger_al(idx_ad)
                         if ad_ham is None or str(ad_ham).strip() == "":
@@ -5070,57 +5083,63 @@ def fiyat_toplu_yukle():
                         f_kkart = fiyat_ayristir(deger_al(idx_kkart))
                         f_3taksit = fiyat_ayristir(deger_al(idx_3taksit))
                         f_aysonu = fiyat_ayristir(deger_al(idx_aysonu))
+                        p_m2 = fiyat_ayristir(deger_al(idx_paket_m2))
+                        p_metre = fiyat_ayristir(deger_al(idx_paket_metre))
+                        cins = str(deger_al(idx_cins) or "").strip()
+                        ebat = str(deger_al(idx_ebat) or "").strip()
+                        depo = str(deger_al(idx_depo) or "").strip() or varsayilan_depo
 
-                        if f_pesin is None and f_kkart is None and f_3taksit is None and f_aysonu is None:
-                            continue  # bu satırda hiç fiyat yok, atla
+                        if (f_pesin is None and f_kkart is None and f_3taksit is None and f_aysonu is None
+                                and p_m2 is None and p_metre is None):
+                            atlananlar.append(ad)
+                            continue  # bu satırda hiç fiyat/paket bilgisi yok, atla
 
-                        # Ürün adına göre (büyük/küçük harf duyarsız) tam eşleşme ara
+                        # Önce mevcut ürünü ada göre (büyük/küçük harf duyarsız) güncellemeyi dene
                         cur.execute("""
                             UPDATE urun SET
                                 fiyat_pesin = COALESCE(%s, fiyat_pesin),
                                 fiyat_kkart = COALESCE(%s, fiyat_kkart),
                                 fiyat_3taksit = COALESCE(%s, fiyat_3taksit),
-                                fiyat_aysonu = COALESCE(%s, fiyat_aysonu)
+                                fiyat_aysonu = COALESCE(%s, fiyat_aysonu),
+                                paket_m2 = COALESCE(%s, paket_m2),
+                                paket_metre = COALESCE(%s, paket_metre)
                             WHERE silindi IS NOT TRUE AND UPPER(TRIM(ad)) = UPPER(%s)
-                        """, (f_pesin, f_kkart, f_3taksit, f_aysonu, ad))
+                        """, (f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre, ad))
 
                         if cur.rowcount > 0:
                             guncellenenler.append(f"{ad} ({cur.rowcount} kayıt)")
                         else:
-                            eslesmeyenler.append(ad)
+                            # Ürün sistemde yoksa, Excel'deki bilgilerle YENİ ürün olarak oluştur
+                            yeni_barkod = barkod_uret()
+                            cur.execute("""
+                                INSERT INTO urun (ad, cins, ebat, adet, depo, barkod, min_stok,
+                                                   fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu,
+                                                   paket_m2, paket_metre)
+                                VALUES (%s,%s,%s,0,%s,%s,5,%s,%s,%s,%s,%s,%s)
+                            """, (ad, cins, ebat, depo, yeni_barkod, f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre))
+                            eklenenler.append(ad)
         finally:
             con.close()
 
-        log_aktivite("Fiyat Listesi Toplu Yüklendi", f"{len(guncellenenler)} ürün güncellendi, {len(eslesmeyenler)} eşleşmedi")
+        log_aktivite("Fiyat Listesi Toplu Yüklendi",
+                      f"{len(guncellenenler)} ürün güncellendi, {len(eklenenler)} yeni ürün eklendi")
 
-        eslesmeyen_html = ""
-        if eslesmeyenler:
-            eslesmeyen_html = (
-                '<div class="kart">'
-                '<label style="color:#e67e22;">⚠️ Eşleşmeyen Ürünler (' + str(len(eslesmeyenler)) + ')</label>'
-                '<p style="font-size:12.5px;color:var(--muted);margin-top:0;">'
-                'Bu isimler stok listenizdeki ürün adlarıyla birebir eşleşmedi, fiyatları güncellenmedi. '
-                'Excel\'deki ürün adını sistemdeki ile birebir aynı yazın (büyük/küçük harf önemli değil).</p>'
-                + "".join(f'<div style="font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--border);">{ad}</div>' for ad in eslesmeyenler[:50])
-                + ('<p style="font-size:11.5px;color:var(--muted);">... ve ' + str(len(eslesmeyenler) - 50) + ' tane daha</p>' if len(eslesmeyenler) > 50 else '')
-                + '</div>'
-            )
-
-        guncellenen_html = ""
-        if guncellenenler:
-            guncellenen_html = (
-                '<div class="kart">'
-                '<label style="color:#27ae60;">✅ Güncellenen Ürünler (' + str(len(guncellenenler)) + ')</label>'
-                + "".join(f'<div style="font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--border);">{ad}</div>' for ad in guncellenenler[:50])
-                + ('<p style="font-size:11.5px;color:var(--muted);">... ve ' + str(len(guncellenenler) - 50) + ' tane daha</p>' if len(guncellenenler) > 50 else '')
+        def _liste_kutusu(baslik, renk, liste):
+            if not liste:
+                return ""
+            return (
+                f'<div class="kart"><label style="color:{renk};">{baslik} ({len(liste)})</label>'
+                + "".join(f'<div style="font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--border);">{ad}</div>' for ad in liste[:50])
+                + (f'<p style="font-size:11.5px;color:var(--muted);">... ve {len(liste) - 50} tane daha</p>' if len(liste) > 50 else '')
                 + '</div>'
             )
 
         icerik = (
-            '<div style="text-align:center;font-size:52px;margin-bottom:4px;">' + ('✅' if guncellenenler else '⚠️') + '</div>'
+            '<div style="text-align:center;font-size:52px;margin-bottom:4px;">' + ('✅' if (guncellenenler or eklenenler) else '⚠️') + '</div>'
             + '<h2 style="margin-top:0;text-align:center;">Fiyat Yükleme Tamamlandı</h2>'
-            + guncellenen_html
-            + eslesmeyen_html
+            + f'<p style="text-align:center;color:var(--muted);">{len(guncellenenler)} ürün güncellendi, {len(eklenenler)} yeni ürün eklendi</p>'
+            + _liste_kutusu("✅ Güncellenen Ürünler", "#27ae60", guncellenenler)
+            + _liste_kutusu("🆕 Yeni Eklenen Ürünler", "#2196F3", eklenenler)
             + '<a href="/rapor/pdf?tur=fiyat" class="okut-kart okut-mor"><div class="okut-ikon">💰</div><div class="okut-metin"><div class="okut-baslik">Fiyat Listesi PDF\'i Aç</div></div><div class="okut-ok">›</div></a>'
             + '<a href="/fiyat_toplu_yukle" class="okut-kart okut-yesil"><div class="okut-ikon">📥</div><div class="okut-metin"><div class="okut-baslik">Tekrar Yükle</div></div><div class="okut-ok">›</div></a>'
         )
@@ -5129,30 +5148,64 @@ def fiyat_toplu_yukle():
     icerik = """
     <h2 style="margin-bottom:2px;">💰 Fiyat Listesi Toplu Yükle</h2>
     <p style="text-align:center;color:var(--muted);margin-top:0;">
-    Excel'deki fiyatları, ürün adına göre eşleştirerek sistemdeki ürünlere otomatik işler.
+    Excel'deki ürünleri fiyatlarıyla birlikte sisteme aktarır. Sistemde olmayan ürünler otomatik oluşturulur.
     </p>
 
     <div class="kart">
       <label style="margin-top:0;">Excel Sütun Başlıkları</label>
       <p style="font-size:13px;color:var(--muted);margin:4px 0 0;">
         İlk satırda şu başlıklar olmalı (sırası önemli değil):<br>
-        <b style="color:var(--text);">Ad</b> (zorunlu), <b style="color:var(--text);">Peşin</b>, <b style="color:var(--text);">K.Kartı</b>, <b style="color:var(--text);">3 Taksit</b>, <b style="color:var(--text);">Ay Sonu</b>
+        <b style="color:var(--text);">Ad</b> (zorunlu), <b style="color:var(--text);">Cins</b>, <b style="color:var(--text);">Ebat</b>, <b style="color:var(--text);">Depo</b>,
+        <b style="color:var(--text);">Peşin</b>, <b style="color:var(--text);">K.Kartı</b>, <b style="color:var(--text);">3 Taksit</b>, <b style="color:var(--text);">Ay Sonu</b>,
+        <b style="color:var(--text);">Paket M2</b>, <b style="color:var(--text);">Paket Metre</b>
       </p>
       <p style="font-size:12.5px;color:var(--muted);margin-top:8px;">
-        📌 "Ad" sütunundaki ürün adı, sistemdeki ürün adıyla <b>birebir</b> (harf büyüklüğü önemsiz) eşleşmelidir.
-        Eşleşmeyen satırlar atlanır ve yükleme sonunda listelenir.
+        📌 Ürün adı sistemde <b>varsa</b> güncellenir; <b>yoksa</b> Excel'deki bilgilerle
+        (Cins, Ebat, Depo dahil) <b>otomatik olarak yeni ürün</b> oluşturulur ve barkod üretilir.
+        Cins/Ebat/Depo boş bırakılırsa varsayılan değerlerle eklenir.
       </p>
+    </div>
+
+    <div class="kart">
+      <label style="margin-top:0;">📥 Şablon İndir</label>
+      <p style="font-size:12.5px;color:var(--muted);margin:4px 0 8px;">
+        Boş bir Excel şablonu indirip doldurarak yükleyebilirsiniz.
+      </p>
+      <a href="/fiyat_sablon.xlsx" class="btn mavi" style="display:block;text-align:center;text-decoration:none;">Şablonu İndir</a>
     </div>
 
     <form method="post" enctype="multipart/form-data">
     <div class="kart">
-      <label>Excel Dosyası (.xlsx)</label>
+      <label>Excel Dosyası (.xlsx veya .xls)</label>
       <input type="file" name="dosya" accept=".xlsx,.xls" required>
       <button class="btn mavi" style="margin-top:10px;">Yükle ve Fiyatları Güncelle</button>
     </div>
     </form>
     """
     return sayfa(icerik, "Fiyat Listesi Toplu Yükle")
+
+
+@app.route("/fiyat_sablon.xlsx")
+@rol_gerekli("muhasebeci")
+def fiyat_sablon():
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Fiyat Listesi"
+    basliklar = ["Ad", "Cins", "Ebat", "Depo", "Peşin", "K.Kartı", "3 Taksit", "Ay Sonu", "Paket M2", "Paket Metre"]
+    ws.append(basliklar)
+    ws.append(["TERRA CLİCK", "LAMİNANT PARKE", "TAKIM", DEPOLAR[0] if DEPOLAR else "", 335.00, 345.11, 363.85, 352.00, 2.3071, ""])
+    ws.append(["6 CM SÜPÜRGELİK", "SÜPÜRGELİK", "280 CM", DEPOLAR[0] if DEPOLAR else "", 90.00, 92.72, 97.75, 100.00, "", 2.8])
+    ws.append(["KABRON (M2)", "KABRON", "", DEPOLAR[0] if DEPOLAR else "", 25.00, 25.75, 27.15, 27.50, 1, ""])
+    for col in ws.columns:
+        max_len = max(len(str(c.value)) if c.value is not None else 0 for c in col)
+        ws.column_dimensions[col[0].column_letter].width = max_len + 3
+
+    bio = io.BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    return send_file(bio, as_attachment=True, download_name="fiyat_sablon.xlsx",
+                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
 @app.route("/laminant_hesap")
