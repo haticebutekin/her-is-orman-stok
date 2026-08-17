@@ -204,6 +204,9 @@ def tablolari_olustur():
                 cur.execute("""
                 ALTER TABLE urun ADD COLUMN IF NOT EXISTS paket_metre NUMERIC(10,4)
                 """)
+                cur.execute("""
+                ALTER TABLE urun ADD COLUMN IF NOT EXISTS paket_m2_fatura NUMERIC(10,4)
+                """)
                 # Laminant ürünlerde "Ebat" kutusuna daha önce elle paket m2 değeri
                 # yazılmış olabilir (örn. "2,26"). Bu değeri, gerçekten sayı formatındaysa
                 # (yanlışlıkla "210*280" gibi bir ölçü metnini bozmadan) otomatik olarak
@@ -221,6 +224,13 @@ def tablolari_olustur():
                         WHERE paket_m2 IS NULL
                         AND cins ILIKE %s
                         AND TRIM(ebat) ~ '^[0-9]+([.,][0-9]+)?$'
+                    """, (_varyasyon,))
+                    # Fatura M² (fiyatlandırmada kullanılan, kapsama m²'sinden FARKLI olabilen
+                    # değer): ekran görüntüsünde doğrulanmış sabit değer 2,3071
+                    cur.execute("""
+                        UPDATE urun
+                        SET paket_m2_fatura = 2.3071
+                        WHERE paket_m2_fatura IS NULL AND paket_m2 IS NOT NULL AND cins ILIKE %s
                     """, (_varyasyon,))
                 # Süpürgelik: 1 paket/parça = 2,8 metre (kullanıcı tarafından belirtildi)
                 for _varyasyon in ('%süpürgelik%', '%supurgelik%'):
@@ -1965,6 +1975,7 @@ def ekle2():
         fiyat_aysonu = fiyat_ayristir(request.form.get("fiyat_aysonu", ""))
         paket_m2 = fiyat_ayristir(request.form.get("paket_m2", ""))
         paket_metre = fiyat_ayristir(request.form.get("paket_metre", ""))
+        paket_m2_fatura = fiyat_ayristir(request.form.get("paket_m2_fatura", ""))
 
         con = db()
         try:
@@ -1977,8 +1988,8 @@ def ekle2():
                             ON CONFLICT (ad) DO NOTHING
                         """, (tedarikci, tr_simdi()))
                     cur.execute("""
-                    INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok,son_tedarikci,fiyat_pesin,fiyat_kkart,fiyat_3taksit,fiyat_aysonu,paket_m2,paket_metre)
-                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    INSERT INTO urun(ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok,son_tedarikci,fiyat_pesin,fiyat_kkart,fiyat_3taksit,fiyat_aysonu,paket_m2,paket_metre,paket_m2_fatura)
+                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """, (
                         ad,
                         request.form.get("cins", ""),
@@ -1993,7 +2004,7 @@ def ekle2():
                         min_stok,
                         tedarikci or None,
                         fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu,
-                        paket_m2, paket_metre,
+                        paket_m2, paket_metre, paket_m2_fatura,
                     ))
                     cur.execute("""
                     INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih, tedarikci)
@@ -2092,9 +2103,11 @@ def ekle2():
     <div class="kart">
     <label>Laminant Hesap Bilgisi (isteğe bağlı — sadece laminant/süpürgelik ürünlerinde doldurun)</label>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px;">
-      <div><label style="margin-top:0;">1 Paket Kaç M²</label><input name="paket_m2" placeholder="Örn: 2,26" inputmode="decimal"></div>
-      <div><label style="margin-top:0;">1 Paket/Kutu Kaç Metre</label><input name="paket_metre" placeholder="Örn: 16,8 (süpürgelik için)" inputmode="decimal"></div>
+      <div><label style="margin-top:0;">1 Paket Kaç M² (Kapsama)</label><input name="paket_m2" placeholder="Örn: 2,26" inputmode="decimal"></div>
+      <div><label style="margin-top:0;">1 Paket/Kutu Kaç Metre</label><input name="paket_metre" placeholder="Örn: 2,8 (süpürgelik için)" inputmode="decimal"></div>
     </div>
+    <label>Fatura M² (fiyatlandırmada kullanılır, kapsamadan farklıysa doldurun — örn: 2,3071)</label>
+    <input name="paket_m2_fatura" placeholder="Boş bırakılırsa kapsama m² kullanılır" inputmode="decimal">
     </div>
 
     <button class="btn mavi">Kaydet</button>
@@ -2398,6 +2411,7 @@ def duzenle(eski_barkod):
         fiyat_aysonu = fiyat_ayristir(request.form.get("fiyat_aysonu", ""))
         paket_m2 = fiyat_ayristir(request.form.get("paket_m2", ""))
         paket_metre = fiyat_ayristir(request.form.get("paket_metre", ""))
+        paket_m2_fatura = fiyat_ayristir(request.form.get("paket_m2_fatura", ""))
 
         con = db()
         try:
@@ -2414,7 +2428,7 @@ def duzenle(eski_barkod):
                     cur.execute("""
                         UPDATE urun
                         SET ad=%s, cins=%s, ebat=%s, kalinlik=%s, yuzey=%s, sinif=%s, renk=%s, adet=%s, depo=%s, barkod=%s, min_stok=%s,
-                            fiyat_pesin=%s, fiyat_kkart=%s, fiyat_3taksit=%s, fiyat_aysonu=%s, paket_m2=%s, paket_metre=%s
+                            fiyat_pesin=%s, fiyat_kkart=%s, fiyat_3taksit=%s, fiyat_aysonu=%s, paket_m2=%s, paket_metre=%s, paket_m2_fatura=%s
                         WHERE barkod=%s
                     """, (
                         ad,
@@ -2429,7 +2443,7 @@ def duzenle(eski_barkod):
                         yeni_barkod,
                         min_stok,
                         fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu,
-                        paket_m2, paket_metre,
+                        paket_m2, paket_metre, paket_m2_fatura,
                         eski_barkod,
                     ))
         finally:
@@ -2459,7 +2473,7 @@ def duzenle(eski_barkod):
     con = db()
     try:
         with con.cursor() as cur:
-            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok,fiyat_pesin,fiyat_kkart,fiyat_3taksit,fiyat_aysonu,paket_m2,paket_metre FROM urun WHERE barkod=%s", (eski_barkod,))
+            cur.execute("SELECT ad,cins,ebat,kalinlik,yuzey,sinif,renk,adet,depo,barkod,min_stok,fiyat_pesin,fiyat_kkart,fiyat_3taksit,fiyat_aysonu,paket_m2,paket_metre,paket_m2_fatura FROM urun WHERE barkod=%s", (eski_barkod,))
             row = cur.fetchone()
     finally:
         con.close()
@@ -2467,7 +2481,7 @@ def duzenle(eski_barkod):
     if not row:
         return sayfa('<p class="hata">❌ Ürün bulunamadı.</p><a class="btn gri" href="/liste">⬅ Stok Listesine Dön</a>', "Hata")
 
-    ad, cins, ebat, kalinlik, yuzey, sinif, renk, adet, depo, barkod, min_stok, fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu, paket_m2, paket_metre = row
+    ad, cins, ebat, kalinlik, yuzey, sinif, renk, adet, depo, barkod, min_stok, fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu, paket_m2, paket_metre, paket_m2_fatura = row
 
     def _fmt(f):
         return "" if f is None else f"{f:.2f}".replace(".", ",")
@@ -2537,9 +2551,11 @@ def duzenle(eski_barkod):
     <div class="kart">
     <label>Laminant Hesap Bilgisi (isteğe bağlı — sadece laminant/süpürgelik ürünlerinde doldurun)</label>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px;">
-      <div><label style="margin-top:0;">1 Paket Kaç M²</label><input name="paket_m2" value="{{paket_m2}}" placeholder="Örn: 2,26" inputmode="decimal"></div>
-      <div><label style="margin-top:0;">1 Paket/Kutu Kaç Metre</label><input name="paket_metre" value="{{paket_metre}}" placeholder="Örn: 16,8 (süpürgelik için)" inputmode="decimal"></div>
+      <div><label style="margin-top:0;">1 Paket Kaç M² (Kapsama)</label><input name="paket_m2" value="{{paket_m2}}" placeholder="Örn: 2,26" inputmode="decimal"></div>
+      <div><label style="margin-top:0;">1 Paket/Kutu Kaç Metre</label><input name="paket_metre" value="{{paket_metre}}" placeholder="Örn: 2,8 (süpürgelik için)" inputmode="decimal"></div>
     </div>
+    <label>Fatura M² (fiyatlandırmada kullanılır, kapsamadan farklıysa doldurun — örn: 2,3071)</label>
+    <input name="paket_m2_fatura" value="{{paket_m2_fatura}}" placeholder="Boş bırakılırsa kapsama m² kullanılır" inputmode="decimal">
     <button class="btn mavi">Kaydet</button>
     </div>
     </form>
@@ -2554,7 +2570,7 @@ def duzenle(eski_barkod):
         sinif=sinif, renk=renk, adet=adet, depo=depo, barkod=barkod, min_stok=min_stok, depolar=DEPOLAR,
         fiyat_pesin=_fmt(fiyat_pesin), fiyat_kkart=_fmt(fiyat_kkart),
         fiyat_3taksit=_fmt(fiyat_3taksit), fiyat_aysonu=_fmt(fiyat_aysonu),
-        paket_m2=_fmt4(paket_m2), paket_metre=_fmt4(paket_metre),
+        paket_m2=_fmt4(paket_m2), paket_metre=_fmt4(paket_metre), paket_m2_fatura=_fmt4(paket_m2_fatura),
     )
 
 
@@ -5049,6 +5065,7 @@ def fiyat_toplu_yukle():
         idx_depo = sutun_bul("depo")
         idx_paket_m2 = sutun_bul("paket m2", "paket m²", "paketm2")
         idx_paket_metre = sutun_bul("paket metre", "paketmetre")
+        idx_paket_m2_fatura = sutun_bul("fatura m2", "fatura m²", "paket m2 fatura", "faturam2")
 
         if idx_ad is None:
             return sayfa(
@@ -5085,6 +5102,7 @@ def fiyat_toplu_yukle():
                         f_aysonu = fiyat_ayristir(deger_al(idx_aysonu))
                         p_m2 = fiyat_ayristir(deger_al(idx_paket_m2))
                         p_metre = fiyat_ayristir(deger_al(idx_paket_metre))
+                        p_m2_fatura = fiyat_ayristir(deger_al(idx_paket_m2_fatura))
                         cins = str(deger_al(idx_cins) or "").strip()
                         ebat = str(deger_al(idx_ebat) or "").strip()
                         depo = str(deger_al(idx_depo) or "").strip() or varsayilan_depo
@@ -5108,11 +5126,12 @@ def fiyat_toplu_yukle():
                                 fiyat_3taksit = COALESCE(%s, fiyat_3taksit),
                                 fiyat_aysonu = COALESCE(%s, fiyat_aysonu),
                                 paket_m2 = COALESCE(%s, paket_m2),
-                                paket_metre = COALESCE(%s, paket_metre)
+                                paket_metre = COALESCE(%s, paket_metre),
+                                paket_m2_fatura = COALESCE(%s, paket_m2_fatura)
                             WHERE silindi IS NOT TRUE
                             AND TRANSLATE(UPPER(TRIM(REGEXP_REPLACE(ad, '\\s+', ' ', 'g'))), 'İIıi', 'IIII')
                               = TRANSLATE(UPPER(TRIM(REGEXP_REPLACE(%s, '\\s+', ' ', 'g'))), 'İIıi', 'IIII')
-                        """, (f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre, ad))
+                        """, (f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre, p_m2_fatura, ad))
 
                         if cur.rowcount > 0:
                             guncellenenler.append(f"{ad} ({cur.rowcount} kayıt)")
@@ -5122,9 +5141,9 @@ def fiyat_toplu_yukle():
                             cur.execute("""
                                 INSERT INTO urun (ad, cins, ebat, adet, depo, barkod, min_stok,
                                                    fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu,
-                                                   paket_m2, paket_metre)
-                                VALUES (%s,%s,%s,0,%s,%s,5,%s,%s,%s,%s,%s,%s)
-                            """, (ad, cins, ebat, depo, yeni_barkod, f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre))
+                                                   paket_m2, paket_metre, paket_m2_fatura)
+                                VALUES (%s,%s,%s,0,%s,%s,5,%s,%s,%s,%s,%s,%s,%s)
+                            """, (ad, cins, ebat, depo, yeni_barkod, f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre, p_m2_fatura))
                             eklenenler.append(ad)
         finally:
             con.close()
@@ -5200,11 +5219,11 @@ def fiyat_sablon():
     wb = Workbook()
     ws = wb.active
     ws.title = "Fiyat Listesi"
-    basliklar = ["Ad", "Cins", "Ebat", "Depo", "Peşin", "K.Kartı", "3 Taksit", "Ay Sonu", "Paket M2", "Paket Metre"]
+    basliklar = ["Ad", "Cins", "Ebat", "Depo", "Peşin", "K.Kartı", "3 Taksit", "Ay Sonu", "Paket M2", "Paket Metre", "Fatura M2"]
     ws.append(basliklar)
-    ws.append(["TERRA CLİCK", "LAMİNANT PARKE", "TAKIM", DEPOLAR[0] if DEPOLAR else "", 335.00, 345.11, 363.85, 352.00, 2.3071, ""])
-    ws.append(["6 CM SÜPÜRGELİK", "SÜPÜRGELİK", "280 CM", DEPOLAR[0] if DEPOLAR else "", 90.00, 92.72, 97.75, 100.00, "", 2.8])
-    ws.append(["KABRON (M2)", "KABRON", "", DEPOLAR[0] if DEPOLAR else "", 25.00, 25.75, 27.15, 27.50, 1, ""])
+    ws.append(["TERRA CLİCK", "LAMİNANT PARKE", "TAKIM", DEPOLAR[0] if DEPOLAR else "", 335.00, 345.11, 363.85, 352.00, 2.26, "", 2.3071])
+    ws.append(["6 CM SÜPÜRGELİK", "SÜPÜRGELİK", "280 CM", DEPOLAR[0] if DEPOLAR else "", 90.00, 92.72, 97.75, 100.00, "", 2.8, ""])
+    ws.append(["KABRON (M2)", "KABRON", "", DEPOLAR[0] if DEPOLAR else "", 25.00, 25.75, 27.15, 27.50, 1, "", ""])
     for col in ws.columns:
         max_len = max(len(str(c.value)) if c.value is not None else 0 for c in col)
         ws.column_dimensions[col[0].column_letter].width = max_len + 3
@@ -5223,7 +5242,7 @@ def laminant_hesap():
     try:
         with con.cursor() as cur:
             cur.execute("""
-                SELECT ad, barkod, paket_m2, paket_metre, fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu
+                SELECT ad, barkod, paket_m2, paket_metre, paket_m2_fatura, fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu
                 FROM urun
                 WHERE silindi IS NOT TRUE AND (paket_m2 IS NOT NULL OR paket_metre IS NOT NULL)
                 ORDER BY ad
@@ -5249,12 +5268,15 @@ def laminant_hesap():
             "ad": ad, "barkod": barkod,
             "paket_m2": float(paket_m2) if paket_m2 is not None else None,
             "paket_metre": float(paket_metre) if paket_metre is not None else None,
+            # Fatura M²: fiyatlandırmada kullanılan değer. Girilmemişse kapsama m²'si
+            # ile aynı kabul edilir (kabron/süpürgelik gibi tek değerli ürünlerde davranış aynı kalır).
+            "paket_m2_fatura": float(paket_m2_fatura) if paket_m2_fatura is not None else (float(paket_m2) if paket_m2 is not None else None),
             "fiyat_pesin": float(f_pesin) if f_pesin is not None else None,
             "fiyat_kkart": float(f_kkart) if f_kkart is not None else None,
             "fiyat_3taksit": float(f_3tak) if f_3tak is not None else None,
             "fiyat_aysonu": float(f_aysonu) if f_aysonu is not None else None,
         }
-        for ad, barkod, paket_m2, paket_metre, f_pesin, f_kkart, f_3tak, f_aysonu in urunler
+        for ad, barkod, paket_m2, paket_metre, paket_m2_fatura, f_pesin, f_kkart, f_3tak, f_aysonu in urunler
     ], ensure_ascii=False)
 
     eksik_html = ""
@@ -5424,7 +5446,11 @@ def laminant_hesap():
         urunAdlari.forEach(ad => {
             const kayit = urunToplam[ad];
             const urun = kayit.urun;
+            // Kapsama m² (kaç paket gerektiğini bulmak için) ile fatura m² (fiyatı
+            // hesaplamak için) FARKLI olabilir (örn. laminant parke: 2,26 kapsama,
+            // 2,3071 fatura). Kabron/süpürgelik gibi tek değerli ürünlerde ikisi aynıdır.
             const birimBasi = urun.paket_m2 || urun.paket_metre;
+            const birimBasiFatura = urun.paket_m2 ? (urun.paket_m2_fatura || urun.paket_m2) : birimBasi;
             const birimFiyat = urun[odemeTuru];
 
             if(kayit.gerekliToplam <= 0){
@@ -5438,7 +5464,7 @@ def laminant_hesap():
 
             const hamPaket = kayit.gerekliToplam / birimBasi;
             const paketSayisi = Math.ceil(hamPaket - 1e-9);  // TOPLAM üzerinden TEK yuvarlama
-            const tutar = paketSayisi * birimBasi * birimFiyat;
+            const tutar = paketSayisi * birimBasiFatura * birimFiyat;
             genelToplam += tutar;
 
             const odaDagilimi = kayit.odaListesi.map(o => `${o.ad}: ${o.miktar.toFixed(2).replace('.', ',')} ${kayit.birim}`).join(' + ');
