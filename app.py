@@ -5094,7 +5094,13 @@ def fiyat_toplu_yukle():
                             atlananlar.append(ad)
                             continue  # bu satırda hiç fiyat/paket bilgisi yok, atla
 
-                        # Önce mevcut ürünü ada göre (büyük/küçük harf duyarsız) güncellemeyi dene
+                        # Önce mevcut ürünü ada göre eşleştirmeyi dene. Türkçe İ/I/ı/i
+                        # harflerinin farklı kaynaklardan (klavye, Excel) farklı Unicode
+                        # karakterle gelmesi normal UPPER() ile eşleşmeyi bozabiliyor
+                        # (örn. "TERRA CLİCK" ile "TERRA CLICK" aynı ürün sayılmalı).
+                        # TRANSLATE ile tüm i-çeşitlerini tek bir harfe indirip öyle
+                        # karşılaştırıyoruz; ayrıca birden fazla boşluğu tek boşluğa
+                        # indirgiyoruz (kopyala-yapıştır kaynaklı fazla boşluklara karşı).
                         cur.execute("""
                             UPDATE urun SET
                                 fiyat_pesin = COALESCE(%s, fiyat_pesin),
@@ -5103,7 +5109,9 @@ def fiyat_toplu_yukle():
                                 fiyat_aysonu = COALESCE(%s, fiyat_aysonu),
                                 paket_m2 = COALESCE(%s, paket_m2),
                                 paket_metre = COALESCE(%s, paket_metre)
-                            WHERE silindi IS NOT TRUE AND UPPER(TRIM(ad)) = UPPER(%s)
+                            WHERE silindi IS NOT TRUE
+                            AND TRANSLATE(UPPER(TRIM(REGEXP_REPLACE(ad, '\\s+', ' ', 'g'))), 'İIıi', 'IIII')
+                              = TRANSLATE(UPPER(TRIM(REGEXP_REPLACE(%s, '\\s+', ' ', 'g'))), 'İIıi', 'IIII')
                         """, (f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre, ad))
 
                         if cur.rowcount > 0:
