@@ -2360,11 +2360,12 @@ if DATABASE_URL:
     yedek_thread.start()
 
 
-# ==================== UYANIK KALMA (KEEP-ALIVE) ====================
+# ==================== UYANIK KALMA (KEEP-ALIVE — SEYREK) ====================
 # Render ücretsiz planda 15 dakika hareketsizlikten sonra uykuya dalar.
-# Bu döngü kendi /ping adresini düzenli aralıklarla çağırarak uygulamayı
-# uyanık tutmaya çalışır (garanti değildir, ücretsiz planın doğal
-# davranışıdır — kalıcı çözüm için Render'da ücretli plana geçmek gerekir).
+# Bu döngü her 30 dakikada bir kendi /ping adresini çağırır — 15 dakikalık
+# uyuma eşiğinden UZUN bir aralık olduğu için uygulama sürekli açık kalmaz
+# (arada uyur), bu da sürekli-açık tutmaktan daha AZ ücretsiz kota tüketir,
+# ama uygulamanın çok uzun süre (saatlerce) hiç uyanmadan kalmasını da önler.
 def kendini_uyandirma_dongusu():
     import urllib.request
     kendi_url = os.environ.get("RENDER_EXTERNAL_URL", "").rstrip("/")
@@ -2372,7 +2373,7 @@ def kendini_uyandirma_dongusu():
         print("KEEP-ALIVE: RENDER_EXTERNAL_URL tanımlı değil, kendi kendini uyandırma pasif.")
         return
     while True:
-        threading.Event().wait(600)  # 10 dakikada bir
+        threading.Event().wait(1800)  # 30 dakikada bir
         try:
             urllib.request.urlopen(kendi_url + "/ping", timeout=15)
         except Exception:
