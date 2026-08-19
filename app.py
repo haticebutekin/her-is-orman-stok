@@ -5312,7 +5312,7 @@ def laminant_hesap():
     icerik = """
     """ + eksik_html + """
     <h2 style="margin-bottom:2px;">📐 Laminant Hesap</h2>
-    <p style="text-align:center;color:var(--muted);margin-top:0;">Birden fazla oda ekleyip toplu hesaplayabilirsiniz</p>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">Oda ölçülerini girin, sonuç aşağıda otomatik hesaplanır</p>
 
     <div class="kart">
       <label>Ödeme Türü</label>
@@ -5325,127 +5325,112 @@ def laminant_hesap():
     </div>
 
     <div class="bolum-baslik">🚪 Odalar</div>
-    <div id="oda-liste"></div>
+    <div class="kart" style="padding:8px;overflow-x:auto;">
+      <table class="lam-tablo">
+        <thead>
+          <tr><th>S/NO</th><th>Oda Eni (cm)</th><th>Oda Boy (cm)</th><th>M²</th></tr>
+        </thead>
+        <tbody id="oda-tablo-govde"></tbody>
+        <tfoot>
+          <tr class="lam-toplam-satir">
+            <td colspan="3">TOPLAM</td>
+            <td id="oda-toplam-m2">0,00</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <button type="button" class="btn-kucuk mavi" onclick="odaSatiriEkle()" style="margin-bottom:16px;">➕ Satır Ekle</button>
 
-    <button type="button" class="okut-kart okut-mavi" style="border:none;width:100%;cursor:pointer;" onclick="odaEkle()">
-      <div class="okut-ikon">➕</div>
-      <div class="okut-metin"><div class="okut-baslik">Yeni Oda Ekle</div></div>
-    </button>
-
-    <div class="kart" id="ozet-kart" style="display:none;">
-      <label>📦 Ürün Bazlı Toplam Paket Özeti</label>
-      <div id="ozet-liste"></div>
+    <div class="bolum-baslik">📦 Kaç Tek Verilecek</div>
+    <div class="kart" style="padding:8px;overflow-x:auto;">
+      <table class="lam-tablo" id="urun-tablo">
+        <thead>
+          <tr><th>Cinsi</th><th>Gereken</th><th>Verilecek</th><th>Birim (M²)</th><th>Toplam (M²)</th><th>Fiyat</th><th>Tutarı</th></tr>
+        </thead>
+        <tbody id="urun-tablo-govde"></tbody>
+        <tfoot>
+          <tr class="lam-toplam-satir">
+            <td colspan="6">GENEL TOPLAM</td>
+            <td id="genel-toplam">0,00 TL</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
 
-    <div class="kart" id="sonuc-kart" style="display:none;">
-      <label>Genel Toplam</label>
-      <div id="sonuc-liste"></div>
-      <div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-weight:800;font-size:16px;">
-        <span>TOPLAM</span><span id="sonuc-toplam">0 TL</span>
-      </div>
-    </div>
+    <style>
+    .lam-tablo { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .lam-tablo th {
+      background:var(--bg2); color:var(--muted); font-weight:700; text-transform:uppercase;
+      font-size:10.5px; letter-spacing:.3px; padding:8px 6px; text-align:left; white-space:nowrap;
+    }
+    .lam-tablo td { padding:6px; border-top:1px solid var(--border); white-space:nowrap; }
+    .lam-tablo input {
+      width:100%; min-width:70px; margin:0; padding:8px 6px; font-size:13px;
+      border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--text);
+    }
+    .lam-tablo .lam-m2-hucre, .lam-tablo .lam-gereken, .lam-tablo .lam-verilecek,
+    .lam-tablo .lam-birim, .lam-tablo .lam-fiyat, .lam-tablo .lam-tutar { font-weight:700; color:var(--text); }
+    .lam-toplam-satir td { font-weight:800; background:var(--bg2); border-top:2px solid var(--border); }
+    .lam-sil-btn {
+      background:#e74c3c; color:white; border:none; border-radius:6px;
+      padding:4px 8px; cursor:pointer; font-size:11px;
+    }
+    </style>
 
     <script>
     const URUNLER = __URUNLER_JSON__;
-    let odaSayisi = 0;
+    let odaSatirNo = 0;
 
-    function odaEkle(){
-        odaSayisi++;
-        const odaId = odaSayisi;
-        const secenekler = URUNLER.map((u, i) => `<option value="${i}">${u.ad}</option>`).join('');
-        const div = document.createElement('div');
-        div.className = 'kart';
-        div.id = 'oda-' + odaId;
-        div.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-              <label style="margin:0;">🚪 Oda ${odaId}</label>
-              <button type="button" onclick="document.getElementById('oda-${odaId}').remove(); hesapla();" style="background:#e74c3c;color:white;border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;">✕ Odayı Sil</button>
-            </div>
-            <div style="display:flex;gap:8px;">
-              <div style="flex:1;"><label style="margin-top:0;">Eni (cm)</label><input type="number" class="oda-eni" placeholder="Örn: 400" oninput="hesapla()"></div>
-              <div style="flex:1;"><label style="margin-top:0;">Boyu (cm)</label><input type="number" class="oda-boyu" placeholder="Örn: 500" oninput="hesapla()"></div>
-            </div>
-            <div style="display:flex;justify-content:space-between;margin:4px 0 10px;font-size:12.5px;color:var(--muted);">
-              <span>Alan: <b class="oda-m2-goster" style="color:var(--text);">0</b> m²</span>
-              <span>Çevre: <b class="oda-cevre-goster" style="color:var(--text);">0</b> m</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-              <label style="margin:0;font-size:12px;">Bu Odaya Ürün Ekle</label>
-              <button type="button" class="btn-kucuk mavi" onclick="urunSatiriEkle(${odaId})" style="margin:0;">➕</button>
-            </div>
-            <div class="satir-liste" id="satir-liste-${odaId}"></div>
+    function odaSatiriEkle(){
+        odaSatirNo++;
+        const govde = document.getElementById('oda-tablo-govde');
+        const tr = document.createElement('tr');
+        tr.id = 'oda-satir-' + odaSatirNo;
+        tr.innerHTML = `
+            <td>${odaSatirNo}</td>
+            <td><input type="number" class="oda-eni" oninput="hesapla()" placeholder="500"></td>
+            <td><input type="number" class="oda-boyu" oninput="hesapla()" placeholder="300"></td>
+            <td class="lam-m2-hucre">0,00</td>
         `;
-        document.getElementById('oda-liste').appendChild(div);
-        urunSatiriEkle(odaId);
-    }
-
-    function urunSatiriEkle(odaId){
-        const satirListe = document.getElementById('satir-liste-' + odaId);
-        const satirId = 'satir-' + odaId + '-' + Date.now();
-        const secenekler = URUNLER.map((u, i) => `<option value="${i}">${u.ad}</option>`).join('');
-        const div = document.createElement('div');
-        div.id = satirId;
-        div.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;align-items:center;';
-        div.innerHTML = `
-            <select onchange="hesapla()" style="margin:0;flex:2;">${secenekler}</select>
-            <button type="button" onclick="document.getElementById('${satirId}').remove(); hesapla();" style="background:#e74c3c;color:white;border:none;border-radius:8px;padding:10px 12px;cursor:pointer;">✕</button>
-        `;
-        satirListe.appendChild(div);
-        hesapla();
+        govde.appendChild(tr);
     }
 
     function hesapla(){
         const odemeTuru = document.getElementById('odeme-turu').value;
-        const odalar = document.querySelectorAll('#oda-liste > div');
+        const satirlar = document.querySelectorAll('#oda-tablo-govde tr');
 
-        // 1. GEÇİŞ: her odayı gezip, her ürün için HAM (yuvarlanmamış) miktarı topla.
-        // Aynı ürün birden fazla odada seçilmişse, m²/metre ihtiyaçları burada birleşir.
-        const urunToplam = {};  // urun adi -> { urun, gerekliToplam, birim, odaListesi: [{ad, miktar}] }
-
-        odalar.forEach(odaDiv => {
-            const eni = parseFloat(odaDiv.querySelector('.oda-eni').value) || 0;
-            const boyu = parseFloat(odaDiv.querySelector('.oda-boyu').value) || 0;
+        // 1. GEÇİŞ: tüm odaların toplam m² ve toplam çevresini bul.
+        let toplamM2 = 0;
+        let toplamCevre = 0;
+        satirlar.forEach(tr => {
+            const eni = parseFloat(tr.querySelector('.oda-eni').value) || 0;
+            const boyu = parseFloat(tr.querySelector('.oda-boyu').value) || 0;
             const m2 = (eni * boyu) / 10000;
             const cevre = 2 * (eni + boyu) / 100;
-            odaDiv.querySelector('.oda-m2-goster').textContent = m2.toFixed(2).replace('.', ',');
-            odaDiv.querySelector('.oda-cevre-goster').textContent = cevre.toFixed(2).replace('.', ',');
-
-            const odaBaslik = odaDiv.querySelector('label').textContent.trim();
-            const satirlar = odaDiv.querySelectorAll('.satir-liste > div');
-
-            satirlar.forEach(satir => {
-                const select = satir.querySelector('select');
-                const urun = URUNLER[parseInt(select.value)];
-                if(!urun) return;
-
-                let gerekliMiktar, birim;
-                if(urun.paket_m2){
-                    gerekliMiktar = m2;
-                    birim = 'm²';
-                } else if(urun.paket_metre){
-                    gerekliMiktar = cevre;
-                    birim = 'm';
-                } else {
-                    return;
-                }
-
-                if(!urunToplam[urun.ad]){
-                    urunToplam[urun.ad] = { urun: urun, gerekliToplam: 0, birim: birim, odaListesi: [] };
-                }
-                urunToplam[urun.ad].gerekliToplam += gerekliMiktar;
-                urunToplam[urun.ad].odaListesi.push({ ad: odaBaslik, miktar: gerekliMiktar });
-            });
+            tr.querySelector('.lam-m2-hucre').textContent = m2.toFixed(2).replace('.', ',');
+            toplamM2 += m2;
+            toplamCevre += cevre;
         });
+        document.getElementById('oda-toplam-m2').textContent = toplamM2.toFixed(2).replace('.', ',');
 
-        // 2. GEÇİŞ: her ürün için TOPLAM miktar üzerinden TEK SEFERDE yukarı yuvarla ve fiyatlandır.
-        const urunAdlari = Object.keys(urunToplam);
+        // 2. GEÇİŞ: sistemde kayıtlı HER ürün için (sabit satır, seçim yok) TEK
+        // SEFERDE toplam üzerinden yukarı yuvarlayıp fiyatlandır.
+        const govde = document.getElementById('urun-tablo-govde');
+        govde.innerHTML = '';
         let genelToplam = 0;
-        let ozetHtml = '';
-        let detayHtml = '';
 
-        urunAdlari.forEach(ad => {
-            const kayit = urunToplam[ad];
-            const urun = kayit.urun;
+        URUNLER.forEach(urun => {
+            let gerekliToplam, birim;
+            if(urun.paket_m2){
+                gerekliToplam = toplamM2;
+                birim = 'm²';
+            } else if(urun.paket_metre){
+                gerekliToplam = toplamCevre;
+                birim = 'm';
+            } else {
+                return;
+            }
+
             // Kapsama m² (kaç paket gerektiğini bulmak için) ile fatura m² (fiyatı
             // hesaplamak için) FARKLI olabilir (örn. laminant parke: 2,26 kapsama,
             // 2,3071 fatura). Kabron/süpürgelik gibi tek değerli ürünlerde ikisi aynıdır.
@@ -5453,46 +5438,42 @@ def laminant_hesap():
             const birimBasiFatura = urun.paket_m2 ? (urun.paket_m2_fatura || urun.paket_m2) : birimBasi;
             const birimFiyat = urun[odemeTuru];
 
-            if(kayit.gerekliToplam <= 0){
-                ozetHtml += `<div class="dash-liste-satir"><span>${ad}</span><span class="dash-liste-deger">Oda ölçüsü girin</span></div>`;
+            const tr = document.createElement('tr');
+            if(gerekliToplam <= 0){
+                tr.innerHTML = `<td>${urun.ad}</td><td colspan="6" style="color:var(--muted);">Oda ölçüsü girin</td>`;
+                govde.appendChild(tr);
                 return;
             }
             if(!birimFiyat){
-                ozetHtml += `<div class="dash-liste-satir"><span>${ad}</span><span class="dash-liste-deger">Bu ödeme türü için fiyat yok</span></div>`;
+                tr.innerHTML = `<td>${urun.ad}</td><td colspan="6" style="color:var(--muted);">Bu ödeme türü için fiyat yok</td>`;
+                govde.appendChild(tr);
                 return;
             }
 
-            const hamPaket = kayit.gerekliToplam / birimBasi;
+            const hamPaket = gerekliToplam / birimBasi;
             const paketSayisi = Math.ceil(hamPaket - 1e-9);  // TOPLAM üzerinden TEK yuvarlama
-            const tutar = paketSayisi * birimBasiFatura * birimFiyat;
+            const toplamFaturaMiktar = paketSayisi * birimBasiFatura;
+            const tutar = toplamFaturaMiktar * birimFiyat;
             genelToplam += tutar;
 
-            const odaDagilimi = kayit.odaListesi.map(o => `${o.ad}: ${o.miktar.toFixed(2).replace('.', ',')} ${kayit.birim}`).join(' + ');
-
-            ozetHtml += `
-              <div class="dash-liste-satir" style="flex-direction:column;align-items:flex-start;gap:2px;padding:10px 0;">
-                <div style="display:flex;justify-content:space-between;width:100%;">
-                  <b>${ad}</b><b>${tutar.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL</b>
-                </div>
-                <div style="font-size:11.5px;color:var(--muted);">
-                  ${kayit.odaListesi.length > 1 ? odaDagilimi + ' = ' : ''}${kayit.gerekliToplam.toFixed(2).replace('.', ',')} ${kayit.birim} toplam ihtiyaç → <b>${paketSayisi} paket</b>
-                  (paket başı ${birimBasi} ${kayit.birim} × ${birimFiyat.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})} TL)
-                </div>
-              </div>`;
+            tr.innerHTML = `
+                <td>${urun.ad}</td>
+                <td class="lam-gereken">${hamPaket.toFixed(2).replace('.', ',')}</td>
+                <td class="lam-verilecek">${paketSayisi.toFixed(2).replace('.', ',')}</td>
+                <td class="lam-birim">${birimBasiFatura.toString().replace('.', ',')}</td>
+                <td class="lam-birim">${toplamFaturaMiktar.toFixed(3).replace('.', ',')}</td>
+                <td class="lam-fiyat">${birimFiyat.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                <td class="lam-tutar">${tutar.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+            `;
+            govde.appendChild(tr);
         });
 
-        document.getElementById('ozet-liste').innerHTML = ozetHtml || '<p style="color:var(--muted);font-size:13px;">Bir oda ve ürün ekleyin.</p>';
-        document.getElementById('ozet-kart').style.display = 'block';
-        document.getElementById('sonuc-liste').innerHTML = '';
-        document.getElementById('sonuc-toplam').textContent = genelToplam.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' TL';
-        document.getElementById('sonuc-kart').style.display = (urunAdlari.length || odalar.length) ? 'block' : 'none';
+        document.getElementById('genel-toplam').textContent = genelToplam.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' TL';
     }
 
-    // Sayfa açılışında birden fazla oda hazır gelsin (her seferinde "Oda Ekle"ye
-    // basmak zorunda kalınmasın)
-    odaEkle();
-    odaEkle();
-    odaEkle();
+    // Ekran görüntüsündeki tabloya uygun şekilde başlangıçta 15 oda satırı hazır gelsin
+    for(let i = 0; i < 15; i++){ odaSatiriEkle(); }
+    hesapla();
     </script>
     """
     icerik = icerik.replace("__URUNLER_JSON__", urunler_json)
