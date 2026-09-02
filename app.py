@@ -5077,29 +5077,22 @@ def fiyat_toplu_yukle():
         guncellenenler = []
         eklenenler = []
         atlananlar = []
-        eslesmeyenler = []  # <-- YENİ: fiyat/paket bilgisi olmayan değil, ismi tutmayan satırlar
+        eslesmeyenler = []  # her biri: dict(excel_ad, benzerler, f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre, p_m2_fatura)
         varsayilan_depo = DEPOLAR[0] if DEPOLAR else ""
 
         con = db()
         try:
             with con:
                 with con.cursor() as cur:
-                    # Sistemdeki tüm ürün isimlerini (normalize edilmiş) önceden çekip
-                    # bellekte tutuyoruz -- her satırda ayrı sorgu yerine hızlı karşılaştırma
-                    # ve daha da önemlisi: "en yakın" isim önerisi sunabilmek için.
                     cur.execute("SELECT ad FROM urun WHERE silindi IS NOT TRUE")
                     tum_urun_adlari = [r[0] for r in cur.fetchall() if r[0]]
 
                     def normalize_et(metin):
-                        metin = " ".join((metin or "").split())  # fazla boşlukları temizle
+                        metin = " ".join((metin or "").split())
                         metin = metin.upper()
                         for i_harf in ("İ", "I", "ı", "i"):
                             metin = metin.replace(i_harf, "I")
                         return metin.strip()
-
-                    normalize_harita = {}
-                    for u_ad in tum_urun_adlari:
-                        normalize_harita.setdefault(normalize_et(u_ad), []).append(u_ad)
 
                     for satir_no, satir in enumerate(satirlar[1:], start=2):
                         if satir is None or all(h is None or str(h).strip() == "" for h in satir):
@@ -5129,7 +5122,7 @@ def fiyat_toplu_yukle():
                         if (f_pesin is None and f_kkart is None and f_3taksit is None and f_aysonu is None
                                 and p_m2 is None and p_metre is None):
                             atlananlar.append(ad)
-                            continue  # bu satırda hiç fiyat/paket bilgisi yok, atla
+                            continue
 
                         cur.execute("""
                             UPDATE urun SET
@@ -5148,18 +5141,20 @@ def fiyat_toplu_yukle():
                         if cur.rowcount > 0:
                             guncellenenler.append(f"{ad} ({cur.rowcount} kayıt)")
                         else:
-                            # Tam eşleşme yok. Sistemde bu isme YAKIN bir ürün var mı diye
-                            # bakıyoruz (örn. Excel'de "VARIO BELEK", sistemde
-                            # "VARIO BELEK VARIO LAMİNANT" gibi -- biri diğerini içeriyor).
                             norm_ad = normalize_et(ad)
                             benzer_urunler = [
                                 u for u in tum_urun_adlari
                                 if norm_ad in normalize_et(u) or normalize_et(u) in norm_ad
                             ]
                             if benzer_urunler:
-                                eslesmeyenler.append((ad, benzer_urunler[:5]))
+                                eslesmeyenler.append({
+                                    "excel_ad": ad,
+                                    "benzerler": benzer_urunler[:5],
+                                    "f_pesin": f_pesin, "f_kkart": f_kkart,
+                                    "f_3taksit": f_3taksit, "f_aysonu": f_aysonu,
+                                    "p_m2": p_m2, "p_metre": p_metre, "p_m2_fatura": p_m2_fatura,
+                                })
                             else:
-                                # Hiç benzeri de yok -> Excel'deki bilgilerle yeni ürün oluştur
                                 yeni_barkod = barkod_uret()
                                 cur.execute("""
                                     INSERT INTO urun (ad, cins, ebat, adet, depo, barkod, min_stok,
@@ -5184,18 +5179,37 @@ def fiyat_toplu_yukle():
                 + '</div>'
             )
 
+        def _sayi_gizli(isim, deger):
+            return f'<input type="hidden" name="{isim}" value="{deger}">' if deger is not None else ""
+
         eslesmeyen_html = ""
         if eslesmeyenler:
             satir_html = ""
-            for excel_ad, benzerler in eslesmeyenler[:50]:
-                benzer_liste = "".join(
-                    f'<div style="font-size:12px;color:var(--muted);padding-left:14px;">→ {b}</div>'
-                    for b in benzerler
+            for oge in eslesmeyenler[:50]:
+                gizli_alanlar = (
+                    _sayi_gizli("f_pesin", oge["f_pesin"])
+                    + _sayi_gizli("f_kkart", oge["f_kkart"])
+                    + _sayi_gizli("f_3taksit", oge["f_3taksit"])
+                    + _sayi_gizli("f_aysonu", oge["f_aysonu"])
+                    + _sayi_gizli("p_m2", oge["p_m2"])
+                    + _sayi_gizli("p_metre", oge["p_metre"])
+                    + _sayi_gizli("p_m2_fatura", oge["p_m2_fatura"])
                 )
+                benzer_liste = ""
+                for b in oge["benzerler"]:
+                    b_guvenli = b.replace('"', '&quot;')
+                    benzer_liste += f"""
+                    <form method="post" action="/fiyat_eslestir" style="display:flex;align-items:center;gap:8px;padding:6px 0 6px 14px;border-top:1px dashed var(--border);">
+                      <input type="hidden" name="hedef_ad" value="{b_guvenli}">
+                      {gizli_alanlar}
+                      <span style="flex:1;font-size:12.5px;color:var(--text);">→ {b}</span>
+                      <button type="submit" class="btn-kucuk yesil" style="margin:0;">✅ Bunu Eşleştir</button>
+                    </form>
+                    """
                 satir_html += f"""
                 <div style="padding:8px 0;border-bottom:1px solid var(--border);">
-                  <div style="font-weight:700;">📄 Excel'de: <span style="color:#e67e22;">{excel_ad}</span></div>
-                  <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">Sistemde bunlara benziyor ama tam eşleşmedi:</div>
+                  <div style="font-weight:700;">📄 Excel'de: <span style="color:#e67e22;">{oge['excel_ad']}</span></div>
+                  <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">Sistemde bunlara benziyor, birini seç:</div>
                   {benzer_liste}
                 </div>
                 """
@@ -5203,9 +5217,8 @@ def fiyat_toplu_yukle():
             <div class="kart" style="border-color:rgba(230,126,34,.5);">
               <label style="color:#e67e22;">⚠️ İsim Tam Eşleşmedi ({len(eslesmeyenler)})</label>
               <p style="font-size:12.5px;color:var(--muted);margin-top:0;">
-                Bu ürünler sistemde benzer isimle var ama Excel'deki yazımla <b>birebir aynı değil</b>,
-                bu yüzden fiyat güncellenmedi. Excel'deki adı sistemdekiyle birebir aynı yapıp
-                tekrar yükleyin, ya da ürünü sistemde elle düzenleyip fiyatı girin.
+                Bu ürünler sistemde benzer isimle var ama Excel'deki yazımla birebir aynı değil.
+                Doğru ürünü seçip "Bunu Eşleştir" butonuna basarsan fiyat o ürüne yazılır.
               </p>
               {satir_html}
             </div>
@@ -5240,8 +5253,8 @@ def fiyat_toplu_yukle():
       <p style="font-size:12.5px;color:var(--muted);margin-top:8px;">
         📌 Ürün adı sistemde <b>varsa</b> güncellenir; <b>yoksa</b> Excel'deki bilgilerle
         (Cins, Ebat, Depo dahil) <b>otomatik olarak yeni ürün</b> oluşturulur ve barkod üretilir.
-        Cins/Ebat/Depo boş bırakılırsa varsayılan değerlerle eklenir.
-        İsim sistemdekine <b>benziyor ama tam aynı değilse</b>, ürün eklenmez, size ayrıca gösterilir.
+        İsim sistemdekine <b>benziyor ama tam aynı değilse</b>, aday ürünleri sana gösterilir,
+        birini seçip tek tıkla eşleştirebilirsin.
       </p>
     </div>
 
@@ -5262,6 +5275,62 @@ def fiyat_toplu_yukle():
     </form>
     """
     return sayfa(icerik, "Fiyat Listesi Toplu Yükle")
+
+
+@app.route("/fiyat_eslestir", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def fiyat_eslestir():
+    hedef_ad = request.form.get("hedef_ad", "").strip()
+    if not hedef_ad:
+        return redirect("/fiyat_toplu_yukle")
+
+    def _al(isim):
+        deger = request.form.get(isim, "")
+        if deger == "":
+            return None
+        try:
+            return float(deger)
+        except (TypeError, ValueError):
+            return None
+
+    f_pesin = _al("f_pesin")
+    f_kkart = _al("f_kkart")
+    f_3taksit = _al("f_3taksit")
+    f_aysonu = _al("f_aysonu")
+    p_m2 = _al("p_m2")
+    p_metre = _al("p_metre")
+    p_m2_fatura = _al("p_m2_fatura")
+
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("""
+                    UPDATE urun SET
+                        fiyat_pesin = COALESCE(%s, fiyat_pesin),
+                        fiyat_kkart = COALESCE(%s, fiyat_kkart),
+                        fiyat_3taksit = COALESCE(%s, fiyat_3taksit),
+                        fiyat_aysonu = COALESCE(%s, fiyat_aysonu),
+                        paket_m2 = COALESCE(%s, paket_m2),
+                        paket_metre = COALESCE(%s, paket_metre),
+                        paket_m2_fatura = COALESCE(%s, paket_m2_fatura)
+                    WHERE ad = %s AND silindi IS NOT TRUE
+                """, (f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre, p_m2_fatura, hedef_ad))
+                guncellenen_sayi = cur.rowcount
+    finally:
+        con.close()
+
+    log_aktivite("Fiyat Elle Eşleştirildi", f"{hedef_ad} — {guncellenen_sayi} kayıt")
+
+    icerik = f"""
+    <div style="text-align:center;font-size:52px;margin-bottom:4px;">✅</div>
+    <h2 style="text-align:center;margin-top:0;">Eşleştirme Tamamlandı</h2>
+    <p style="text-align:center;color:var(--muted);"><b style="color:var(--text);">{hedef_ad}</b> için fiyat güncellendi ({guncellenen_sayi} kayıt).</p>
+    <a href="/duzenle/{hedef_ad}" class="okut-kart okut-mavi" style="display:none;"></a>
+    <a href="/liste" class="okut-kart okut-mor"><div class="okut-ikon">📦</div><div class="okut-metin"><div class="okut-baslik">Stok Listesine Git</div></div><div class="okut-ok">›</div></a>
+    <a href="/fiyat_toplu_yukle" class="okut-kart okut-yesil"><div class="okut-ikon">📥</div><div class="okut-metin"><div class="okut-baslik">Fiyat Yükleme Sayfasına Dön</div></div><div class="okut-ok">›</div></a>
+    """
+    return sayfa(icerik, "Eşleştirme Tamamlandı")
 
 
 @app.route("/fiyat_sablon.xlsx")
