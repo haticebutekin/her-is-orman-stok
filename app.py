@@ -5077,12 +5077,30 @@ def fiyat_toplu_yukle():
         guncellenenler = []
         eklenenler = []
         atlananlar = []
+        eslesmeyenler = []  # <-- YENİ: fiyat/paket bilgisi olmayan değil, ismi tutmayan satırlar
         varsayilan_depo = DEPOLAR[0] if DEPOLAR else ""
 
         con = db()
         try:
             with con:
                 with con.cursor() as cur:
+                    # Sistemdeki tüm ürün isimlerini (normalize edilmiş) önceden çekip
+                    # bellekte tutuyoruz -- her satırda ayrı sorgu yerine hızlı karşılaştırma
+                    # ve daha da önemlisi: "en yakın" isim önerisi sunabilmek için.
+                    cur.execute("SELECT ad FROM urun WHERE silindi IS NOT TRUE")
+                    tum_urun_adlari = [r[0] for r in cur.fetchall() if r[0]]
+
+                    def normalize_et(metin):
+                        metin = " ".join((metin or "").split())  # fazla boşlukları temizle
+                        metin = metin.upper()
+                        for i_harf in ("İ", "I", "ı", "i"):
+                            metin = metin.replace(i_harf, "I")
+                        return metin.strip()
+
+                    normalize_harita = {}
+                    for u_ad in tum_urun_adlari:
+                        normalize_harita.setdefault(normalize_et(u_ad), []).append(u_ad)
+
                     for satir_no, satir in enumerate(satirlar[1:], start=2):
                         if satir is None or all(h is None or str(h).strip() == "" for h in satir):
                             continue
@@ -5113,13 +5131,6 @@ def fiyat_toplu_yukle():
                             atlananlar.append(ad)
                             continue  # bu satırda hiç fiyat/paket bilgisi yok, atla
 
-                        # Önce mevcut ürünü ada göre eşleştirmeyi dene. Türkçe İ/I/ı/i
-                        # harflerinin farklı kaynaklardan (klavye, Excel) farklı Unicode
-                        # karakterle gelmesi normal UPPER() ile eşleşmeyi bozabiliyor
-                        # (örn. "TERRA CLİCK" ile "TERRA CLICK" aynı ürün sayılmalı).
-                        # TRANSLATE ile tüm i-çeşitlerini tek bir harfe indirip öyle
-                        # karşılaştırıyoruz; ayrıca birden fazla boşluğu tek boşluğa
-                        # indirgiyoruz (kopyala-yapıştır kaynaklı fazla boşluklara karşı).
                         cur.execute("""
                             UPDATE urun SET
                                 fiyat_pesin = COALESCE(%s, fiyat_pesin),
@@ -5137,20 +5148,31 @@ def fiyat_toplu_yukle():
                         if cur.rowcount > 0:
                             guncellenenler.append(f"{ad} ({cur.rowcount} kayıt)")
                         else:
-                            # Ürün sistemde yoksa, Excel'deki bilgilerle YENİ ürün olarak oluştur
-                            yeni_barkod = barkod_uret()
-                            cur.execute("""
-                                INSERT INTO urun (ad, cins, ebat, adet, depo, barkod, min_stok,
-                                                   fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu,
-                                                   paket_m2, paket_metre, paket_m2_fatura)
-                                VALUES (%s,%s,%s,0,%s,%s,5,%s,%s,%s,%s,%s,%s,%s)
-                            """, (ad, cins, ebat, depo, yeni_barkod, f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre, p_m2_fatura))
-                            eklenenler.append(ad)
+                            # Tam eşleşme yok. Sistemde bu isme YAKIN bir ürün var mı diye
+                            # bakıyoruz (örn. Excel'de "VARIO BELEK", sistemde
+                            # "VARIO BELEK VARIO LAMİNANT" gibi -- biri diğerini içeriyor).
+                            norm_ad = normalize_et(ad)
+                            benzer_urunler = [
+                                u for u in tum_urun_adlari
+                                if norm_ad in normalize_et(u) or normalize_et(u) in norm_ad
+                            ]
+                            if benzer_urunler:
+                                eslesmeyenler.append((ad, benzer_urunler[:5]))
+                            else:
+                                # Hiç benzeri de yok -> Excel'deki bilgilerle yeni ürün oluştur
+                                yeni_barkod = barkod_uret()
+                                cur.execute("""
+                                    INSERT INTO urun (ad, cins, ebat, adet, depo, barkod, min_stok,
+                                                       fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu,
+                                                       paket_m2, paket_metre, paket_m2_fatura)
+                                    VALUES (%s,%s,%s,0,%s,%s,5,%s,%s,%s,%s,%s,%s,%s)
+                                """, (ad, cins, ebat, depo, yeni_barkod, f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre, p_m2_fatura))
+                                eklenenler.append(ad)
         finally:
             con.close()
 
         log_aktivite("Fiyat Listesi Toplu Yüklendi",
-                      f"{len(guncellenenler)} ürün güncellendi, {len(eklenenler)} yeni ürün eklendi")
+                      f"{len(guncellenenler)} ürün güncellendi, {len(eklenenler)} yeni ürün eklendi, {len(eslesmeyenler)} eşleşmedi")
 
         def _liste_kutusu(baslik, renk, liste):
             if not liste:
@@ -5162,10 +5184,38 @@ def fiyat_toplu_yukle():
                 + '</div>'
             )
 
+        eslesmeyen_html = ""
+        if eslesmeyenler:
+            satir_html = ""
+            for excel_ad, benzerler in eslesmeyenler[:50]:
+                benzer_liste = "".join(
+                    f'<div style="font-size:12px;color:var(--muted);padding-left:14px;">→ {b}</div>'
+                    for b in benzerler
+                )
+                satir_html += f"""
+                <div style="padding:8px 0;border-bottom:1px solid var(--border);">
+                  <div style="font-weight:700;">📄 Excel'de: <span style="color:#e67e22;">{excel_ad}</span></div>
+                  <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">Sistemde bunlara benziyor ama tam eşleşmedi:</div>
+                  {benzer_liste}
+                </div>
+                """
+            eslesmeyen_html = f"""
+            <div class="kart" style="border-color:rgba(230,126,34,.5);">
+              <label style="color:#e67e22;">⚠️ İsim Tam Eşleşmedi ({len(eslesmeyenler)})</label>
+              <p style="font-size:12.5px;color:var(--muted);margin-top:0;">
+                Bu ürünler sistemde benzer isimle var ama Excel'deki yazımla <b>birebir aynı değil</b>,
+                bu yüzden fiyat güncellenmedi. Excel'deki adı sistemdekiyle birebir aynı yapıp
+                tekrar yükleyin, ya da ürünü sistemde elle düzenleyip fiyatı girin.
+              </p>
+              {satir_html}
+            </div>
+            """
+
         icerik = (
             '<div style="text-align:center;font-size:52px;margin-bottom:4px;">' + ('✅' if (guncellenenler or eklenenler) else '⚠️') + '</div>'
             + '<h2 style="margin-top:0;text-align:center;">Fiyat Yükleme Tamamlandı</h2>'
-            + f'<p style="text-align:center;color:var(--muted);">{len(guncellenenler)} ürün güncellendi, {len(eklenenler)} yeni ürün eklendi</p>'
+            + f'<p style="text-align:center;color:var(--muted);">{len(guncellenenler)} ürün güncellendi, {len(eklenenler)} yeni ürün eklendi, {len(eslesmeyenler)} eşleşmedi</p>'
+            + eslesmeyen_html
             + _liste_kutusu("✅ Güncellenen Ürünler", "#27ae60", guncellenenler)
             + _liste_kutusu("🆕 Yeni Eklenen Ürünler", "#2196F3", eklenenler)
             + '<a href="/rapor/pdf?tur=fiyat" class="okut-kart okut-mor"><div class="okut-ikon">💰</div><div class="okut-metin"><div class="okut-baslik">Fiyat Listesi PDF\'i Aç</div></div><div class="okut-ok">›</div></a>'
@@ -5191,6 +5241,7 @@ def fiyat_toplu_yukle():
         📌 Ürün adı sistemde <b>varsa</b> güncellenir; <b>yoksa</b> Excel'deki bilgilerle
         (Cins, Ebat, Depo dahil) <b>otomatik olarak yeni ürün</b> oluşturulur ve barkod üretilir.
         Cins/Ebat/Depo boş bırakılırsa varsayılan değerlerle eklenir.
+        İsim sistemdekine <b>benziyor ama tam aynı değilse</b>, ürün eklenmez, size ayrıca gösterilir.
       </p>
     </div>
 
