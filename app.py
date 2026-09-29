@@ -97,7 +97,7 @@ DEPOLAR = [
 
 ROLLER = {
     "Ramazan": "depocu",
-    "Behiç": "depocu",
+    "Ahmet": "depocu",
     "Orhan": "depocu",
     "Berke": "muhasebeci",
     "İrem": "muhasebeci",
@@ -107,7 +107,7 @@ ROLLER = {
 
 def _pin_yukle():
     varsayilan = {
-        "Ramazan": "1111", "Behiç": "2222", "Orhan": "3333",
+        "Ramazan": "1111", "Ahmet": "2222", "Orhan": "3333",
         "Berke": "4444", "İrem": "4444", "Hatice": "4444", "Ahmet": "4444",
     }
     ozel_json = os.environ.get("PIN_KODLARI_JSON", "")
