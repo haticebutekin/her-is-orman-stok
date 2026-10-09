@@ -5769,6 +5769,10 @@ def fiyat_grup():
               border-radius:14px; padding:12px 14px; margin:10px 0; }
     .g-baslik { display:flex; justify-content:space-between; align-items:center; gap:8px; font-weight:800; font-size:14.5px; }
     .g-adet { font-size:11.5px; font-weight:700; color:var(--muted); white-space:nowrap; }
+    .g-renkler { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+    .g-renk { font-size:11px; padding:3px 9px; border-radius:999px; background:var(--bg2);
+                        border:1px solid var(--border); color:var(--text); }
+    .g-renk-fazla { font-size:11px; padding:3px 9px; color:var(--muted); }
     .g-fiyatlar { display:grid; grid-template-columns:repeat(2,1fr); gap:6px 8px; margin-top:8px; }
     .g-fiyatlar label { margin:0; font-size:10px; }
     .g-fiyatlar input { width:100%; margin:2px 0 0; padding:9px 8px; text-align:right; font-size:14px;
@@ -5830,6 +5834,18 @@ def fiyat_grup():
       return {metin:'', ipucu:'karışık'};
     }
 
+    function renkAdi(u, grupAd){
+  if(u.renk) return u.renk;                       // Renk alanı doluysa onu göster
+  const grupKelimeleri = grupAd.toLocaleLowerCase('tr').split(/[\\s•]+/);
+  const kalan = u.ad.split(/\\s+/).filter(w => grupKelimeleri.indexOf(w.toLocaleLowerCase('tr')) === -1).join(' ');
+  return kalan || u.ad;                           // yoksa ürün adından grup adını çıkarıp kalanı göster
+}
+    function renkEtiketleri(g){
+  const renkler = Array.from(new Set(g.urunler.map(u => renkAdi(u, g.ad)))).sort((a,b) => a.localeCompare(b,'tr'));
+  const gosterilen = renkler.slice(0, 14);
+  return '<div class="g-renkler">' + gosterilen.map(r => '<span class="g-renk">' + kacak(r) + '</span>').join('') +
+         (renkler.length > 14 ? '<span class="g-renk-fazla">+' + (renkler.length - 14) + ' renk daha</span>' : '') + '</div>';
+}
     function ciz(){
       const q = document.getElementById('g-arama').value.toLocaleLowerCase('tr').trim();
       GRUPLAR = grupla().filter(g => !q || g.ad.toLocaleLowerCase('tr').indexOf(q) !== -1);
@@ -5843,6 +5859,7 @@ def fiyat_grup():
           '<div class="g-urun"><span>' + kacak(u.ad) + (u.renk ? ' • ' + kacak(u.renk) : '') + '</span><span>' +
           (u.fiyat_pesin !== null ? fmt(u.fiyat_pesin) : '—') + '</span></div>').join('');
         return '<div class="g-kart"><div class="g-baslik"><span>' + kacak(g.ad) + '</span><span class="g-adet">' + g.urunler.length + ' ürün</span></div>' +
+               renkEtiketleri(g) +
                '<div class="g-fiyatlar">' + kutular + '</div>' +
                '<button type="button" class="g-detay-btn" onclick="this.nextElementSibling.style.display=(this.nextElementSibling.style.display===\\'block\\'?\\'none\\':\\'block\\')">Ürünleri göster / gizle</button>' +
                '<div class="g-urunler">' + urunSatirlari + '</div></div>';
