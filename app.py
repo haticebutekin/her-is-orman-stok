@@ -1,7 +1,7 @@
 from functools import wraps
 from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file, Response
 import psycopg2
-import os, random, io, json, threading, traceback
+import os, random, io, json, threading, traceback, math
 import smtplib  # artık kullanılmıyor ama zararsız, gelecekte gerekirse dursun
 from email.message import EmailMessage
 from datetime import timedelta
@@ -1880,6 +1880,11 @@ def index():
         <a href="/laminant_hesap" class="okut-kart okut-yesil">
           <div class="okut-ikon">📐</div>
           <div class="okut-metin"><div class="okut-baslik">Laminant Hesap</div><div class="okut-alt">Oda ölçüsünden paket ve fiyat hesapla</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/fiyat_girisi" class="okut-kart okut-yesil">
+          <div class="okut-ikon">💰</div>
+          <div class="okut-metin"><div class="okut-baslik">Hızlı Fiyat Girişi</div><div class="okut-alt">Tüm ürünlerin fiyatını tek tabloda gir</div></div>
           <div class="okut-ok">›</div>
         </a>
         <a href="/fiyat_toplu_yukle" class="okut-kart okut-mor">
@@ -5354,6 +5359,338 @@ def fiyat_sablon():
     bio.seek(0)
     return send_file(bio, as_attachment=True, download_name="fiyat_sablon.xlsx",
                       mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                      
+# ============================================================
+# HIZLI FİYAT GİRİŞİ — app.py'ye ekleyin
+# (örneğin "/fiyat_sablon.xlsx" route'unun hemen altına)
+# Dosyanın en üstündeki import satırlarına şunu da ekleyin:
+#     import math
+# ============================================================
+
+FIYAT_ALANLARI = ("fiyat_pesin", "fiyat_kkart", "fiyat_3taksit", "fiyat_aysonu")
+
+
+@app.route("/fiyat_girisi")
+@rol_gerekli("muhasebeci")
+def fiyat_girisi():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT id, ad, cins, ebat, depo,
+                       fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu
+                FROM urun WHERE silindi IS NOT TRUE
+                ORDER BY cins, ad
+            """)
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+
+    def _f(x):
+        return float(x) if x is not None else None
+
+    veri = [
+        {"id": r[0], "ad": r[1] or "", "cins": r[2] or "", "ebat": r[3] or "", "depo": r[4] or "",
+         "fiyat_pesin": _f(r[5]), "fiyat_kkart": _f(r[6]),
+         "fiyat_3taksit": _f(r[7]), "fiyat_aysonu": _f(r[8])}
+        for r in satirlar
+    ]
+    veri_json = json.dumps(veri, ensure_ascii=False).replace("<", "\\u003c")
+
+    icerik = """
+    <h2 style="margin-bottom:2px;">💰 Hızlı Fiyat Girişi</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">
+    Kutuya yaz, Enter'a bas — kaydedilir ve alt satıra geçer.
+    </p>
+
+    <div class="kart">
+      <input type="text" id="f-arama" class="arama" placeholder="🔍 Ürün ara..." oninput="ciz()" style="margin-bottom:8px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <select id="f-depo" onchange="ciz()" style="flex:1;min-width:140px;margin:0;"><option value="">Tüm depolar</option></select>
+        <label class="etiket-sec-satir" style="margin:0;">
+          <input type="checkbox" id="f-eksik" onchange="ciz()"> <span>Sadece fiyatı eksik olanlar</span>
+        </label>
+      </div>
+      <div id="f-sayac" style="font-size:12.5px;color:var(--muted);margin-top:8px;"></div>
+    </div>
+
+    <div class="kart">
+      <label style="margin-top:0;">⚙️ Otomatik Hesap (Peşin fiyattan)</label>
+      <label class="etiket-sec-satir">
+        <input type="checkbox" id="oto-doldur" checked>
+        <span>Peşin girince boş olan diğer fiyatları otomatik doldur</span>
+      </label>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+        <div><label style="margin:0;font-size:10.5px;">K.Kartı %</label><input type="text" id="oran-fiyat_kkart" value="3,02" inputmode="decimal" style="margin:2px 0 0;padding:8px;"></div>
+        <div><label style="margin:0;font-size:10.5px;">3 Taksit %</label><input type="text" id="oran-fiyat_3taksit" value="8,61" inputmode="decimal" style="margin:2px 0 0;padding:8px;"></div>
+        <div><label style="margin:0;font-size:10.5px;">Ay Sonu %</label><input type="text" id="oran-fiyat_aysonu" value="5" inputmode="decimal" style="margin:2px 0 0;padding:8px;"></div>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">
+        Oranlar örnek değerdir, kendi vade farkı oranlarınızla değiştirin. Satırdaki ⚡ butonu o ürünün 3 fiyatını (üzerine yazarak) yeniden hesaplar.
+      </p>
+    </div>
+
+    <div class="kart">
+      <label style="margin-top:0;">📈 Görünen Ürünlere Toplu Zam / İndirim</label>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="zam-oran" placeholder="Örn: 10 (zam), -5 (indirim)" inputmode="decimal" style="margin:0;flex:1;">
+        <button type="button" class="btn-kucuk mavi" style="margin:0;" onclick="topluZam()">Uygula</button>
+      </div>
+    </div>
+
+    <div class="kart" style="padding:6px;overflow-x:auto;">
+      <table class="fg-tablo">
+        <thead>
+          <tr><th>Ürün</th><th>Peşin</th><th>K.Kartı</th><th>3 Taksit</th><th>Ay Sonu</th><th></th></tr>
+        </thead>
+        <tbody id="f-govde"></tbody>
+      </table>
+    </div>
+
+    <div id="f-toast" style="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+         background:rgba(18,21,28,.95);color:#fff;padding:10px 18px;border-radius:999px;
+         font-size:13px;font-weight:700;display:none;z-index:99999;box-shadow:0 4px 18px rgba(0,0,0,.4);"></div>
+
+    <style>
+    .fg-tablo { width:100%; border-collapse:collapse; font-size:13px; }
+    .fg-tablo th { background:var(--bg2); color:var(--muted); font-size:10.5px; text-transform:uppercase;
+                   padding:8px 6px; text-align:left; white-space:nowrap; position:sticky; top:56px; }
+    .fg-tablo td { padding:5px 4px; border-top:1px solid var(--border); vertical-align:middle; }
+    .fg-tablo td:first-child { min-width:150px; max-width:210px; font-weight:600; }
+    .fg-alt { display:block; font-size:10.5px; color:var(--muted); font-weight:400; }
+    .fg-tablo input.fg-in { width:92px; margin:0; padding:9px 6px; text-align:right; font-size:14px;
+                            border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--text); }
+    .fg-tablo input.fg-in.bos { border-color:rgba(255,152,0,.55); }
+    .fg-tablo input.fg-in.hatali { border-color:#e74c3c; background:rgba(231,76,60,.15); }
+    .fg-tablo input.fg-in.kayitli { border-color:rgba(100,221,23,.7); }
+    .fg-hesap { background:none; border:1px solid var(--border); color:var(--text); border-radius:8px;
+                padding:7px 9px; cursor:pointer; font-size:14px; }
+    </style>
+
+    <script>
+    const URUNLER = __VERI__;
+    const ALANLAR = ['fiyat_pesin','fiyat_kkart','fiyat_3taksit','fiyat_aysonu'];
+    const MAP = {};
+    URUNLER.forEach(u => { MAP[u.id] = u; });
+
+    function fmt(n){
+      if(n === null || n === undefined) return '';
+      return n.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    }
+    // "2.500,00" / "2500.50" / "2.500" / "2500,5" -> sayı
+    function parseTR(s){
+      s = String(s).replace(/TL|₺/gi,'').replace(/\\s/g,'');
+      if(s === '') return null;
+      if(s.indexOf(',') !== -1 && s.indexOf('.') !== -1){ s = s.replace(/\\./g,'').replace(',', '.'); }
+      else if(s.indexOf(',') !== -1){ s = s.replace(',', '.'); }
+      else if(/^\\d{1,3}(\\.\\d{3})+$/.test(s)){ s = s.replace(/\\./g,''); }  // 2.500 -> 2500
+      const n = parseFloat(s);
+      return isNaN(n) ? NaN : Math.round(n*100)/100;
+    }
+    function oranAl(alan){
+      const v = parseTR(document.getElementById('oran-' + alan).value);
+      return (v === null || isNaN(v)) ? 0 : v;
+    }
+    function hesapla(pesin, alan){
+      return Math.round(pesin * (1 + oranAl(alan)/100) * 100) / 100;
+    }
+
+    let toastZamanlayici;
+    function toast(m){
+      const t = document.getElementById('f-toast');
+      t.textContent = m; t.style.display = 'block';
+      clearTimeout(toastZamanlayici);
+      toastZamanlayici = setTimeout(() => t.style.display = 'none', 1800);
+    }
+
+    function kaydet(liste, tr){
+      return fetch('/fiyat_kaydet', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({guncellemeler: liste})
+      }).then(r => r.json()).then(d => {
+        if(d.ok){
+          toast('✓ Kaydedildi');
+          if(tr) tr.querySelectorAll('.fg-in').forEach(i => { i.classList.add('kayitli'); setTimeout(() => i.classList.remove('kayitli'), 900); });
+        } else { toast('❌ Kaydedilemedi'); }
+        return d;
+      }).catch(() => { toast('❌ Bağlantı hatası, KAYDEDİLMEDİ'); });
+    }
+
+    function bosIsaretle(inp){ inp.classList.toggle('bos', inp.value.trim() === ''); }
+
+    function alanDegisti(inp){
+      const tr = inp.closest('tr'), id = parseInt(tr.dataset.id), u = MAP[id], alan = inp.dataset.alan;
+      const ham = inp.value.trim();
+      let deger = null;
+      if(ham !== ''){
+        deger = parseTR(ham);
+        if(deger === null || isNaN(deger) || deger < 0 || deger > 99999999){
+          inp.classList.add('hatali'); toast('❌ Geçersiz sayı'); return;
+        }
+      }
+      inp.classList.remove('hatali');
+      u[alan] = deger;
+      inp.value = fmt(deger);
+      bosIsaretle(inp);
+      const guncel = [{id: id, alan: alan, deger: deger}];
+
+      if(alan === 'fiyat_pesin' && deger !== null && document.getElementById('oto-doldur').checked){
+        ALANLAR.slice(1).forEach(a => {
+          if(u[a] === null){
+            const y = hesapla(deger, a);
+            u[a] = y;
+            const kutu = tr.querySelector('[data-alan="' + a + '"]');
+            kutu.value = fmt(y); bosIsaretle(kutu);
+            guncel.push({id: id, alan: a, deger: y});
+          }
+        });
+      }
+      kaydet(guncel, tr);
+      sayacGuncelle();
+    }
+
+    function satirHesapla(id){
+      const u = MAP[id];
+      if(u.fiyat_pesin === null){ toast('Önce Peşin fiyatı girin'); return; }
+      const tr = document.querySelector('tr[data-id="' + id + '"]');
+      const guncel = [];
+      ALANLAR.slice(1).forEach(a => {
+        const y = hesapla(u.fiyat_pesin, a);
+        u[a] = y;
+        const kutu = tr.querySelector('[data-alan="' + a + '"]');
+        kutu.value = fmt(y); bosIsaretle(kutu);
+        guncel.push({id: id, alan: a, deger: y});
+      });
+      kaydet(guncel, tr);
+      sayacGuncelle();
+    }
+
+    function gorunenler(){
+      const q = document.getElementById('f-arama').value.toLocaleLowerCase('tr').trim();
+      const depo = document.getElementById('f-depo').value;
+      const sadeceEksik = document.getElementById('f-eksik').checked;
+      return URUNLER.filter(u => {
+        if(depo && u.depo !== depo) return false;
+        if(q && (u.ad + ' ' + u.cins + ' ' + u.ebat).toLocaleLowerCase('tr').indexOf(q) === -1) return false;
+        if(sadeceEksik && ALANLAR.every(a => u[a] !== null)) return false;
+        return true;
+      });
+    }
+
+    function kacak(s){
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function ciz(){
+      const liste = gorunenler();
+      const govde = document.getElementById('f-govde');
+      govde.innerHTML = liste.map(u => {
+        const alt = [u.cins, u.ebat].filter(x => x).join(' • ');
+        const kutular = ALANLAR.map(a =>
+          '<td><input class="fg-in' + (u[a] === null ? ' bos' : '') + '" data-alan="' + a +
+          '" inputmode="decimal" value="' + fmt(u[a]) + '" placeholder="—"></td>'
+        ).join('');
+        return '<tr data-id="' + u.id + '"><td>' + kacak(u.ad) + '<span class="fg-alt">' + kacak(alt) + '</span></td>' +
+               kutular + '<td><button type="button" class="fg-hesap" title="Peşin fiyattan diğerlerini hesapla" onclick="satirHesapla(' + u.id + ')">⚡</button></td></tr>';
+      }).join('');
+      sayacGuncelle();
+    }
+
+    function sayacGuncelle(){
+      const eksik = URUNLER.filter(u => ALANLAR.some(a => u[a] === null)).length;
+      document.getElementById('f-sayac').textContent =
+        gorunenler().length + ' ürün gösteriliyor • ' + eksik + ' üründe eksik fiyat var (toplam ' + URUNLER.length + ')';
+    }
+
+    // Enter: kaydet ve alt satırdaki aynı sütuna geç
+    document.getElementById('f-govde').addEventListener('keydown', function(e){
+      if(e.key !== 'Enter' || !e.target.classList.contains('fg-in')) return;
+      e.preventDefault();
+      const inp = e.target, alan = inp.dataset.alan;
+      alanDegisti(inp);
+      const sonraki = inp.closest('tr').nextElementSibling;
+      if(sonraki){
+        const hedef = sonraki.querySelector('[data-alan="' + alan + '"]');
+        if(hedef){ hedef.focus(); hedef.select(); }
+      }
+    });
+    document.getElementById('f-govde').addEventListener('change', function(e){
+      if(e.target.classList.contains('fg-in')) alanDegisti(e.target);
+    });
+    document.getElementById('f-govde').addEventListener('focusin', function(e){
+      if(e.target.classList.contains('fg-in')) e.target.select();
+    });
+
+    function topluZam(){
+      const oran = parseTR(document.getElementById('zam-oran').value);
+      if(oran === null || isNaN(oran) || oran === 0){ toast('Geçerli bir oran girin'); return; }
+      const liste = gorunenler();
+      if(liste.length === 0) return;
+      if(!confirm(liste.length + ' ürünün tüm fiyatlarına %' + oran + ' uygulanacak. Emin misin?')) return;
+      const guncel = [];
+      liste.forEach(u => {
+        ALANLAR.forEach(a => {
+          if(u[a] !== null){
+            const y = Math.max(0, Math.round(u[a] * (1 + oran/100) * 100) / 100);
+            u[a] = y;
+            guncel.push({id: u.id, alan: a, deger: y});
+          }
+        });
+      });
+      kaydet(guncel, null).then(() => ciz());
+    }
+
+    // Depo filtresi
+    (function(){
+      const depolar = Array.from(new Set(URUNLER.map(u => u.depo).filter(x => x))).sort();
+      const sel = document.getElementById('f-depo');
+      depolar.forEach(d => { const o = document.createElement('option'); o.value = d; o.textContent = d; sel.appendChild(o); });
+    })();
+
+    ciz();
+    </script>
+    """
+    icerik = icerik.replace("__VERI__", veri_json)
+    return sayfa(icerik, "Hızlı Fiyat Girişi")
+
+
+@app.route("/fiyat_kaydet", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def fiyat_kaydet():
+    data = request.get_json(silent=True) or {}
+    guncellemeler = data.get("guncellemeler", [])
+    if not isinstance(guncellemeler, list):
+        return jsonify({"ok": False}), 400
+
+    sayi = 0
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                for g in guncellemeler[:3000]:
+                    try:
+                        uid = int(g.get("id"))
+                    except (TypeError, ValueError):
+                        continue
+                    alan = g.get("alan")
+                    if alan not in FIYAT_ALANLARI:   # beyaz liste: SQL enjeksiyonunu engeller
+                        continue
+                    deger = g.get("deger")
+                    if deger is not None:
+                        try:
+                            deger = round(float(deger), 2)
+                        except (TypeError, ValueError):
+                            continue
+                        if not math.isfinite(deger) or deger < 0 or deger >= 1e9:
+                            continue
+                    cur.execute(f"UPDATE urun SET {alan}=%s WHERE id=%s", (deger, uid))
+                    sayi += cur.rowcount
+    finally:
+        con.close()
+
+    if sayi:
+        log_aktivite("Fiyat Güncellendi", f"{sayi} fiyat alanı güncellendi (Hızlı Fiyat Girişi)")
+    return jsonify({"ok": True, "guncellenen": sayi})
 
 
 @app.route("/laminant_hesap")
