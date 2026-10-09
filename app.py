@@ -5692,6 +5692,457 @@ def fiyat_kaydet():
         log_aktivite("Fiyat Güncellendi", f"{sayi} fiyat alanı güncellendi (Hızlı Fiyat Girişi)")
     return jsonify({"ok": True, "guncellenen": sayi})
 
+# ============================================================
+# GRUBA GÖRE FİYAT GİRİŞİ — app.py'ye ekleyin
+# (önceki /fiyat_girisi ve /fiyat_kaydet kodları zaten ekli olmalı;
+#  bu sayfa kaydetmek için aynı /fiyat_kaydet adresini kullanır)
+# ============================================================
+
+@app.route("/fiyat_grup")
+@rol_gerekli("muhasebeci")
+def fiyat_grup():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT id, ad, cins, ebat, kalinlik, yuzey, sinif, renk,
+                       fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu
+                FROM urun WHERE silindi IS NOT TRUE
+                ORDER BY cins, ad
+            """)
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+
+    def _f(x):
+        return float(x) if x is not None else None
+
+    veri = [
+        {"id": r[0], "ad": r[1] or "", "cins": r[2] or "", "ebat": r[3] or "",
+         "kalinlik": r[4] or "", "yuzey": r[5] or "", "sinif": r[6] or "", "renk": r[7] or "",
+         "fiyat_pesin": _f(r[8]), "fiyat_kkart": _f(r[9]),
+         "fiyat_3taksit": _f(r[10]), "fiyat_aysonu": _f(r[11])}
+        for r in satirlar
+    ]
+    veri_json = json.dumps(veri, ensure_ascii=False).replace("<", "\\u003c")
+
+    icerik = """
+    <h2 style="margin-bottom:2px;">🏷️ Gruba Göre Fiyat Girişi</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">
+    Fiyatı grup başına bir kez gir, gruptaki tüm ürünlere yazılsın.
+    </p>
+
+    <div class="kart">
+      <label style="margin-top:0;">Ürünler neye göre gruplansın?</label>
+      <div id="grup-secenekler" style="display:flex;flex-wrap:wrap;gap:6px 14px;">
+        <label class="etiket-sec-satir" style="margin:0;"><input type="checkbox" value="cins" checked onchange="ciz()"> <span>Cins</span></label>
+        <label class="etiket-sec-satir" style="margin:0;"><input type="checkbox" value="marka" onchange="ciz()"> <span>Ürün adının ilk kelimesi (marka)</span></label>
+        <label class="etiket-sec-satir" style="margin:0;"><input type="checkbox" value="sinif" onchange="ciz()"> <span>Sınıf</span></label>
+        <label class="etiket-sec-satir" style="margin:0;"><input type="checkbox" value="kalinlik" onchange="ciz()"> <span>Kalınlık</span></label>
+        <label class="etiket-sec-satir" style="margin:0;"><input type="checkbox" value="ebat" onchange="ciz()"> <span>Ebat</span></label>
+        <label class="etiket-sec-satir" style="margin:0;"><input type="checkbox" value="yuzey" onchange="ciz()"> <span>Yüzey</span></label>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">
+        Örnek: DESEN MDFLAM'ı markaya göre ayırmak için "Cins" + "Marka" (veya markanın yazıldığı alanı) seç.
+      </p>
+      <input type="text" id="g-arama" class="arama" placeholder="🔍 Grup ara..." oninput="ciz()" style="margin:10px 0 0;">
+      <label class="etiket-sec-satir" style="margin:8px 0 0;">
+        <input type="checkbox" id="oto-doldur" checked>
+        <span>Peşin girince, gruptaki ürünlerin boş olan diğer fiyatlarını da doldur</span>
+      </label>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px;">
+        <div><label style="margin:0;font-size:10.5px;">K.Kartı %</label><input type="text" id="oran-fiyat_kkart" value="3,02" inputmode="decimal" style="margin:2px 0 0;padding:8px;"></div>
+        <div><label style="margin:0;font-size:10.5px;">3 Taksit %</label><input type="text" id="oran-fiyat_3taksit" value="8,61" inputmode="decimal" style="margin:2px 0 0;padding:8px;"></div>
+        <div><label style="margin:0;font-size:10.5px;">Ay Sonu %</label><input type="text" id="oran-fiyat_aysonu" value="5" inputmode="decimal" style="margin:2px 0 0;padding:8px;"></div>
+      </div>
+      <div id="g-sayac" style="font-size:12.5px;color:var(--muted);margin-top:8px;"></div>
+    </div>
+
+    <div id="g-liste"></div>
+
+    <div id="g-toast" style="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+         background:rgba(18,21,28,.95);color:#fff;padding:10px 18px;border-radius:999px;
+         font-size:13px;font-weight:700;display:none;z-index:99999;box-shadow:0 4px 18px rgba(0,0,0,.4);"></div>
+
+    <style>
+    .g-kart { background:linear-gradient(180deg,var(--card2),var(--card)); border:1px solid var(--border);
+              border-radius:14px; padding:12px 14px; margin:10px 0; }
+    .g-baslik { display:flex; justify-content:space-between; align-items:center; gap:8px; font-weight:800; font-size:14.5px; }
+    .g-adet { font-size:11.5px; font-weight:700; color:var(--muted); white-space:nowrap; }
+    .g-fiyatlar { display:grid; grid-template-columns:repeat(2,1fr); gap:6px 8px; margin-top:8px; }
+    .g-fiyatlar label { margin:0; font-size:10px; }
+    .g-fiyatlar input { width:100%; margin:2px 0 0; padding:9px 8px; text-align:right; font-size:14px;
+                        border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--text); }
+    .g-fiyatlar input.kayitli { border-color:rgba(100,221,23,.7); }
+    .g-fiyatlar input.hatali { border-color:#e74c3c; }
+    .g-detay-btn { background:none; border:none; color:var(--accent); font-size:12px; font-weight:700; cursor:pointer; padding:6px 0 0; }
+    .g-urunler { display:none; margin-top:6px; border-top:1px dashed var(--border); }
+    .g-urun { display:flex; justify-content:space-between; gap:8px; font-size:12px; padding:5px 0; border-bottom:1px solid var(--border); }
+    .g-urun span:last-child { color:var(--muted); white-space:nowrap; }
+    </style>
+
+    <script>
+    const URUNLER = __VERI__;
+    const ALANLAR = ['fiyat_pesin','fiyat_kkart','fiyat_3taksit','fiyat_aysonu'];
+    const ETIKET = {fiyat_pesin:'Peşin', fiyat_kkart:'K.Kartı', fiyat_3taksit:'3 Taksit', fiyat_aysonu:'Ay Sonu'};
+    const MAP = {}; URUNLER.forEach(u => MAP[u.id] = u);
+    let GRUPLAR = [];
+
+    function fmt(n){ return (n === null || n === undefined) ? '' : n.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+    function parseTR(s){
+      s = String(s).replace(/TL|₺/gi,'').replace(/\\s/g,'');
+      if(s === '') return null;
+      if(s.indexOf(',') !== -1 && s.indexOf('.') !== -1){ s = s.replace(/\\./g,'').replace(',', '.'); }
+      else if(s.indexOf(',') !== -1){ s = s.replace(',', '.'); }
+      else if(/^\\d{1,3}(\\.\\d{3})+$/.test(s)){ s = s.replace(/\\./g,''); }
+      const n = parseFloat(s);
+      return isNaN(n) ? NaN : Math.round(n*100)/100;
+    }
+    function oranAl(a){ const v = parseTR(document.getElementById('oran-' + a).value); return (v === null || isNaN(v)) ? 0 : v; }
+    function kacak(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    let tz;
+    function toast(m){ const t = document.getElementById('g-toast'); t.textContent = m; t.style.display='block'; clearTimeout(tz); tz = setTimeout(() => t.style.display='none', 1800); }
+
+    function secilenAlanlar(){
+      return Array.from(document.querySelectorAll('#grup-secenekler input:checked')).map(i => i.value);
+    }
+    function deger(u, alan){
+      if(alan === 'marka') return (u.ad.trim().split(/\\s+/)[0] || '');
+      return u[alan] || '';
+    }
+    function grupla(){
+      const alanlar = secilenAlanlar();
+      const map = {};
+      URUNLER.forEach(u => {
+        const parcalar = alanlar.map(a => deger(u, a)).filter(x => x);
+        const anahtar = alanlar.length ? (parcalar.join(' • ') || '(boş)') : 'Tüm ürünler';
+        (map[anahtar] = map[anahtar] || []).push(u);
+      });
+      return Object.keys(map).sort((a,b) => a.localeCompare(b,'tr')).map(k => ({ad:k, urunler:map[k]}));
+    }
+
+    function ortakDeger(urunler, alan){
+      const hepsi = urunler.map(u => u[alan]);
+      if(hepsi.every(v => v === null)) return {metin:'', ipucu:'—'};
+      const ilk = hepsi[0];
+      if(ilk !== null && hepsi.every(v => v === ilk)) return {metin:fmt(ilk), ipucu:''};
+      return {metin:'', ipucu:'karışık'};
+    }
+
+    function ciz(){
+      const q = document.getElementById('g-arama').value.toLocaleLowerCase('tr').trim();
+      GRUPLAR = grupla().filter(g => !q || g.ad.toLocaleLowerCase('tr').indexOf(q) !== -1);
+      document.getElementById('g-liste').innerHTML = GRUPLAR.map((g, i) => {
+        const kutular = ALANLAR.map(a => {
+          const o = ortakDeger(g.urunler, a);
+          return '<div><label>' + ETIKET[a] + '</label><input data-g="' + i + '" data-alan="' + a +
+                 '" inputmode="decimal" value="' + o.metin + '" placeholder="' + o.ipucu + '"></div>';
+        }).join('');
+        const urunSatirlari = g.urunler.map(u =>
+          '<div class="g-urun"><span>' + kacak(u.ad) + (u.renk ? ' • ' + kacak(u.renk) : '') + '</span><span>' +
+          (u.fiyat_pesin !== null ? fmt(u.fiyat_pesin) : '—') + '</span></div>').join('');
+        return '<div class="g-kart"><div class="g-baslik"><span>' + kacak(g.ad) + '</span><span class="g-adet">' + g.urunler.length + ' ürün</span></div>' +
+               '<div class="g-fiyatlar">' + kutular + '</div>' +
+               '<button type="button" class="g-detay-btn" onclick="this.nextElementSibling.style.display=(this.nextElementSibling.style.display===\\'block\\'?\\'none\\':\\'block\\')">Ürünleri göster / gizle</button>' +
+               '<div class="g-urunler">' + urunSatirlari + '</div></div>';
+      }).join('');
+      document.getElementById('g-sayac').textContent = GRUPLAR.length + ' grup • ' + URUNLER.length + ' ürün';
+    }
+
+    function kaydet(liste){
+      return fetch('/fiyat_kaydet', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({guncellemeler: liste})})
+        .then(r => r.json()).then(d => { toast(d.ok ? '✓ ' + d.guncellenen + ' fiyat kaydedildi' : '❌ Kaydedilemedi'); return d; })
+        .catch(() => { toast('❌ Bağlantı hatası, KAYDEDİLMEDİ'); return {ok:false}; });
+    }
+
+    document.getElementById('g-liste').addEventListener('change', function(e){
+      const inp = e.target;
+      if(inp.tagName !== 'INPUT' || inp.dataset.g === undefined) return;
+      const grup = GRUPLAR[parseInt(inp.dataset.g)], alan = inp.dataset.alan;
+      const ham = inp.value.trim();
+      if(ham === '') return;                 // boş bırakılırsa gruptaki fiyatlara dokunma
+      const fiyat = parseTR(ham);
+      if(fiyat === null || isNaN(fiyat) || fiyat < 0 || fiyat > 99999999){ inp.classList.add('hatali'); toast('❌ Geçersiz sayı'); return; }
+      inp.classList.remove('hatali');
+      if(grup.urunler.length > 1 && !confirm('"' + grup.ad + '" grubundaki ' + grup.urunler.length + ' ürünün ' + ETIKET[alan] + ' fiyatı ' + fmt(fiyat) + ' TL olacak. Onaylıyor musun?')){
+        ciz(); return;
+      }
+      const guncel = [];
+      const oto = document.getElementById('oto-doldur').checked && alan === 'fiyat_pesin';
+      grup.urunler.forEach(u => {
+        u[alan] = fiyat; guncel.push({id:u.id, alan:alan, deger:fiyat});
+        if(oto){
+          ALANLAR.slice(1).forEach(a => {
+            if(u[a] === null){
+              const y = Math.round(fiyat * (1 + oranAl(a)/100) * 100) / 100;
+              u[a] = y; guncel.push({id:u.id, alan:a, deger:y});
+            }
+          });
+        }
+      });
+      kaydet(guncel).then(d => { if(d.ok) ciz(); });
+    });
+    document.getElementById('g-liste').addEventListener('keydown', function(e){
+      if(e.key === 'Enter' && e.target.tagName === 'INPUT'){ e.preventDefault(); e.target.blur(); }
+    });
+    document.getElementById('g-liste').addEventListener('focusin', function(e){ if(e.target.tagName === 'INPUT') e.target.select(); });
+
+    ciz();
+    </script>
+    """
+    icerik = icerik.replace("__VERI__", veri_json)
+    return sayfa(icerik, "Gruba Göre Fiyat Girişi")
+
+
+# ============================================================
+# MENÜYE EKLEMEK İÇİN (index() içinde, "Hızlı Fiyat Girişi" kartının altına):
+#
+#        <a href="/fiyat_grup" class="okut-kart okut-turkuaz">
+#          <div class="okut-ikon">🏷️</div>
+#          <div class="okut-metin"><div class="okut-baslik">Gruba Göre Fiyat Girişi</div><div class="okut-alt">Marka / cins bazında tek seferde fiyat gir</div></div>
+#          <div class="okut-ok">›</div>
+#        </a>
+# ============================================================
+
+# ============================================================
+# FİYAT GRUBU — "STARWOOD DESENLERİ" gibi tek kalemde görmek için
+# 4 adımda eklenir:
+#   ADIM 1: Veritabanına yeni kolon
+#   ADIM 2: Grup atama sayfası (bu dosyadaki iki route)
+#   ADIM 3: fiyat_grup sayfasında 4 küçük değişiklik
+#   ADIM 4: Menüye kart
+# ============================================================
+
+
+# ------------------------------------------------------------
+# ADIM 1 — tablolari_olustur() içinde, şu satırın hemen altına ekleyin:
+#     cur.execute("""
+#     ALTER TABLE urun ADD COLUMN IF NOT EXISTS paket_m2_fatura NUMERIC(10,4)
+#     """)
+# şunu ekleyin:
+#
+#                cur.execute("""
+#                ALTER TABLE urun ADD COLUMN IF NOT EXISTS fiyat_grubu TEXT
+#                """)
+#
+# (Deploy edince kolon otomatik oluşur.)
+# ------------------------------------------------------------
+
+
+# ------------------------------------------------------------
+# ADIM 2 — Bu iki route'u app.py'ye yapıştırın
+# (fiyat_grup() fonksiyonunun altına)
+# ------------------------------------------------------------
+
+@app.route("/grup_ata")
+@rol_gerekli("muhasebeci")
+def grup_ata():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT id, ad, cins, ebat, kalinlik, renk, fiyat_grubu
+                FROM urun WHERE silindi IS NOT TRUE
+                ORDER BY ad
+            """)
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+
+    veri = [
+        {"id": r[0], "ad": r[1] or "", "cins": r[2] or "", "ebat": r[3] or "",
+         "kalinlik": r[4] or "", "renk": r[5] or "", "grup": r[6] or ""}
+        for r in satirlar
+    ]
+    veri_json = json.dumps(veri, ensure_ascii=False).replace("<", "\\u003c")
+
+    icerik = """
+    <h2 style="margin-bottom:2px;">🗂️ Ürünleri Gruba Ata</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">
+    Örnek: "starwood" yaz → görünenleri seç → grup adına <b>STARWOOD DESENLERİ</b> yaz → kaydet.
+    </p>
+
+    <div class="kart">
+      <input type="text" id="a-arama" class="arama" placeholder="🔍 Ürün ara (marka, renk, cins...)" oninput="ciz()" style="margin-bottom:8px;">
+      <label class="etiket-sec-satir" style="margin:0 0 8px;">
+        <input type="checkbox" id="sadece-gruplanmamis" onchange="ciz()"> <span>Sadece grubu olmayanlar</span>
+      </label>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button type="button" class="btn-kucuk mavi" style="flex:1;margin:0;text-align:center;" onclick="gorunenleriSec(true)">☑️ Görünenlerin Hepsini Seç</button>
+        <button type="button" class="btn-kucuk gri" style="flex:1;margin:0;text-align:center;" onclick="gorunenleriSec(false)">✖️ Seçimi Temizle</button>
+      </div>
+      <label style="margin-top:0;">Grup Adı</label>
+      <input type="text" id="grup-adi" list="grup-listesi" placeholder="Örn: STARWOOD DESENLERİ" autocomplete="off" style="margin-bottom:8px;">
+      <datalist id="grup-listesi"></datalist>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn yesil" style="margin:0;flex:2;" onclick="kaydet(false)">✅ Seçilenleri Gruba Ekle (<span id="secili-sayi">0</span>)</button>
+        <button type="button" class="btn gri" style="margin:0;flex:1;" onclick="kaydet(true)">Gruptan Çıkar</button>
+      </div>
+      <div id="a-sayac" style="font-size:12.5px;color:var(--muted);margin-top:8px;"></div>
+    </div>
+
+    <div id="a-liste"></div>
+
+    <style>
+    .a-satir { display:flex; align-items:center; gap:10px; padding:10px 12px; margin:6px 0;
+               background:var(--card); border:1px solid var(--border); border-radius:12px; font-size:13px; }
+    .a-satir input { width:20px; height:20px; margin:0; flex-shrink:0; }
+    .a-ad { flex:1; font-weight:600; }
+    .a-alt { display:block; font-size:11px; color:var(--muted); font-weight:400; }
+    .a-grup { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:999px;
+              background:rgba(33,150,243,.15); color:#64B5F6; white-space:nowrap; }
+    </style>
+
+    <script>
+    const URUNLER = __VERI__;
+    const secili = new Set();
+    function kacak(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function gorunenler(){
+      const q = document.getElementById('a-arama').value.toLocaleLowerCase('tr').trim();
+      const sadeceBos = document.getElementById('sadece-gruplanmamis').checked;
+      return URUNLER.filter(u => {
+        if(sadeceBos && u.grup) return false;
+        if(q && (u.ad + ' ' + u.cins + ' ' + u.ebat + ' ' + u.renk + ' ' + u.grup).toLocaleLowerCase('tr').indexOf(q) === -1) return false;
+        return true;
+      });
+    }
+    function ciz(){
+      const liste = gorunenler();
+      document.getElementById('a-liste').innerHTML = liste.map(u => {
+        const alt = [u.cins, u.ebat, u.kalinlik, u.renk].filter(x => x).join(' • ');
+        return '<label class="a-satir"><input type="checkbox" data-id="' + u.id + '"' + (secili.has(u.id) ? ' checked' : '') + '>' +
+               '<span class="a-ad">' + kacak(u.ad) + '<span class="a-alt">' + kacak(alt) + '</span></span>' +
+               (u.grup ? '<span class="a-grup">' + kacak(u.grup) + '</span>' : '') + '</label>';
+      }).join('');
+      grupListesiGuncelle();
+      sayacGuncelle();
+    }
+    function grupListesiGuncelle(){
+      const adlar = Array.from(new Set(URUNLER.map(u => u.grup).filter(x => x))).sort((a,b) => a.localeCompare(b,'tr'));
+      document.getElementById('grup-listesi').innerHTML = adlar.map(a => '<option value="' + kacak(a) + '">').join('');
+    }
+    function sayacGuncelle(){
+      document.getElementById('secili-sayi').textContent = secili.size;
+      document.getElementById('a-sayac').textContent =
+        gorunenler().length + ' ürün gösteriliyor • ' + URUNLER.filter(u => u.grup).length + ' ürün bir gruba bağlı (toplam ' + URUNLER.length + ')';
+    }
+    function gorunenleriSec(durum){
+      if(durum){ gorunenler().forEach(u => secili.add(u.id)); }
+      else { secili.clear(); }
+      ciz();
+    }
+    document.getElementById('a-liste').addEventListener('change', function(e){
+      if(e.target.dataset.id === undefined) return;
+      const id = parseInt(e.target.dataset.id);
+      if(e.target.checked) secili.add(id); else secili.delete(id);
+      sayacGuncelle();
+    });
+
+    function kaydet(cikar){
+      if(secili.size === 0){ alert('Önce ürün seç.'); return; }
+      const grup = cikar ? '' : document.getElementById('grup-adi').value.trim();
+      if(!cikar && !grup){ alert('Grup adını yaz.'); return; }
+      const mesaj = cikar ? secili.size + ' ürün gruptan çıkarılacak. Emin misin?'
+                          : secili.size + ' ürün "' + grup + '" grubuna eklenecek. Emin misin?';
+      if(!confirm(mesaj)) return;
+      fetch('/grup_kaydet', {method:'POST', headers:{'Content-Type':'application/json'},
+                             body: JSON.stringify({ids: Array.from(secili), grup: grup})})
+        .then(r => r.json()).then(d => {
+          if(d.ok){
+            URUNLER.forEach(u => { if(secili.has(u.id)) u.grup = grup; });
+            secili.clear();
+            ciz();
+            alert('✓ ' + d.guncellenen + ' ürün güncellendi');
+          } else { alert('❌ Kaydedilemedi'); }
+        }).catch(() => alert('❌ Bağlantı hatası, KAYDEDİLMEDİ'));
+    }
+    ciz();
+    </script>
+    """
+    icerik = icerik.replace("__VERI__", veri_json)
+    return sayfa(icerik, "Ürünleri Gruba Ata")
+
+
+@app.route("/grup_kaydet", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def grup_kaydet():
+    data = request.get_json(silent=True) or {}
+    ham_idler = data.get("ids", [])
+    grup = (data.get("grup") or "").strip()[:100] or None   # boşsa gruptan çıkarır (NULL)
+    if not isinstance(ham_idler, list):
+        return jsonify({"ok": False}), 400
+
+    idler = []
+    for x in ham_idler[:5000]:
+        try:
+            idler.append(int(x))
+        except (TypeError, ValueError):
+            continue
+    if not idler:
+        return jsonify({"ok": False}), 400
+
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute(
+                    "UPDATE urun SET fiyat_grubu=%s WHERE id = ANY(%s) AND silindi IS NOT TRUE",
+                    (grup, idler),
+                )
+                sayi = cur.rowcount
+    finally:
+        con.close()
+
+    log_aktivite("Fiyat Grubu Atandı", f"{sayi} ürün → {grup or '(gruptan çıkarıldı)'}")
+    return jsonify({"ok": True, "guncellenen": sayi})
+
+
+# ------------------------------------------------------------
+# ADIM 3 — fiyat_grup() fonksiyonunda 4 küçük değişiklik
+# ------------------------------------------------------------
+#
+# (a) SQL sorgusunda "sinif, renk," satırını şöyle değiştirin:
+#         SELECT id, ad, cins, ebat, kalinlik, yuzey, sinif, renk, fiyat_grubu,
+#                fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu
+#     ve satırlardaki indeksler kayacağı için "veri = [...]" bloğunu şununla değiştirin:
+#
+#     veri = [
+#         {"id": r[0], "ad": r[1] or "", "cins": r[2] or "", "ebat": r[3] or "",
+#          "kalinlik": r[4] or "", "yuzey": r[5] or "", "sinif": r[6] or "", "renk": r[7] or "",
+#          "fiyat_grubu": r[8] or "",
+#          "fiyat_pesin": _f(r[9]), "fiyat_kkart": _f(r[10]),
+#          "fiyat_3taksit": _f(r[11]), "fiyat_aysonu": _f(r[12])}
+#         for r in satirlar
+#     ]
+#
+# (b) HTML'de grup seçeneklerinin başına (Cins checkbox'ının ÜSTÜNE) şunu ekleyin
+#     ve Cins checkbox'ından "checked" ifadesini silin:
+#
+#     <label class="etiket-sec-satir" style="margin:0;"><input type="checkbox" value="fiyat_grubu" checked onchange="ciz()"> <span>Fiyat grubu (grubu olmayan ürün tek başına görünür)</span></label>
+#
+# (c) JS'te deger() fonksiyonunu şununla değiştirin:
+#
+#     function deger(u, alan){
+#       if(alan === 'marka') return (u.ad.trim().split(/\\s+/)[0] || '');
+#       if(alan === 'fiyat_grubu') return u.fiyat_grubu || u.ad;   // grubu yoksa kendi adı
+#       return u[alan] || '';
+#     }
+#
+# (d) Sayfanın altındaki yorumdan menü kartını ekleyin (ADIM 4).
+# ------------------------------------------------------------
+
+
+# ------------------------------------------------------------
+# ADIM 4 — index() menüsünde "Gruba Göre Fiyat Girişi" kartının altına:
+#
+#        <a href="/grup_ata" class="okut-kart okut-mor">
+#          <div class="okut-ikon">🗂️</div>
+#          <div class="okut-metin"><div class="okut-baslik">Ürünleri Gruba Ata</div><div class="okut-alt">Örn: tüm Starwood renklerini tek grupta topla</div></div>
+#          <div class="okut-ok">›</div>
+#        </a>
+# ------------------------------------------------------------
 
 @app.route("/laminant_hesap")
 @rol_gerekli("muhasebeci")
