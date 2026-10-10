@@ -5160,8 +5160,8 @@ def fiyat_toplu_yukle():
                                     "f_3taksit": f_3taksit, "f_aysonu": f_aysonu,
                                     "p_m2": p_m2, "p_metre": p_metre, "p_m2_fatura": p_m2_fatura,
                                 })
-                        else:
-                            bulunamayanlar.append(ad)
+                            else:
+                                bulunamayanlar.append(ad)
         finally:
             con.close()
 
