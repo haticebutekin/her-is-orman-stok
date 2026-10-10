@@ -8340,7 +8340,104 @@ function geriAl(){
         siparis_id=(int(siparis_id) if siparis_id else None),
         siparis_bilgi_html=siparis_bilgi_html,
     )
+@app.route("/cift_kartlar")
+@rol_gerekli("muhasebeci")
+def cift_kartlar():
+    from html import escape
+    con = db()
+    try:
+        with con.cursor() as cur:
+            gruplar = _cift_gruplari_bul(cur)
+    finally:
+        con.close()
 
+    silinecek_toplam = sum(len(g) - 1 for g in gruplar)
+    kartlar = ""
+    for grup in gruplar[:100]:
+        tut = _tutulacak_kart(grup)
+        satirlar = ""
+        for r in grup:
+            if r[0] == tut[0]:
+                satirlar += f'<div class="dash-liste-satir"><span>✅ TUTULACAK — {escape(r[2] or "")}</span><span class="dash-liste-deger">{r[3] or 0} adet</span></div>'
+            else:
+                satirlar += f'<div class="dash-liste-satir"><span>🗑️ silinecek — {escape(r[2] or "")}</span><span class="dash-liste-deger">{r[3] or 0} adet</span></div>'
+        kartlar += f'<div class="kart"><div class="bolum-baslik" style="margin:0 0 4px;">{escape(grup[0][1] or "")} — {escape(grup[0][4] or "-")}</div>{satirlar}</div>'
+
+    if not gruplar:
+        icerik = '<h2>🧹 Çift Kartlar</h2><p class="basari">✅ Çift kart bulunamadı.</p><a class="btn gri" href="/liste">⬅ Stok Listesine Dön</a>'
+        return sayfa(icerik, "Çift Kartlar")
+
+    icerik = (
+        "<h2>🧹 Çift Kartlar</h2>"
+        + f'<p style="text-align:center;color:var(--muted);">{len(gruplar)} üründe çift kart var. Temizlenirse {silinecek_toplam} kart silinecek, stoklar tutulan kartta birleşecek.</p>'
+        + '<form method="post" action="/cift_kartlar_temizle" onsubmit="return confirm(\'Çift kartlar silinsin mi? (Çöp kutusundan geri getirilebilir)\');">'
+        + f'<button class="btn kirmizi" type="submit">🧹 {silinecek_toplam} Çift Kartı Temizle</button></form>'
+        + (f'<p style="text-align:center;color:var(--muted);font-size:12.5px;">İlk 100 grup gösteriliyor, temizleme hepsini kapsar.</p>' if len(gruplar) > 100 else '')
+        + kartlar
+    )
+    return sayfa(icerik, "Çift Kartlar")
+
+
+@app.route("/cift_kartlar_temizle", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def cift_kartlar_temizle():
+    silinen = 0
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                gruplar = _cift_gruplari_bul(cur)
+                for grup in gruplar:
+                    tut = _tutulacak_kart(grup)
+                    digerleri = [r for r in grup if r[0] != tut[0]]
+                    toplam_adet = sum((r[3] or 0) for r in grup)
+                    fiyatlar = []
+                    for i in range(5, 9):
+                        deger = tut[i]
+                        if deger is None:
+                            for r in digerleri:
+                                if r[i] is not None:
+                                    deger = r[i]
+                                    break
+                        fiyatlar.append(deger)
+                    cur.execute("""
+                        UPDATE urun SET adet=%s, fiyat_pesin=%s, fiyat_kkart=%s,
+                                        fiyat_3taksit=%s, fiyat_aysonu=%s
+                        WHERE id=%s
+                    """, (toplam_adet, fiyatlar[0], fiyatlar[1], fiyatlar[2], fiyatlar[3], tut[0]))
+                    cur.execute(
+                        "UPDATE urun SET silindi=TRUE, silinme_tarihi=%s WHERE id = ANY(%s)",
+                        (tr_simdi(), [r[0] for r in digerleri])
+                    )
+                    silinen += len(digerleri)
+    finally:
+        con.close()
+    log_aktivite("Çift Kartlar Temizlendi", f"{silinen} kart silindi")
+    icerik = (
+        '<div style="text-align:center;font-size:52px;">✅</div>'
+        + f'<h2 style="text-align:center;">{silinen} Çift Kart Temizlendi</h2>'
+        + '<a href="/liste" class="okut-kart okut-mor"><div class="okut-ikon">📦</div><div class="okut-metin"><div class="okut-baslik">Stok Listesine Git</div></div><div class="okut-ok">›</div></a>'
+        + '<a href="/cop_kutusu" class="okut-kart okut-kirmizi"><div class="okut-ikon">🗑️</div><div class="okut-metin"><div class="okut-baslik">Çöp Kutusu</div></div><div class="okut-ok">›</div></a>'
+    )
+    return sayfa(icerik, "Temizlendi")
+
+
+def _cift_gruplari_bul(cur):
+    cur.execute("""
+        SELECT id, ad, barkod, adet, depo, fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu
+        FROM urun WHERE silindi IS NOT TRUE ORDER BY id
+    """)
+    harita = {}
+    for r in cur.fetchall():
+        ad_norm = " ".join((r[1] or "").split()).replace("İ", "I").replace("ı", "i").upper()
+        anahtar = (ad_norm, r[4] or "")
+        harita.setdefault(anahtar, []).append(r)
+    return [g for g in harita.values() if len(g) > 1]
+
+
+def _tutulacak_kart(grup):
+    return max(grup, key=lambda r: (r[3] or 0, 1 if r[5] is not None else 0, -r[0]))
+    
 @app.route("/ping")
 def ping():
     return "ok"
