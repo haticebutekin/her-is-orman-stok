@@ -5083,6 +5083,7 @@ def fiyat_toplu_yukle():
         eklenenler = []
         atlananlar = []
         eslesmeyenler = []  # her biri: dict(excel_ad, benzerler, f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre, p_m2_fatura)
+        bulunamayanlar = []
         varsayilan_depo = DEPOLAR[0] if DEPOLAR else ""
 
         con = db()
@@ -5159,15 +5160,8 @@ def fiyat_toplu_yukle():
                                     "f_3taksit": f_3taksit, "f_aysonu": f_aysonu,
                                     "p_m2": p_m2, "p_metre": p_metre, "p_m2_fatura": p_m2_fatura,
                                 })
-                            else:
-                                yeni_barkod = barkod_uret()
-                                cur.execute("""
-                                    INSERT INTO urun (ad, cins, ebat, adet, depo, barkod, min_stok,
-                                                       fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu,
-                                                       paket_m2, paket_metre, paket_m2_fatura)
-                                    VALUES (%s,%s,%s,0,%s,%s,5,%s,%s,%s,%s,%s,%s,%s)
-                                """, (ad, cins, ebat, depo, yeni_barkod, f_pesin, f_kkart, f_3taksit, f_aysonu, p_m2, p_metre, p_m2_fatura))
-                                eklenenler.append(ad)
+                        else:
+                            bulunamayanlar.append(ad)
         finally:
             con.close()
 
@@ -5234,6 +5228,7 @@ def fiyat_toplu_yukle():
             + '<h2 style="margin-top:0;text-align:center;">Fiyat Yükleme Tamamlandı</h2>'
             + f'<p style="text-align:center;color:var(--muted);">{len(guncellenenler)} ürün güncellendi, {len(eklenenler)} yeni ürün eklendi, {len(eslesmeyenler)} eşleşmedi</p>'
             + eslesmeyen_html
+            + _liste_kutusu("❌ Sistemde Bulunamadı (kart açılmadı)", "#e74c3c", bulunamayanlar)
             + _liste_kutusu("✅ Güncellenen Ürünler", "#27ae60", guncellenenler)
             + _liste_kutusu("🆕 Yeni Eklenen Ürünler", "#2196F3", eklenenler)
             + '<a href="/rapor/pdf?tur=fiyat" class="okut-kart okut-mor"><div class="okut-ikon">💰</div><div class="okut-metin"><div class="okut-baslik">Fiyat Listesi PDF\'i Aç</div></div><div class="okut-ok">›</div></a>'
