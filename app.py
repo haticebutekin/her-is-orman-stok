@@ -1264,7 +1264,16 @@ def palet_giris():
                             VALUES (%s, %s)
                             ON CONFLICT (ad) DO NOTHING
                         """, (tedarikci, tr_simdi()))
-                    cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=%s AND depo=%s FOR UPDATE", (barkod, depo))
+                        
+                    cur.execute("""
+                        SELECT u.id, u.ad, u.adet, u.cins, u.ebat, u.yuzey, u.sinif, u.renk, u.depo, u.barkod
+                        FROM urun u
+                        WHERE u.silindi IS NOT TRUE
+                           AND (u.barkod=%s OR u.id IN (SELECT urun_id FROM urun_barkod WHERE barkod=%s))
+                        ORDER BY (u.barkod=%s) DESC
+                        LIMIT 1
+                        FOR UPDATE OF u
+                    """, (barkod, barkod, barkod))
                     row = cur.fetchone()
                     if row:
                         uid, urun_ad, mevcut = row
@@ -2046,6 +2055,41 @@ def ekle2():
       📷 Okutulan barkod: <b>{{on_dolu_barkod}}</b> — bu ürün stokta yok, yeni ürün olarak ekleyin.
     </div>
     {% endif %}
+    {% if on_dolu_barkod %}
+<div class="kart">
+  <label style="margin-top:0;">Ya da bu barkodu mevcut bir ürüne bağla</label>
+  <input type="text" id="bagla-arama" class="arama" placeholder="🔍 Mevcut ürünü ara..." oninput="baglaAra()">
+  <div id="bagla-sonuc"></div>
+</div>
+<script>
+const YENI_BARKOD = {{ on_dolu_barkod|tojson }};
+let bz;
+function baglaAra(){
+  clearTimeout(bz);
+  const q = document.getElementById('bagla-arama').value.trim();
+  const kutu = document.getElementById('bagla-sonuc');
+  if(!q){ kutu.innerHTML = ''; return; }
+  bz = setTimeout(() => {
+    fetch('/urun_ara?q=' + encodeURIComponent(q)).then(r => r.json()).then(liste => {
+      kutu.innerHTML = '';
+      liste.forEach(u => {
+        const f = document.createElement('form');
+        f.method = 'post'; f.action = '/barkod_bagla';
+        f.onsubmit = () => confirm('Bu barkod "' + u.ad + '" kartına bağlansın mı?');
+        [['yeni_barkod', YENI_BARKOD], ['ana_barkod', u.barkod], ['donus', '/kamera/giris']].forEach(([n, v]) => {
+          const i = document.createElement('input');
+          i.type = 'hidden'; i.name = n; i.value = v; f.appendChild(i);
+        });
+        const b = document.createElement('button');
+        b.className = 'btn-kucuk mavi'; b.style.cssText = 'width:100%;text-align:left;margin:4px 0;';
+        b.textContent = '🔗 ' + u.ad + ' (' + u.adet + ' adet • ' + u.depo + ')';
+        f.appendChild(b); kutu.appendChild(f);
+      });
+    });
+  }, 250);
+}
+</script>
+{% endif %}
 
     <form method="post">
     <div class="kart">
@@ -2636,6 +2680,7 @@ def liste():
        <div class="urun-aksiyonlar">
         <button class="btn-kucuk mavi" onclick="window.location.href='/duzenle/{u[10]}'">✏️ Düzenle</button>
         <button class="btn-kucuk turkuaz" onclick="window.open('/etiket/{u[10]}','_blank')">🖨️ Etiket</button>
+        <button class="btn-kucuk mor" onclick="window.location.href='/barkodlar/{u[10]}'">🔗 Barkodlar</button>
         <button class="btn-kucuk kirmizi" onclick="urunSil('{u[10]}')">🗑️ Sil</button>
         </div>
         </div>
@@ -4235,7 +4280,8 @@ def hizli_islem():
                         return jsonify({"ok": False, "yeni": True, "barkod": barkod})
                     return jsonify({"ok": False, "msg": "Bu ürün sizin sattığınız ürünler arasında değil, çıkış yapılamaz"})
 
-                uid, ad, adet, cins, ebat, yuzey, sinif, renk, depo = row
+                uid, ad, adet, cins, ebat, yuzey, sinif, renk, depo, ana_barkod = row
+                barkod = ana_barkod   # sipariş, hareket kaydı vs. hep ana barkodla çalışsın
 
                 # ---- Sipariş kontrolü: depocu, açık siparişte olmayan ürünü çıkış yapamaz ----
                 kalem_id = None
@@ -5024,9 +5070,11 @@ def urun_ara():
         with con.cursor() as cur:
             cur.execute("""
                 SELECT ad, barkod, adet, depo, cins, ebat FROM urun
-                WHERE (ad ILIKE %s OR barkod ILIKE %s) AND silindi IS NOT TRUE
-                ORDER BY ad LIMIT 20
-            """, (f"%{q}%", f"%{q}%"))
+                WHERE (ad ILIKE %s OR barkod ILIKE %s
+                       OR id IN (SELECT urun_id FROM urun_barkod WHERE barkod ILIKE %s))
+                  AND silindi IS NOT TRUE
+               ORDER BY ad LIMIT 20
+           """, (f"%{q}%", f"%{q}%", f"%{q}%"))
             satirlar = cur.fetchall()
     finally:
         con.close()
@@ -5034,7 +5082,105 @@ def urun_ara():
         {"ad": s[0], "barkod": s[1], "adet": s[2], "depo": s[3] or "", "cins": s[4] or "", "ebat": s[5] or ""}
         for s in satirlar
     ])
+def _barkod_kullanimda_mi(cur, kod):
+    cur.execute("SELECT 1 FROM urun WHERE barkod=%s UNION SELECT 1 FROM urun_barkod WHERE barkod=%s", (kod, kod))
+    return cur.fetchone() is not None
 
+
+@app.route("/barkod_bagla", methods=["POST"])
+@rol_gerekli("depocu", "muhasebeci")
+def barkod_bagla():
+    yeni = request.form.get("yeni_barkod", "").strip()
+    ana = request.form.get("ana_barkod", "").strip()
+    donus = request.form.get("donus", "/liste")
+    if not donus.startswith("/"):
+        donus = "/liste"
+    hata = None
+    ad = ""
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("SELECT id, ad FROM urun WHERE barkod=%s AND silindi IS NOT TRUE", (ana,))
+                u = cur.fetchone()
+                if not yeni or not u:
+                    hata = "Ürün veya barkod bulunamadı."
+                elif _barkod_kullanimda_mi(cur, yeni):
+                    hata = "Bu barkod zaten bir ürüne bağlı."
+                else:
+                    ad = u[1]
+                    cur.execute("INSERT INTO urun_barkod (urun_id, barkod) VALUES (%s,%s)", (u[0], yeni))
+    finally:
+        con.close()
+    if hata:
+        return sayfa(f'<p class="hata">❌ {hata}</p><a class="btn gri" href="{donus}">⬅ Geri Dön</a>', "Hata")
+    log_aktivite("Ek Barkod Bağlandı", f"{ad} — {yeni}")
+    return sayfa(
+        '<div style="text-align:center;font-size:52px;">✅</div>'
+        f'<h2 style="text-align:center;">Barkod Bağlandı</h2>'
+        f'<p style="text-align:center;color:var(--muted);"><b>{yeni}</b> artık <b>{ad}</b> kartına ait. Ürünü tekrar okutabilirsin.</p>'
+        f'<a class="btn mavi" href="{donus}">Devam</a>', "Barkod Bağlandı")
+
+
+@app.route("/barkodlar/<barkod>")
+@rol_gerekli("muhasebeci")
+def barkodlar(barkod):
+    from html import escape
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("SELECT id, ad FROM urun WHERE barkod=%s", (barkod,))
+            u = cur.fetchone()
+            if not u:
+                return sayfa('<p class="hata">❌ Ürün bulunamadı.</p><a class="btn gri" href="/liste">⬅ Geri Dön</a>', "Hata")
+            cur.execute("SELECT id, barkod FROM urun_barkod WHERE urun_id=%s AND barkod<>%s ORDER BY id", (u[0], barkod))
+            ekler = cur.fetchall()
+    finally:
+        con.close()
+
+    satirlar = "".join(
+        f'<div class="dash-liste-satir"><span>🔢 {escape(b)}</span>'
+        f'<form method="post" action="/barkod_sil/{bid}" onsubmit="return confirm(\'Bu barkod kaldırılsın mı?\');" style="margin:0;">'
+        f'<button class="btn-kucuk kirmizi" style="margin:0;">Kaldır</button></form></div>'
+        for bid, b in ekler
+    ) or '<p style="color:var(--muted);font-size:13px;">Henüz ek barkod yok.</p>'
+
+    icerik = f"""
+    <h2>🔗 Barkodlar</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">{escape(u[1])}</p>
+    <div class="kart">
+      <label style="margin-top:0;">Ana Barkod</label>
+      <b style="font-size:17px;letter-spacing:1px;">{escape(barkod)}</b>
+    </div>
+    <div class="kart">
+      <label style="margin-top:0;">Ek Barkodlar (bunlar okutulunca da bu karta işlenir)</label>
+      {satirlar}
+    </div>
+    <form method="post" action="/barkod_bagla" class="kart">
+      <label style="margin-top:0;">Yeni Barkod Ekle (okut veya yaz)</label>
+      <input type="hidden" name="ana_barkod" value="{escape(barkod)}">
+      <input type="hidden" name="donus" value="/barkodlar/{escape(barkod)}">
+      <input name="yeni_barkod" inputmode="numeric" placeholder="Barkod" required autofocus>
+      <button class="btn mavi">Bağla</button>
+    </form>
+    <a href="/liste" class="okut-kart okut-mor"><div class="okut-ikon">📦</div><div class="okut-metin"><div class="okut-baslik">Stok Listesine Dön</div></div><div class="okut-ok">›</div></a>
+    """
+    return sayfa(icerik, "Barkodlar")
+
+
+@app.route("/barkod_sil/<int:bid>", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def barkod_sil(bid):
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("SELECT u.barkod FROM urun_barkod ub JOIN urun u ON u.id=ub.urun_id WHERE ub.id=%s", (bid,))
+                r = cur.fetchone()
+                cur.execute("DELETE FROM urun_barkod WHERE id=%s", (bid,))
+    finally:
+        con.close()
+    return redirect(f"/barkodlar/{r[0]}" if r else "/liste")
 
 @app.route("/fiyat_toplu_yukle", methods=["GET", "POST"])
 @rol_gerekli("muhasebeci")
@@ -8268,7 +8414,7 @@ function sonucGoster(d, barkod){
     const alan = document.getElementById('sonuc-alan');
 
     if (d.ok) {
-        sonIslem = { barkod: barkod, tip: aktifTip, siparis_id: siparisId };
+        sonIslem = { barkod: d.barkod || barkod, tip: aktifTip, siparis_id: siparisId };
         oturumGuncelle(barkod, d.ad, d.miktar || 1);
         const oturumToplamAdet = Object.values(oturumListesi).reduce((t, k) => t + k.toplamAdet, 0);
         const oturumUrunSayisi = Object.keys(oturumListesi).length;
