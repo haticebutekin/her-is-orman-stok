@@ -8887,6 +8887,231 @@ def akilli_fiyat_eslestir():
     finally:
         con.close()
     return jsonify({"ok": sayi > 0})
+@app.route("/takim_hesap")
+@rol_gerekli("muhasebeci")
+def takim_hesap():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT ad, cins, paket_m2, paket_metre, paket_m2_fatura,
+                       fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu
+                FROM urun
+                WHERE silindi IS NOT TRUE AND (paket_m2 IS NOT NULL OR paket_metre IS NOT NULL)
+                ORDER BY ad
+            """)
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+
+    def sade(m):
+        m = str(m or "").replace("İ", "I").replace("ı", "I").upper()
+        for a, b in (("Ş", "S"), ("Ğ", "G"), ("Ü", "U"), ("Ö", "O"), ("Ç", "C")):
+            m = m.replace(a, b)
+        return m
+
+    def fl(x):
+        return float(x) if x is not None else None
+
+    urunler = []
+    for ad, cins, p_m2, p_metre, p_fatura, f1, f2, f3, f4 in satirlar:
+        metin = sade(ad) + " " + sade(cins)
+        if "KABRON" in metin or "SILTE" in metin:
+            tur = "altlik"
+        elif p_metre is not None:
+            tur = "supurgelik"
+        else:
+            tur = "parke"
+        urunler.append({
+            "ad": ad or "", "tur": tur,
+            "paket_m2": fl(p_m2), "paket_metre": fl(p_metre),
+            "paket_m2_fatura": fl(p_fatura) if p_fatura is not None else fl(p_m2),
+            "fiyat_pesin": fl(f1), "fiyat_kkart": fl(f2),
+            "fiyat_3taksit": fl(f3), "fiyat_aysonu": fl(f4),
+        })
+
+    if not any(u["tur"] == "parke" for u in urunler):
+        return sayfa(
+            '<h2>📐 Laminant Takım Hesabı</h2>'
+            '<p class="hata">❌ "1 Paket Kaç M²" bilgisi girilmiş laminant/parke ürünü yok. '
+            'Önce ürünlerin Düzenle sayfasından bu bilgiyi gir.</p>'
+            '<a class="btn gri" href="/liste">⬅ Stok Listesine Dön</a>', "Laminant Takım Hesabı")
+
+    veri_json = json.dumps(urunler, ensure_ascii=False).replace("<", "\\u003c")
+
+    icerik = r"""
+    <h2 style="margin-bottom:2px;">📐 Laminant Takım Hesabı</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">
+    Takım = Parke + Süpürgelik + Altlık. Üçünü de seç, ölçüyü gir, toplam otomatik çıksın.
+    </p>
+
+    <div class="kart">
+      <label style="margin-top:0;">Ödeme Türü</label>
+      <select id="odeme" onchange="hesapla()">
+        <option value="fiyat_pesin">Peşin</option>
+        <option value="fiyat_kkart">Kredi Kartı</option>
+        <option value="fiyat_3taksit">3 Taksit</option>
+        <option value="fiyat_aysonu">Ay Sonu</option>
+      </select>
+    </div>
+
+    <div class="kart">
+      <label style="margin-top:0;">🪵 Parke (renk / model)</label>
+      <select id="parke-sec" onchange="hesapla()"></select>
+      <label>📏 Süpürgelik</label>
+      <select id="sup-sec" onchange="hesapla()"></select>
+      <label class="etiket-sec-satir" style="margin:10px 0 4px;">
+        <input type="checkbox" id="isitma" onchange="altlikVarsayilan(); hesapla();">
+        <span>🔥 Yerden ısıtma var (altlık: termal şilte)</span>
+      </label>
+      <label>🧱 Altlık (kabron / şilte)</label>
+      <select id="alt-sec" onchange="hesapla()"></select>
+    </div>
+
+    <div class="bolum-baslik">🚪 Odalar</div>
+    <div class="kart" style="padding:8px;overflow-x:auto;">
+      <table class="tk-tablo">
+        <thead><tr><th>S/NO</th><th>Oda Eni (cm)</th><th>Oda Boy (cm)</th><th>M²</th></tr></thead>
+        <tbody id="oda-govde"></tbody>
+        <tfoot><tr class="tk-toplam"><td colspan="3">TOPLAM M²</td><td id="toplam-m2">0,00</td></tr>
+        <tr class="tk-toplam"><td colspan="3">TOPLAM ÇEVRE (metre)</td><td id="toplam-cevre">0,00</td></tr></tfoot>
+      </table>
+    </div>
+    <button type="button" class="btn-kucuk mavi" onclick="odaEkle()" style="margin-bottom:16px;">➕ Oda Ekle</button>
+
+    <div class="bolum-baslik">📦 Takım Hesabı</div>
+    <div class="kart" style="padding:8px;overflow-x:auto;">
+      <table class="tk-tablo">
+        <thead><tr><th>Cinsi</th><th>Gereken</th><th>Verilecek</th><th>Birim</th><th>Toplam</th><th>Fiyat</th><th>Tutarı</th></tr></thead>
+        <tbody id="sonuc-govde"></tbody>
+        <tfoot>
+          <tr class="tk-toplam"><td colspan="6">GENEL TOPLAM</td><td id="genel-toplam">0,00 TL</td></tr>
+          <tr class="tk-toplam"><td colspan="6">M² BAŞINA TAKIM FİYATI</td><td id="m2-fiyat">-</td></tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <style>
+    .tk-tablo { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .tk-tablo th { background:var(--bg2); color:var(--muted); font-weight:700; text-transform:uppercase;
+                   font-size:10.5px; padding:8px 6px; text-align:left; white-space:nowrap; }
+    .tk-tablo td { padding:6px; border-top:1px solid var(--border); white-space:nowrap; }
+    .tk-tablo input { width:100%; min-width:70px; margin:0; padding:8px 6px; font-size:13px; border-radius:8px;
+                      border:1px solid var(--border); background:var(--bg2); color:var(--text); }
+    .tk-toplam td { font-weight:800; background:var(--bg2); border-top:2px solid var(--border); }
+    </style>
+
+    <script>
+    const URUNLER = __URUNLER__;
+    const PARKE = URUNLER.filter(u => u.tur === 'parke');
+    const SUP = URUNLER.filter(u => u.tur === 'supurgelik');
+    const ALT = URUNLER.filter(u => u.tur === 'altlik');
+    let odaNo = 0;
+
+    function kacak(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function sade(s){
+      return String(s || '').toLocaleUpperCase('tr').replace(/İ/g,'I').replace(/Ş/g,'S').replace(/Ü/g,'U')
+             .replace(/Ö/g,'O').replace(/Ç/g,'C').replace(/Ğ/g,'G');
+    }
+    function tl(n){ return n.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+    function vir(n, k){ return n.toFixed(k).replace('.', ','); }
+
+    function doldur(id, liste, bosMetin){
+      let h = bosMetin ? '<option value="-1">' + bosMetin + '</option>' : '';
+      liste.forEach((u, i) => { h += '<option value="' + i + '">' + kacak(u.ad) + '</option>'; });
+      document.getElementById(id).innerHTML = h;
+    }
+
+    function altlikVarsayilan(){
+      const isitma = document.getElementById('isitma').checked;
+      let idx = -1;
+      if(isitma){
+        idx = ALT.findIndex(u => sade(u.ad).indexOf('TERMAL') !== -1);
+        if(idx < 0) idx = ALT.findIndex(u => sade(u.ad).indexOf('SILTE') !== -1);
+      } else {
+        idx = ALT.findIndex(u => sade(u.ad).indexOf('KABRON') !== -1);
+      }
+      if(idx < 0 && ALT.length) idx = 0;
+      document.getElementById('alt-sec').value = String(idx);
+    }
+
+    function varsayilanlar(){
+      let si = SUP.findIndex(u => /(^|[^0-9])6\s*CM/.test(sade(u.ad)));
+      if(si < 0 && SUP.length) si = 0;
+      document.getElementById('sup-sec').value = String(si);
+      altlikVarsayilan();
+    }
+
+    function odaEkle(){
+      odaNo++;
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + odaNo + '</td>' +
+        '<td><input type="number" class="oda-eni" oninput="hesapla()" placeholder="500"></td>' +
+        '<td><input type="number" class="oda-boyu" oninput="hesapla()" placeholder="300"></td>' +
+        '<td class="oda-m2">0,00</td>';
+      document.getElementById('oda-govde').appendChild(tr);
+    }
+
+    function urunHesapla(u, m2, cevre, alan){
+      let gerekli, birimBasi, birimFatura;
+      if(u.paket_m2){ gerekli = m2; birimBasi = u.paket_m2; birimFatura = u.paket_m2_fatura || u.paket_m2; }
+      else { gerekli = cevre; birimBasi = u.paket_metre; birimFatura = u.paket_metre; }
+      if(!(gerekli > 0)) return {bos: 'Oda ölçüsü girin'};
+      const fiyat = u[alan];
+      if(!fiyat) return {bos: 'Bu ödeme türü için fiyat yok'};
+      const ham = gerekli / birimBasi;
+      const paket = Math.ceil(ham - 1e-9);
+      const miktar = paket * birimFatura;
+      return {ham: ham, paket: paket, birim: birimFatura, miktar: miktar, fiyat: fiyat, tutar: miktar * fiyat};
+    }
+
+    function hesapla(){
+      const alan = document.getElementById('odeme').value;
+      let m2 = 0, cevre = 0;
+      document.querySelectorAll('#oda-govde tr').forEach(tr => {
+        const eni = parseFloat(tr.querySelector('.oda-eni').value) || 0;
+        const boyu = parseFloat(tr.querySelector('.oda-boyu').value) || 0;
+        tr.querySelector('.oda-m2').textContent = vir(eni * boyu / 10000, 2);
+        m2 += eni * boyu / 10000;
+        cevre += 2 * (eni + boyu) / 100;
+      });
+      document.getElementById('toplam-m2').textContent = vir(m2, 2);
+      document.getElementById('toplam-cevre').textContent = vir(cevre, 2);
+
+      const secimler = [
+        ['Parke', PARKE[parseInt(document.getElementById('parke-sec').value)]],
+        ['Süpürgelik', SUP[parseInt(document.getElementById('sup-sec').value)]],
+        ['Altlık', ALT[parseInt(document.getElementById('alt-sec').value)]]
+      ];
+      let html = '', genel = 0;
+      secimler.forEach(par => {
+        const baslik = par[0], u = par[1];
+        if(!u){ return; }
+        const s = urunHesapla(u, m2, cevre, alan);
+        if(s.bos){
+          html += '<tr><td>' + kacak(u.ad) + '</td><td colspan="6" style="color:var(--muted);">' + s.bos + '</td></tr>';
+          return;
+        }
+        genel += s.tutar;
+        html += '<tr><td><b>' + baslik + ':</b> ' + kacak(u.ad) + '</td><td>' + vir(s.ham, 2) + '</td><td>' + vir(s.paket, 2) +
+                '</td><td>' + String(s.birim).replace('.', ',') + '</td><td>' + vir(s.miktar, 3) +
+                '</td><td>' + tl(s.fiyat) + '</td><td><b>' + tl(s.tutar) + '</b></td></tr>';
+      });
+      document.getElementById('sonuc-govde').innerHTML = html;
+      document.getElementById('genel-toplam').textContent = tl(genel) + ' TL';
+      document.getElementById('m2-fiyat').textContent = m2 > 0 ? tl(genel / m2) + ' TL' : '-';
+    }
+
+    doldur('parke-sec', PARKE, '');
+    doldur('sup-sec', SUP, '— Süpürgelik yok —');
+    doldur('alt-sec', ALT, '— Altlık yok —');
+    varsayilanlar();
+    for(let i = 0; i < 10; i++){ odaEkle(); }
+    hesapla();
+    </script>
+    """
+    icerik = icerik.replace("__URUNLER__", veri_json)
+    return sayfa(icerik, "Laminant Takım Hesabı")
     
 @app.route("/ping")
 def ping():
