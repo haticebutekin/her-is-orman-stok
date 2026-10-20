@@ -9112,6 +9112,390 @@ def takim_hesap():
     """
     icerik = icerik.replace("__URUNLER__", veri_json)
     return sayfa(icerik, "Laminant Takım Hesabı")
+@app.route("/akilli_fiyat_yukle2", methods=["GET", "POST"])
+@rol_gerekli("muhasebeci")
+def akilli_fiyat_yukle2():
+    import re
+    from html import escape
+
+    DUR = {"MDF", "LAM", "MM", "LISTESI", "LISTE", "VE", "M", "D", "F", "MDFLAM"}
+
+    def norm(metin):
+        m = str(metin or "").replace("İ", "I").replace("ı", "I").upper()
+        for a, b in (("Ş", "S"), ("Ğ", "G"), ("Ü", "U"), ("Ö", "O"), ("Ç", "C")):
+            m = m.replace(a, b)
+        return re.sub(r"[^A-Z0-9*]+", " ", m).strip()
+
+    def tokenler(metin):
+        parcalar = norm(metin).split()
+        if len(parcalar) > 2 and all(len(p) == 1 for p in parcalar):
+            parcalar = ["".join(parcalar)]
+        sonuc = set()
+        for t in parcalar:
+            if t in DUR or re.fullmatch(r"\d+(\*\d+)+", t) or re.fullmatch(r"\d{1,2}", t):
+                continue
+            sonuc.add(t)
+        return sonuc
+
+    def ebat_anahtar(metin):
+        sayilar = re.findall(r"\d+", str(metin or ""))
+        if len(sayilar) >= 2:
+            return tuple(sorted(int(x) for x in sayilar[:2]))
+        return None
+
+    def sayi_mi(v):
+        if isinstance(v, (int, float)):
+            return True
+        return isinstance(v, str) and re.fullmatch(r"[\d.,]+", v.strip()) is not None
+
+    def bul(bas, *adaylar):
+        for a in adaylar:
+            if a in bas:
+                return bas.index(a)
+        return None
+
+    if request.method == "POST":
+        dosya = request.files.get("dosya")
+        if not dosya or dosya.filename == "":
+            return sayfa('<p class="hata">❌ Dosya seçilmedi.</p><a class="btn gri" href="/akilli_fiyat_yukle2">⬅ Geri Dön</a>', "Hata")
+        satirlar = excel_satirlarini_oku(dosya)
+        if not satirlar:
+            return sayfa('<p class="hata">❌ Dosya okunamadı veya boş. .xlsx olarak kaydedip tekrar dene.</p><a class="btn gri" href="/akilli_fiyat_yukle2">⬅ Geri Dön</a>', "Hata")
+
+        # ---- 1) Excel'i oku ----
+        BASLIK_KELIMELERI = {"MM", "EBAT", "PESIN", "K KRTI", "3 TKST", "AY SONU"}
+        veriler = []
+        bolum = ""
+        temiz_mod = False
+        idx = {}
+        for satir in satirlar:
+            if satir is None:
+                continue
+            hucre = list(satir)
+            dolu = [h for h in hucre if h is not None and str(h).strip() != ""]
+            if not dolu:
+                continue
+            ilk = str(hucre[0]).strip().lower() if hucre[0] is not None else ""
+
+            if ilk == "ad":
+                temiz_mod = True
+                bas = [str(h).strip().lower() if h is not None else "" for h in hucre]
+                idx = {
+                    "ebat": bul(bas, "ebat"),
+                    "p": [bul(bas, "peşin", "pesin"), bul(bas, "k.kartı", "k.krti", "kredi kartı"),
+                          bul(bas, "3 taksit", "3 tkst"), bul(bas, "ay sonu", "aysonu")],
+                }
+                continue
+            if ilk == "mm":
+                temiz_mod = False
+                bolum = " ".join(str(h).strip() for h in dolu if norm(h) not in BASLIK_KELIMELERI)
+                continue
+
+            if temiz_mod:
+                def al(i):
+                    return hucre[i] if (i is not None and i < len(hucre)) else None
+                ad = str(al(0) or "").strip()
+                f = [fiyat_ayristir(al(i)) for i in idx["p"]]
+                ebat_txt = str(al(idx["ebat"]) or "").strip()
+                mm = None
+            else:
+                mm_m = re.search(r"\d+", str(hucre[0] or "").upper().replace("O", "0"))
+                mm = int(mm_m.group()) if mm_m else None
+                yazilar, sayilar = [], []
+                for h in hucre[1:]:
+                    if h is None or str(h).strip() == "":
+                        continue
+                    if sayi_mi(h):
+                        sayilar.append(h)
+                    else:
+                        yazilar.append(str(h).strip())
+                if len(sayilar) < 4:
+                    continue
+                f = [fiyat_ayristir(x) for x in sayilar[-4:]]
+                ebat_txt = ""
+                kalan = []
+                for y in yazilar:
+                    m = re.search(r"\d+\*\d+(\*\d+)?", y)
+                    if m:
+                        if not ebat_txt:
+                            ebat_txt = m.group()
+                        y = (y[:m.start()] + " " + y[m.end():]).strip()
+                    if y:
+                        kalan.append(y)
+                ad = " ".join(kalan).strip()
+
+            if not ad or all(x is None for x in f) or "GRUP" in norm(ad).split():
+                continue
+            veriler.append((ad, bolum, mm, ebat_txt, f))
+
+        # ---- 2) Stoktaki kartlar ----
+        con = db()
+        try:
+            with con.cursor() as cur:
+                cur.execute("SELECT id, ad, cins, ebat, kalinlik, yuzey, sinif, renk FROM urun WHERE silindi IS NOT TRUE")
+                ham_kartlar = cur.fetchall()
+        finally:
+            con.close()
+
+        kartlar = []
+        for kid, kad, cins, kebat, kkal, yuzey, sinif, renk in ham_kartlar:
+            kmm = None
+            m = re.search(r"\d+", str(kkal or ""))
+            if m:
+                kmm = int(m.group())
+            else:
+                m = re.search(r"(\d+)\s*MM", norm(kad))
+                if m:
+                    kmm = int(m.group(1))
+            kartlar.append({
+                "id": kid, "ad": kad or "", "ebat_txt": kebat or "",
+                "ebat": ebat_anahtar(kebat), "mm": kmm,
+                "ad_t": tokenler(kad),
+                "tum": tokenler(" ".join(str(x or "") for x in (kad, cins, yuzey, sinif, renk))),
+            })
+
+        def kart_bul(ad, bol, mm, ebat_txt):
+            ebat = ebat_anahtar(ebat_txt)
+            R = tokenler(ad)
+            if not R:
+                return "yok", []
+            S = tokenler(bol)
+
+            def tara(filtre):
+                guclu, zayif = [], []
+                for k in kartlar:
+                    if filtre:
+                        if ebat and k["ebat"] and ebat != k["ebat"]:
+                            continue
+                        if mm and k["mm"] and mm != k["mm"]:
+                            continue
+                    cov = len(R & k["tum"]) / len(R)
+                    if cov == 1:
+                        fazla = [t for t in (k["ad_t"] - R)
+                                 if not any(x.startswith(t) or t.startswith(x) for x in S)]
+                        guclu.append((len(fazla), -len(S & k["tum"]), k))
+                    elif cov >= 0.6:
+                        zayif.append((-cov, k))
+                return guclu, zayif
+
+            guclu, zayif = tara(True)
+            filtresiz = False
+            if not guclu and not zayif:
+                guclu, zayif = tara(False)
+                filtresiz = True
+            if guclu:
+                guclu.sort(key=lambda x: (x[0], x[1]))
+                en = guclu[0]
+                ayni = [x for x in guclu if x[0] == en[0] and x[1] == en[1]]
+                adlar = {norm(x[2]["ad"]) for x in ayni}
+                if (not filtresiz) and en[0] == 0 and len(adlar) == 1:
+                    return "otomatik", [x[2]["id"] for x in ayni]
+                return "sor", [x[2] for x in guclu[:5]]
+            if zayif:
+                zayif.sort(key=lambda x: x[0])
+                return "sor", [x[1] for x in zayif[:5]]
+            yakin = []
+            for k in kartlar:
+                ortak = len(R & k["tum"])
+                if ortak:
+                    yakin.append((-ortak / len(R), len(k["ad_t"] - R), k))
+            yakin.sort(key=lambda x: (x[0], x[1]))
+            return "yok", [x[2] for x in yakin[:4]]
+
+        # ---- 3) Eşleştir, fiyatları yaz ----
+        otomatik, sorulacak, bulunamayan = [], [], []
+        con = db()
+        try:
+            with con:
+                with con.cursor() as cur:
+                    for ad, bol, mm, ebat_txt, f in veriler:
+                        durum, sonuc = kart_bul(ad, bol, mm, ebat_txt)
+                        if durum == "otomatik":
+                            cur.execute("""
+                                UPDATE urun SET
+                                    fiyat_pesin = COALESCE(%s, fiyat_pesin),
+                                    fiyat_kkart = COALESCE(%s, fiyat_kkart),
+                                    fiyat_3taksit = COALESCE(%s, fiyat_3taksit),
+                                    fiyat_aysonu = COALESCE(%s, fiyat_aysonu)
+                                WHERE id = ANY(%s)
+                            """, (f[0], f[1], f[2], f[3], sonuc))
+                            otomatik.append((ad, len(sonuc)))
+                        elif durum == "sor":
+                            sorulacak.append((ad, bol, ebat_txt, mm, f, sonuc))
+                        else:
+                            bulunamayan.append((ad, bol, ebat_txt, mm, f, sonuc))
+        finally:
+            con.close()
+
+        log_aktivite("Akıllı Fiyat Yüklendi v2", f"{len(otomatik)} otomatik, {len(sorulacak)} onay bekliyor, {len(bulunamayan)} bulunamadı")
+
+        def satir_html(ad, bol, ebat_txt, mm, f, adaylar, kart_ac_dugmesi):
+            f_json = escape(json.dumps(f), quote=True)
+            dugmeler = ""
+            for k in adaylar:
+                ebat_yazi = (" • " + escape(k["ebat_txt"])) if k["ebat_txt"] else ""
+                dugmeler += (
+                    '<div style="display:flex;align-items:center;gap:8px;padding:6px 0 6px 12px;border-top:1px dashed var(--border);">'
+                    f'<span style="flex:1;font-size:12.5px;">→ {escape(k["ad"])}{ebat_yazi}</span>'
+                    f'<button type="button" class="btn-kucuk yesil" style="margin:0;" data-id="{k["id"]}" data-f="{f_json}" onclick="eslestir(this)">✅ Bu</button></div>'
+                )
+            ac = ""
+            if kart_ac_dugmesi:
+                ac = (
+                    '<div style="padding:6px 0 0 12px;">'
+                    f'<button type="button" class="btn-kucuk mavi kart-ac-btn" style="margin:0;" data-ad="{escape(ad, quote=True)}" '
+                    f'data-cins="{escape(bol[:60], quote=True)}" data-ebat="{escape(ebat_txt, quote=True)}" data-mm="{mm or ""}" '
+                    f'data-f="{f_json}" onclick="kartAc(this)">➕ Hiçbiri değil, yeni kart aç</button></div>'
+                )
+            fiyat_yazi = " / ".join("-" if x is None else str(x) for x in f)
+            return (
+                '<div class="sor-satir" style="padding:8px 0;border-bottom:1px solid var(--border);">'
+                f'<div style="font-weight:700;">📄 Excel: {escape(ad)}</div>'
+                f'<div style="font-size:11.5px;color:var(--muted);">Bölüm: {escape(bol)} • Ebat: {escape(ebat_txt or "-")} • Fiyat: {fiyat_yazi}</div>'
+                f'{dugmeler}{ac}</div>'
+            )
+
+        def kutu(baslik_metni, renk, govde):
+            if not govde:
+                return ""
+            return f'<div class="kart"><label style="color:{renk};">{baslik_metni}</label>{govde}</div>'
+
+        sor_govde = "".join(satir_html(a, b, e, m, f, ad_, True) for a, b, e, m, f, ad_ in sorulacak[:60])
+        yok_govde = "".join(satir_html(a, b, e, m, f, ad_, True) for a, b, e, m, f, ad_ in bulunamayan[:100])
+        oto_govde = "".join(
+            f'<div style="font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--border);">{escape(a)} → {n} kart</div>'
+            for a, n in otomatik[:150])
+
+        depo_secenekleri = "".join(f"<option>{escape(d)}</option>" for d in DEPOLAR)
+        hepsi_dugme = ""
+        if sorulacak or bulunamayan:
+            hepsi_dugme = (
+                '<div class="kart"><label style="margin-top:0;">Yeni kart açılacaksa hangi depoya?</label>'
+                f'<select id="yeni-depo">{depo_secenekleri}</select>'
+                '<button type="button" class="btn-kucuk mavi" style="margin:0;" onclick="hepsiniAc()">➕ Aşağıdaki hepsi için yeni kart aç</button>'
+                '<p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">Önce ✅ Bu butonlarıyla doğru kartları seç, kalanlar için yeni kart aç.</p></div>'
+            )
+
+        js = """
+        <script>
+        function eslestir(btn){
+          fetch('/akilli_fiyat_eslestir', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id: parseInt(btn.dataset.id), f: JSON.parse(btn.dataset.f)})
+          }).then(r => r.json()).then(d => {
+            if(d.ok){
+              var satir = btn.closest('.sor-satir');
+              satir.style.opacity = '.4';
+              satir.innerHTML = '<div style="font-weight:700;">✅ Eşleştirildi</div>';
+            } else { alert('Kaydedilemedi'); }
+          }).catch(() => alert('Bağlantı hatası'));
+        }
+        function kartAc(btn){
+          var depoKutu = document.getElementById('yeni-depo');
+          return fetch('/akilli_kart_ac', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ad: btn.dataset.ad, cins: btn.dataset.cins, ebat: btn.dataset.ebat,
+                                  kalinlik: btn.dataset.mm, depo: depoKutu ? depoKutu.value : '',
+                                  f: JSON.parse(btn.dataset.f)})
+          }).then(r => r.json()).then(d => {
+            var satir = btn.closest('.sor-satir');
+            if(d.ok && satir){
+              satir.style.opacity = '.4';
+              satir.innerHTML = '<div style="font-weight:700;">✅ ' + (d.yeni ? 'Yeni kart açıldı' : 'Kart zaten vardı, fiyatı güncellendi') + '</div>';
+            } else if(!d.ok){ alert('Kart açılamadı'); }
+            return d;
+          });
+        }
+        function hepsiniAc(){
+          var liste = Array.from(document.querySelectorAll('.kart-ac-btn'));
+          if(liste.length === 0){ return; }
+          if(!confirm(liste.length + ' ürün için yeni stok kartı açılacak (stok 0). Emin misin?')){ return; }
+          (function sira(i){
+            if(i >= liste.length){ return; }
+            if(!liste[i].isConnected){ sira(i + 1); return; }
+            kartAc(liste[i]).then(() => sira(i + 1)).catch(() => sira(i + 1));
+          })(0);
+        }
+        </script>
+        """
+        icerik = (
+            '<h2 style="text-align:center;">Fiyat Yükleme Tamamlandı</h2>'
+            + f'<p style="text-align:center;color:var(--muted);">{len(veriler)} satır okundu: {len(otomatik)} otomatik eşleşti, {len(sorulacak)} onay bekliyor, {len(bulunamayan)} için stokta kart yok.</p>'
+            + hepsi_dugme
+            + kutu(f"❓ Emin olamadım, sen seç ({len(sorulacak)})", "#e67e22", sor_govde)
+            + kutu(f"❌ Stokta kart bulunamadı ({len(bulunamayan)})", "#e74c3c", yok_govde)
+            + kutu(f"✅ Otomatik güncellenen ({len(otomatik)})", "#27ae60", oto_govde)
+            + '<a href="/akilli_fiyat_yukle2" class="okut-kart okut-yesil"><div class="okut-ikon">📥</div><div class="okut-metin"><div class="okut-baslik">Başka Dosya Yükle</div></div><div class="okut-ok">›</div></a>'
+            + js
+        )
+        return sayfa(icerik, "Fiyat Yükleme Tamamlandı")
+
+    icerik = """
+    <h2 style="margin-bottom:2px;">📥 Akıllı Fiyat Yükle (v2)</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">
+    Tedarikçi listesini olduğu gibi yükle. Stokta kartı olmayan ürünler için "yeni kart aç" seçeneği sunar.
+    </p>
+    <form method="post" enctype="multipart/form-data">
+    <div class="kart">
+      <label>Fiyat Listesi (.xlsx veya .xls)</label>
+      <input type="file" name="dosya" accept=".xlsx,.xls" required>
+      <button class="btn mavi" style="margin-top:10px;">Yükle ve Fiyatları Güncelle</button>
+    </div>
+    </form>
+    """
+    return sayfa(icerik, "Akıllı Fiyat Yükle v2")
+
+
+@app.route("/akilli_kart_ac", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def akilli_kart_ac():
+    data = request.get_json(silent=True) or {}
+    ad = str(data.get("ad") or "").strip()[:200]
+    if not ad:
+        return jsonify({"ok": False}), 400
+    cins = str(data.get("cins") or "").strip()[:80]
+    ebat = str(data.get("ebat") or "").strip()[:40]
+    kalinlik = str(data.get("kalinlik") or "").strip()[:20]
+    depo = str(data.get("depo") or "").strip()
+    if depo not in DEPOLAR:
+        depo = DEPOLAR[0]
+    ham = data.get("f") or []
+    f = []
+    for i in range(4):
+        try:
+            f.append(round(float(ham[i]), 2) if (i < len(ham) and ham[i] is not None) else None)
+        except (TypeError, ValueError):
+            f.append(None)
+
+    barkod = barkod_uret()
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("SELECT id FROM urun WHERE silindi IS NOT TRUE AND LOWER(TRIM(ad)) = LOWER(TRIM(%s))", (ad,))
+                mevcut = cur.fetchall()
+                if mevcut:
+                    cur.execute("""
+                        UPDATE urun SET
+                            fiyat_pesin = COALESCE(%s, fiyat_pesin),
+                            fiyat_kkart = COALESCE(%s, fiyat_kkart),
+                            fiyat_3taksit = COALESCE(%s, fiyat_3taksit),
+                            fiyat_aysonu = COALESCE(%s, fiyat_aysonu)
+                        WHERE id = ANY(%s)
+                    """, (f[0], f[1], f[2], f[3], [r[0] for r in mevcut]))
+                    yeni = False
+                else:
+                    cur.execute("""
+                        INSERT INTO urun (ad, cins, ebat, kalinlik, adet, depo, barkod, min_stok,
+                                          fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu)
+                        VALUES (%s,%s,%s,%s,0,%s,%s,5,%s,%s,%s,%s)
+                    """, (ad, cins, ebat, kalinlik, depo, barkod, f[0], f[1], f[2], f[3]))
+                    yeni = True
+    finally:
+        con.close()
+    if yeni:
+        log_aktivite("Fiyat Listesinden Kart Açıldı", ad)
+    return jsonify({"ok": True, "yeni": yeni})
     
 @app.route("/ping")
 def ping():
