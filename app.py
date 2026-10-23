@@ -1886,7 +1886,7 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Tedarikçiler</div><div class="okut-alt">Malzeme hangi tedarikçiden geldi</div></div>
           <div class="okut-ok">›</div>
         </a>
-        <a href="/laminant_hesap" class="okut-kart okut-yesil">
+        <a href="/laminant_takim" class="okut-kart okut-yesil">
           <div class="okut-ikon">📐</div>
           <div class="okut-metin"><div class="okut-baslik">Laminant Hesap</div><div class="okut-alt">Oda ölçüsünden paket ve fiyat hesapla</div></div>
           <div class="okut-ok">›</div>
