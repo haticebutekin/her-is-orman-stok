@@ -9062,7 +9062,7 @@ def takim_hesap():
       const ham = gerekli / birimBasi;
       const paket = Math.ceil(ham - 1e-9);
       const miktar = paket * birimFatura;
-      return {ham: ham, paket: paket, birim: birimFatura, miktar: miktar, fiyat: fiyat, tutar: miktar * fiyat};
+      return {ham: ham, paket: paket, birim: birimFatura, miktar: miktar, fiyat: fiyat, tutar: (u.paket_m2 ? miktar * fiyat : paket * fiyat)};
     }
 
     function hesapla(){
