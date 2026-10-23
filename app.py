@@ -9891,6 +9891,302 @@ def akilli_fiyat_toplu_eslestir():
     finally:
         con.close()
     return jsonify({"ok": sayi > 0, "guncellenen": sayi})
+@app.route("/laminant_takim")
+@rol_gerekli("muhasebeci")
+def laminant_takim():
+    import re
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT ad, cins, ebat, fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu
+                FROM urun WHERE silindi IS NOT TRUE ORDER BY ad
+            """)
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+
+    def sade(m):
+        m = str(m or "").replace("İ", "I").replace("ı", "I").upper()
+        for a, b in (("Ş", "S"), ("Ğ", "G"), ("Ü", "U"), ("Ö", "O"), ("Ç", "C")):
+            m = m.replace(a, b)
+        return m
+
+    def fl(x):
+        return float(x) if x is not None else None
+
+    parkeler, supler, altlar = {}, {}, {}
+
+    def kaydet(sozluk, ad, kayit):
+        eski = sozluk.get(ad)
+        if eski is None or (eski["fiyat"][0] is None and kayit["fiyat"][0] is not None):
+            sozluk[ad] = kayit
+
+    for ad, cins, ebat, f1, f2, f3, f4 in satirlar:
+        a = " ".join(str(ad or "").split())
+        if not a:
+            continue
+        n = sade(a)
+        c = sade(cins)
+        fiyat = [fl(f1), fl(f2), fl(f3), fl(f4)]
+        if re.search(r"SPRG|SUPURG|SUPRG", n):
+            mb = re.search(r"(\d+)\s*CM", n)
+            if mb:
+                m = re.search(r"CM\s+(.*)$", n)
+                renk = m.group(1) if m else ""
+                kaydet(supler, a, {"ad": a, "fiyat": fiyat, "boy": int(mb.group(1)), "renk": renk, "pvc": "PVC" in n})
+        elif "KABRON" in n or "SILTE" in n or "KABRON" in c or "SILTE" in c:
+            if fiyat[0] is not None:
+                kaydet(altlar, a, {"ad": a, "fiyat": fiyat})
+        elif "LAMNT" in c or "LAMINANT" in c or "PARKE" in c:
+            try:
+                pm2 = float(str(ebat).replace(",", "."))
+            except (TypeError, ValueError):
+                continue
+            if 0.5 < pm2 < 6:
+                kaydet(parkeler, a, {"ad": a, "fiyat": fiyat, "m2": pm2})
+
+    veri = {
+        "parke": sorted(parkeler.values(), key=lambda x: x["ad"]),
+        "sup": sorted(supler.values(), key=lambda x: (x["boy"], x["ad"])),
+        "alt": sorted(altlar.values(), key=lambda x: x["ad"]),
+    }
+    veri_json = json.dumps(veri, ensure_ascii=False).replace("<", "\\u003c")
+
+    icerik = r"""
+    <h2 style="margin-bottom:2px;">📐 Laminant Takım Hesabı</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">
+    Parke rengini seç, renkli süpürgelik ve altlık otomatik gelsin. Ölçüyü gir, takım fiyatı çıksın.
+    </p>
+
+    <div class="kart">
+      <label style="margin-top:0;">Ödeme Türü</label>
+      <select id="odeme" onchange="hesapla()">
+        <option value="0">Peşin</option>
+        <option value="1">Kredi Kartı</option>
+        <option value="2">3 Taksit</option>
+        <option value="3">Ay Sonu</option>
+      </select>
+    </div>
+
+    <div class="kart">
+      <label style="margin-top:0;">🪵 Parke</label>
+      <input type="text" id="parke-ara" class="arama" placeholder="🔍 Parke ara (örn. kartepe, alanya)..." oninput="parkeFiltrele()" style="margin:0 0 6px;">
+      <select id="parke-sec" onchange="parkeDegisti()"></select>
+
+      <label>📏 Süpürgelik boyu</label>
+      <select id="sup-boy" onchange="supBoyDegisti()">
+        <option value="6">6 cm (renkli)</option>
+        <option value="8">8 cm</option>
+        <option value="10">10 cm</option>
+        <option value="0">Süpürgelik yok</option>
+      </select>
+      <select id="sup-sec" onchange="hesapla()" style="margin-top:6px;"></select>
+      <div id="sup-not" style="font-size:11.5px;color:var(--muted);margin-top:4px;"></div>
+
+      <label class="etiket-sec-satir" style="margin:12px 0 4px;">
+        <input type="checkbox" id="isitma" onchange="altlikVarsayilan(); hesapla();">
+        <span>🔥 Yerden ısıtma var (altlık: termal şilte)</span>
+      </label>
+      <label>🧱 Altlık</label>
+      <select id="alt-sec" onchange="hesapla()"></select>
+    </div>
+
+    <div class="bolum-baslik">🚪 Odalar</div>
+    <div class="kart" style="padding:8px;overflow-x:auto;">
+      <table class="tk-tablo">
+        <thead><tr><th>S/NO</th><th>Oda Eni (cm)</th><th>Oda Boy (cm)</th><th>M²</th></tr></thead>
+        <tbody id="oda-govde"></tbody>
+        <tfoot>
+          <tr class="tk-toplam"><td colspan="3">TOPLAM M²</td><td id="toplam-m2">0,00</td></tr>
+          <tr class="tk-toplam"><td colspan="3">TOPLAM ÇEVRE (metre)</td><td id="toplam-cevre">0,00</td></tr>
+        </tfoot>
+      </table>
+    </div>
+    <button type="button" class="btn-kucuk mavi" onclick="odaEkle()" style="margin-bottom:10px;">➕ Oda Ekle</button>
+    <div class="kart">
+      <label style="margin-top:0;">Kapı boşlukları toplamı (metre) — süpürgelikten düşülür</label>
+      <input type="number" id="kapi" value="0" step="0.1" min="0" oninput="hesapla()" style="margin:0;">
+    </div>
+
+    <div class="bolum-baslik">📦 Takım Hesabı</div>
+    <div class="kart" style="padding:8px;overflow-x:auto;">
+      <table class="tk-tablo">
+        <thead><tr><th>Cinsi</th><th>Miktar</th><th>Birim fiyat</th><th>Tutarı</th></tr></thead>
+        <tbody id="sonuc-govde"></tbody>
+        <tfoot>
+          <tr class="tk-toplam"><td colspan="3">GENEL TOPLAM</td><td id="genel-toplam">0,00 TL</td></tr>
+          <tr class="tk-toplam"><td colspan="3">M² BAŞINA TAKIM FİYATI</td><td id="m2-fiyat">-</td></tr>
+        </tfoot>
+      </table>
+    </div>
+    <button type="button" class="btn-kucuk gri" onclick="ozetKopyala()">📋 Özeti kopyala</button>
+
+    <style>
+    .tk-tablo { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .tk-tablo th { background:var(--bg2); color:var(--muted); font-weight:700; text-transform:uppercase;
+                   font-size:10.5px; padding:8px 6px; text-align:left; white-space:nowrap; }
+    .tk-tablo td { padding:6px; border-top:1px solid var(--border); }
+    .tk-tablo input { width:100%; min-width:70px; margin:0; padding:8px 6px; font-size:13px; border-radius:8px;
+                      border:1px solid var(--border); background:var(--bg2); color:var(--text); }
+    .tk-toplam td { font-weight:800; background:var(--bg2); border-top:2px solid var(--border); }
+    </style>
+
+    <script>
+    const VERI = __VERI__;
+    const PARKE = VERI.parke, SUP = VERI.sup, ALT = VERI.alt;
+    const CUBUK = 2.8;
+    let odaNo = 0, gorunenParke = PARKE.slice(), gorunenSup = [], sonOzet = '';
+
+    function kacak(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function sade(s){
+      return String(s || '').toLocaleUpperCase('tr').replace(/İ/g,'I').replace(/Ş/g,'S').replace(/Ü/g,'U')
+             .replace(/Ö/g,'O').replace(/Ç/g,'C').replace(/Ğ/g,'G');
+    }
+    function tl(n){ return n.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+    function vir(n, k){ return n.toFixed(k).replace('.', ','); }
+
+    const DURAK = ['TERRA','VARIO','EXCLSV','5G','DERZLI','TREND','DAR','PRM','PLUS','CLICK','CMSN','CAMSAN','MDRN','GNS','PAHLI','TAKIM','MM','LAMINANT','PARKE','POLOCLICK'];
+    function renkKelimeleri(s){
+      return sade(s).replace(/[^A-Z0-9 ]+/g,' ').split(/\s+/).filter(t => t.length >= 3 && DURAK.indexOf(t) === -1);
+    }
+
+    function parkeDoldur(){
+      document.getElementById('parke-sec').innerHTML = gorunenParke.map((u, i) =>
+        '<option value="' + i + '">' + kacak(u.ad) + '</option>').join('');
+    }
+    function parkeFiltrele(){
+      const q = sade(document.getElementById('parke-ara').value).trim();
+      gorunenParke = PARKE.filter(u => !q || sade(u.ad).indexOf(q) !== -1);
+      parkeDoldur();
+      parkeDegisti();
+    }
+    function parkeDegisti(){ supSec(); hesapla(); }
+
+    function supBoyDegisti(){
+      const boy = parseInt(document.getElementById('sup-boy').value);
+      gorunenSup = boy ? SUP.filter(s => s.boy === boy) : [];
+      document.getElementById('sup-sec').innerHTML =
+        gorunenSup.map((s, i) => '<option value="' + i + '">' + kacak(s.ad) + '</option>').join('') ||
+        '<option value="-1">— Süpürgelik yok —</option>';
+      supSec();
+      hesapla();
+    }
+    function supSec(){
+      const notKutu = document.getElementById('sup-not');
+      const boy = parseInt(document.getElementById('sup-boy').value);
+      if(!boy){ notKutu.textContent = ''; return; }
+      const p = gorunenParke[parseInt(document.getElementById('parke-sec').value)];
+      if(!p || !gorunenSup.length){ notKutu.textContent = ''; return; }
+      const pk = renkKelimeleri(p.ad);
+      let en = 0, adaylar = [];
+      gorunenSup.forEach((s, i) => {
+        const sk = renkKelimeleri(s.renk);
+        const ortak = sk.filter(t => pk.indexOf(t) !== -1).length;
+        if(ortak > en){ en = ortak; adaylar = [i]; } else if(ortak === en && ortak > 0){ adaylar.push(i); }
+      });
+      if(adaylar.length === 1){
+        document.getElementById('sup-sec').value = String(adaylar[0]);
+        notKutu.textContent = '✅ Renk eşleşti: ' + gorunenSup[adaylar[0]].ad;
+      } else {
+        notKutu.textContent = boy + ' cm süpürgelikte bu renk otomatik bulunamadı, listeden seç.';
+      }
+    }
+
+    function altlikVarsayilan(){
+      const isitma = document.getElementById('isitma').checked;
+      let idx = -1;
+      if(isitma){
+        idx = ALT.findIndex(u => sade(u.ad).indexOf('TERMAL') !== -1);
+        if(idx < 0) idx = ALT.findIndex(u => sade(u.ad).indexOf('SILTE') !== -1);
+      } else {
+        idx = ALT.findIndex(u => /KABRON/.test(sade(u.ad)) && !/OPTIMUM/.test(sade(u.ad)) && /(05 MM|O5)/.test(sade(u.ad)));
+        if(idx < 0) idx = ALT.findIndex(u => /KABRON/.test(sade(u.ad)) && !/OPTIMUM/.test(sade(u.ad)));
+      }
+      if(idx < 0 && ALT.length) idx = 0;
+      document.getElementById('alt-sec').value = String(idx);
+    }
+
+    function odaEkle(){
+      odaNo++;
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + odaNo + '</td>' +
+        '<td><input type="number" class="oda-eni" oninput="hesapla()" placeholder="500"></td>' +
+        '<td><input type="number" class="oda-boyu" oninput="hesapla()" placeholder="300"></td>' +
+        '<td class="oda-m2">0,00</td>';
+      document.getElementById('oda-govde').appendChild(tr);
+    }
+
+    function hesapla(){
+      const fi = parseInt(document.getElementById('odeme').value);
+      let m2 = 0, cevre = 0;
+      document.querySelectorAll('#oda-govde tr').forEach(tr => {
+        const eni = parseFloat(tr.querySelector('.oda-eni').value) || 0;
+        const boyu = parseFloat(tr.querySelector('.oda-boyu').value) || 0;
+        tr.querySelector('.oda-m2').textContent = vir(eni * boyu / 10000, 2);
+        m2 += eni * boyu / 10000;
+        cevre += 2 * (eni + boyu) / 100;
+      });
+      document.getElementById('toplam-m2').textContent = vir(m2, 2);
+      document.getElementById('toplam-cevre').textContent = vir(cevre, 2);
+      const kapi = parseFloat(document.getElementById('kapi').value) || 0;
+      const supMetre = Math.max(0, cevre - kapi);
+
+      const parke = gorunenParke[parseInt(document.getElementById('parke-sec').value)];
+      const sup = gorunenSup[parseInt(document.getElementById('sup-sec').value)];
+      const alt = ALT[parseInt(document.getElementById('alt-sec').value)];
+
+      let html = '', genel = 0, ozet = [];
+      function satir(baslik, u, miktarYazi, adet, birim){
+        const fiyat = u.fiyat[fi];
+        if(!fiyat){
+          html += '<tr><td><b>' + baslik + ':</b> ' + kacak(u.ad) + '</td><td colspan="3" style="color:var(--muted);">Bu ödeme türü için fiyat yok</td></tr>';
+          return;
+        }
+        const tutar = adet * fiyat;
+        genel += tutar;
+        html += '<tr><td><b>' + baslik + ':</b> ' + kacak(u.ad) + '</td><td>' + miktarYazi + '</td><td>' + tl(fiyat) + ' / ' + birim + '</td><td><b>' + tl(tutar) + '</b></td></tr>';
+        ozet.push(baslik + ': ' + u.ad + ' — ' + miktarYazi + ' — ' + tl(tutar) + ' TL');
+      }
+      if(m2 > 0){
+        if(parke){
+          const paket = Math.ceil(m2 / parke.m2 - 1e-9);
+          satir('Parke', parke, paket + ' paket (' + vir(paket * parke.m2, 2) + ' m²)', paket * parke.m2, 'm²');
+        }
+        if(sup && supMetre > 0){
+          const adet = Math.ceil(supMetre / CUBUK - 1e-9);
+          satir('Süpürgelik', sup, adet + ' çubuk (' + vir(adet * CUBUK, 1) + ' m)', adet, 'çubuk');
+        }
+        if(alt){
+          const adet = Math.ceil(m2 - 1e-9);
+          satir('Altlık', alt, adet + ' m²', adet, 'm²');
+        }
+      } else {
+        html = '<tr><td colspan="4" style="color:var(--muted);">Oda ölçüsü girin</td></tr>';
+      }
+      document.getElementById('sonuc-govde').innerHTML = html;
+      document.getElementById('genel-toplam').textContent = tl(genel) + ' TL';
+      document.getElementById('m2-fiyat').textContent = m2 > 0 ? tl(genel / m2) + ' TL' : '-';
+      sonOzet = ozet.join('\n') + (m2 > 0 ? '\nToplam: ' + tl(genel) + ' TL (' + vir(m2, 2) + ' m²)' : '');
+    }
+
+    function ozetKopyala(){
+      if(!sonOzet){ return; }
+      if(navigator.clipboard){ navigator.clipboard.writeText(sonOzet).then(() => alert('Kopyalandı')); }
+      else { alert(sonOzet); }
+    }
+
+    parkeDoldur();
+    document.getElementById('sup-boy').value = '6';
+    supBoyDegisti();
+    altlikVarsayilan();
+    for(let i = 0; i < 10; i++){ odaEkle(); }
+    supSec();
+    hesapla();
+    </script>
+    """
+    icerik = icerik.replace("__VERI__", veri_json)
+    return sayfa(icerik, "Laminant Takım Hesabı")
     
 @app.route("/ping")
 def ping():
