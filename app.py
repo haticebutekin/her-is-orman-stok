@@ -9984,12 +9984,14 @@ def laminant_takim():
       <select id="sup-sec" onchange="hesapla()" style="margin-top:6px;"></select>
       <div id="sup-not" style="font-size:11.5px;color:var(--muted);margin-top:4px;"></div>
 
-      <label class="etiket-sec-satir" style="margin:12px 0 4px;">
-        <input type="checkbox" id="isitma" onchange="altlikVarsayilan(); hesapla();">
-        <span>🔥 Yerden ısıtma var (altlık: termal şilte)</span>
-      </label>
-      <label>🧱 Altlık</label>
-      <select id="alt-sec" onchange="hesapla()"></select>
+      <label>🧱 Altlık türü</label>
+      <select id="alt-tur" onchange="altTurDegisti()">
+        <option value="kabron">Kabron</option>
+        <option value="silte">Şilte</option>
+        <option value="termal">Termal şilte (yerden ısıtma)</option>
+        <option value="yok">Altlık yok</option>
+      </select>
+      <select id="alt-sec" onchange="hesapla()" style="margin-top:6px;"></select>
     </div>
 
     <div class="bolum-baslik">🚪 Odalar</div>
@@ -10093,19 +10095,28 @@ def laminant_takim():
       }
     }
 
-    function altlikVarsayilan(){
-      const isitma = document.getElementById('isitma').checked;
-      let idx = -1;
-      if(isitma){
-        idx = ALT.findIndex(u => sade(u.ad).indexOf('TERMAL') !== -1);
-        if(idx < 0) idx = ALT.findIndex(u => sade(u.ad).indexOf('SILTE') !== -1);
-      } else {
-        idx = ALT.findIndex(u => /KABRON/.test(sade(u.ad)) && !/OPTIMUM/.test(sade(u.ad)) && /(05 MM|O5)/.test(sade(u.ad)));
-        if(idx < 0) idx = ALT.findIndex(u => /KABRON/.test(sade(u.ad)) && !/OPTIMUM/.test(sade(u.ad)));
+        function altlikVarsayilan(){
+      const tur = document.getElementById('alt-tur').value;
+      const sec = document.getElementById('alt-sec');
+      const idxler = [];
+      ALT.forEach((u, i) => {
+        const n = sade(u.ad);
+        const termal = n.indexOf('TERMAL') !== -1;
+        const silte = n.indexOf('SILTE') !== -1;
+        if(tur === 'termal' && termal){ idxler.push(i); }
+        else if(tur === 'silte' && silte && !termal){ idxler.push(i); }
+        else if(tur === 'kabron' && n.indexOf('KABRON') !== -1){ idxler.push(i); }
+      });
+      sec.innerHTML = idxler.length
+        ? idxler.map(i => '<option value="' + i + '">' + kacak(ALT[i].ad) + '</option>').join('')
+        : '<option value="-1">— Altlık yok —</option>';
+      sec.value = idxler.length ? String(idxler[0]) : '-1';
+      if(tur === 'kabron'){
+        const bes = idxler.find(i => !/OPTIMUM/.test(sade(ALT[i].ad)) && /(05 MM|O5)/.test(sade(ALT[i].ad)));
+        if(bes !== undefined){ sec.value = String(bes); }
       }
-      if(idx < 0 && ALT.length) idx = 0;
-      document.getElementById('alt-sec').value = String(idx);
     }
+    function altTurDegisti(){ altlikVarsayilan(); hesapla(); }
 
     function odaEkle(){
       odaNo++;
