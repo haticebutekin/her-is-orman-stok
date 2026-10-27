@@ -6390,7 +6390,21 @@ def laminant_hesap():
         <option value="fiyat_aysonu">Ay Sonu</option>
       </select>
     </div>
-
+         <div class="kart">
+      <label style="margin-top:0;">Hesap şekli</label>
+      <select id="mod" onchange="modDegisti()">
+        <option value="olcu">Oda ölçüsünden hesapla</option>
+        <option value="elle">Miktarı ben gireceğim (oda ölçüsü gerekmez)</option>
+      </select>
+      <div id="elle-alan" style="display:none;margin-top:10px;">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+          <div><label style="margin:0;font-size:10.5px;">Parke (paket)</label><input type="number" id="elle-paket" value="0" min="0" step="1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+          <div><label style="margin:0;font-size:10.5px;">Süpürgelik (çubuk)</label><input type="number" id="elle-sup" value="0" min="0" step="1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+          <div><label style="margin:0;font-size:10.5px;">Altlık (m²)</label><input type="number" id="elle-alt" value="0" min="0" step="0.5" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+        </div>
+        <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">Bu modda aşağıdaki oda ölçüleri kullanılmaz.</p>
+      </div>
+    </div>
     <div class="bolum-baslik">🚪 Odalar</div>
     <div class="kart" style="padding:8px;overflow-x:auto;">
       <table class="lam-tablo">
@@ -9042,6 +9056,11 @@ def takim_hesap():
       altlikVarsayilan();
     }
 
+         function modDegisti(){
+      document.getElementById('elle-alan').style.display = document.getElementById('mod').value === 'elle' ? 'block' : 'none';
+      hesapla();
+    }
+    
     function odaEkle(){
       odaNo++;
       const tr = document.createElement('tr');
@@ -10159,22 +10178,32 @@ def laminant_takim():
         html += '<tr><td><b>' + baslik + ':</b> ' + kacak(u.ad) + '</td><td>' + miktarYazi + '</td><td>' + tl(fiyat) + ' / ' + birim + '</td><td><b>' + tl(tutar) + '</b></td></tr>';
         ozet.push(baslik + ': ' + u.ad + ' — ' + miktarYazi + ' — ' + tl(tutar) + ' TL');
       }
-      if(m2 > 0){
-        if(parke){
-          const paket = Math.ceil(m2 / parke.m2 - 1e-9);
-          satir('Parke', parke, paket + ' paket (' + vir(paket * parke.m2, 2) + ' m²)', paket * parke.m2, 'm²');
-        }
-        if(sup && supMetre > 0){
-          const adet = Math.ceil(supMetre / CUBUK - 1e-9);
-          satir('Süpürgelik', sup, adet + ' çubuk (' + vir(adet * CUBUK, 1) + ' m)', adet, 'çubuk');
-        }
-        if(alt){
-          const adet = Math.ceil(m2 - 1e-9);
-          satir('Altlık', alt, adet + ' m²', adet, 'm²');
-        }
-      } else {
-        html = '<tr><td colspan="4" style="color:var(--muted);">Oda ölçüsü girin</td></tr>';
+     
+            const elle = document.getElementById('mod').value === 'elle';
+      let paket = 0, cubuk = 0, altMiktar = 0, parkeM2 = 0;
+      if(elle){
+        paket = parseInt(document.getElementById('elle-paket').value) || 0;
+        cubuk = parseInt(document.getElementById('elle-sup').value) || 0;
+        altMiktar = parseFloat(document.getElementById('elle-alt').value) || 0;
+      } else if(m2 > 0){
+        paket = parke ? Math.ceil(m2 / parke.m2 - 1e-9) : 0;
+        cubuk = supMetre > 0 ? Math.ceil(supMetre / CUBUK - 1e-9) : 0;
+        altMiktar = Math.ceil(m2 - 1e-9);
       }
+      if(parke && paket > 0){
+        parkeM2 = paket * parke.m2;
+        satir('Parke', parke, paket + ' paket (' + vir(parkeM2, 2) + ' m²)', parkeM2, 'm²');
+      }
+      if(sup && cubuk > 0){
+        satir('Süpürgelik', sup, cubuk + ' çubuk (' + vir(cubuk * CUBUK, 1) + ' m)', cubuk * CUBUK, 'metre');
+      }
+      if(alt && altMiktar > 0){
+        satir('Altlık', alt, String(altMiktar).replace('.', ',') + ' m²', altMiktar, 'm²');
+      }
+      if(!html){
+        html = '<tr><td colspan="4" style="color:var(--muted);">' + (elle ? 'Miktar girin' : 'Oda ölçüsü girin') + '</td></tr>';
+      }
+      if(elle){ m2 = parkeM2; }
       document.getElementById('sonuc-govde').innerHTML = html;
       document.getElementById('genel-toplam').textContent = tl(genel) + ' TL';
       document.getElementById('m2-fiyat').textContent = m2 > 0 ? tl(genel / m2) + ' TL' : '-';
