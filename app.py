@@ -10569,6 +10569,379 @@ def laminant_takim2():
     """
     icerik = icerik.replace("__VERI__", veri_json)
     return sayfa(icerik, "Laminant Takım Hesabı")    
+@app.route("/laminant_takim3")
+@rol_gerekli("muhasebeci")
+def laminant_takim3():
+    import re
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT ad, cins, ebat, fiyat_pesin
+                FROM urun WHERE silindi IS NOT TRUE ORDER BY ad
+            """)
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+
+    def sade(m):
+        m = str(m or "").replace("İ", "I").replace("ı", "I").upper()
+        for a, b in (("Ş", "S"), ("Ğ", "G"), ("Ü", "U"), ("Ö", "O"), ("Ç", "C")):
+            m = m.replace(a, b)
+        return m
+
+    def fl(x):
+        return float(x) if x is not None else None
+
+    # ---- TAKIM İÇİ NAKİT FİYATLAR (burayı fiyat değişince güncelle) ----
+    SUP_NAKIT = {(6, False): 25.0, (6, True): 25.0, (8, False): 50.0, (8, True): 75.0,
+                 (10, False): 90.0, (10, True): 90.0}          # metre fiyatı
+    KABRON_03, KABRON_05, OPTIMUM_03 = 18.5, 22.5, 22.5         # m² fiyatı
+    TERMAL_03, TERMAL_01, SILTE_03 = 30.0, 20.0, 10.0           # m² fiyatı
+    PARKE_YEDEK = {"GNS": 409.5, "STILO": 376.5, "NATURAL SENSE": 365.5}  # kartta fiyat yoksa
+
+    def alt_nakit(n):
+        if "OPTIMUM" in n:
+            return OPTIMUM_03
+        if "KABRON" in n:
+            return KABRON_05 if re.search(r"(?:^|[^0-9])(?:0|O)?5(?:\s*MM|\b)", n) else KABRON_03
+        if "TERMAL" in n or "TERMOS" in n:
+            return TERMAL_01 if re.search(r"(?:^|[^0-9])0?1\s*MM", n) else TERMAL_03
+        if "SILTE" in n:
+            return SILTE_03
+        return None
+
+    parkeler, supler, altlar = {}, {}, {}
+
+    def kaydet(sozluk, ad, kayit):
+        eski = sozluk.get(ad)
+        if eski is None or (eski["nakit"] is None and kayit["nakit"] is not None):
+            sozluk[ad] = kayit
+
+    for ad, cins, ebat, f1 in satirlar:
+        a = " ".join(str(ad or "").split())
+        if not a:
+            continue
+        n = sade(a)
+        c = sade(cins)
+        if re.search(r"SPRG|SUPURG|SUPRG", n):
+            mb = re.search(r"(\d+)\s*CM", n)
+            if mb:
+                m = re.search(r"CM\s+(.*)$", n)
+                renk = m.group(1) if m else ""
+                boy = int(mb.group(1))
+                pvc = "PVC" in n
+                kaydet(supler, a, {"ad": a, "nakit": SUP_NAKIT.get((boy, pvc)), "boy": boy, "renk": renk, "pvc": pvc})
+        elif "KABRON" in n or "SILTE" in n or "KABRON" in c or "SILTE" in c:
+            nk = alt_nakit(n)
+            if nk is not None:
+                kaydet(altlar, a, {"ad": a, "nakit": nk})
+        elif "LAMNT" in c or "LAMINANT" in c or "PARKE" in c:
+            try:
+                pm2 = float(str(ebat).replace(",", "."))
+            except (TypeError, ValueError):
+                continue
+            if 0.5 < pm2 < 6:
+                nk = fl(f1)
+                if nk is None:
+                    for anahtar, deger in PARKE_YEDEK.items():
+                        if anahtar in n:
+                            nk = deger
+                kaydet(parkeler, a, {"ad": a, "nakit": nk, "m2": pm2})
+
+    veri = {
+        "parke": sorted(parkeler.values(), key=lambda x: x["ad"]),
+        "sup": sorted(supler.values(), key=lambda x: (x["boy"], x["ad"])),
+        "alt": sorted(altlar.values(), key=lambda x: x["ad"]),
+    }
+    veri_json = json.dumps(veri, ensure_ascii=False).replace("<", "\\u003c")
+
+    icerik = r"""
+    <h2 style="margin-bottom:2px;">📐 Laminant Takım Hesabı</h2>
+    <p style="text-align:center;color:var(--muted);margin-top:0;">
+    Parke rengini seç, renkli süpürgelik ve altlık otomatik gelsin. Takım içi fiyatlarla hesaplanır.
+    </p>
+
+    <div class="kart">
+      <label style="margin-top:0;">Ödeme Türü</label>
+      <select id="odeme" onchange="hesapla()">
+        <option value="0">Nakit / Peşin</option>
+        <option value="1">Kredi Kartı</option>
+        <option value="2">3 Taksit</option>
+        <option value="3">Ay Sonu</option>
+      </select>
+      <label>Vade farkı oranları (%) — nakit fiyatın üstüne eklenir</label>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+        <div><label style="margin:0;font-size:10.5px;">K.Kartı</label><input type="number" id="oran1" value="5" step="0.01" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+        <div><label style="margin:0;font-size:10.5px;">3 Taksit</label><input type="number" id="oran2" value="8.61" step="0.01" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+        <div><label style="margin:0;font-size:10.5px;">Ay Sonu</label><input type="number" id="oran3" value="5" step="0.01" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+      </div>
+    </div>
+
+    <div class="kart">
+      <label style="margin-top:0;">🪵 Parke</label>
+      <input type="text" id="parke-ara" class="arama" placeholder="🔍 Parke ara (örn. kartepe, alanya)..." oninput="parkeFiltrele()" style="margin:0 0 6px;">
+      <select id="parke-sec" onchange="parkeDegisti()"></select>
+
+      <label>📏 Süpürgelik boyu</label>
+      <select id="sup-boy" onchange="supBoyDegisti()">
+        <option value="6">6 cm (renkli)</option>
+        <option value="8">8 cm</option>
+        <option value="10">10 cm</option>
+        <option value="0">Süpürgelik yok</option>
+      </select>
+      <select id="sup-sec" onchange="hesapla()" style="margin-top:6px;"></select>
+      <div id="sup-not" style="font-size:11.5px;color:var(--muted);margin-top:4px;"></div>
+
+      <label>🧱 Altlık türü</label>
+      <select id="alt-tur" onchange="altTurDegisti()">
+        <option value="kabron">Kabron</option>
+        <option value="silte">Şilte</option>
+        <option value="termal">Termal şilte (yerden ısıtma)</option>
+        <option value="yok">Altlık yok</option>
+      </select>
+      <select id="alt-sec" onchange="hesapla()" style="margin-top:6px;"></select>
+    </div>
+
+    <div class="kart">
+      <label style="margin-top:0;">Hesap şekli</label>
+      <select id="mod" onchange="modDegisti()">
+        <option value="olcu">Oda ölçüsünden hesapla</option>
+        <option value="elle">Miktarı ben gireceğim (oda ölçüsü gerekmez)</option>
+      </select>
+      <div id="elle-alan" style="display:none;margin-top:10px;">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+          <div><label style="margin:0;font-size:10.5px;">Parke (paket)</label><input type="number" id="elle-paket" value="0" min="0" step="1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+          <div><label style="margin:0;font-size:10.5px;">Süpürgelik (çubuk)</label><input type="number" id="elle-sup" value="0" min="0" step="1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+          <div><label style="margin:0;font-size:10.5px;">Altlık (m²)</label><input type="number" id="elle-alt" value="0" min="0" step="0.5" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+        </div>
+        <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">Bu modda aşağıdaki oda ölçüleri kullanılmaz.</p>
+      </div>
+    </div>
+
+    <div class="bolum-baslik">🚪 Odalar</div>
+    <div class="kart" style="padding:8px;overflow-x:auto;">
+      <table class="tk-tablo">
+        <thead><tr><th>S/NO</th><th>Oda Eni (cm)</th><th>Oda Boy (cm)</th><th>M²</th></tr></thead>
+        <tbody id="oda-govde"></tbody>
+        <tfoot>
+          <tr class="tk-toplam"><td colspan="3">TOPLAM M²</td><td id="toplam-m2">0,00</td></tr>
+          <tr class="tk-toplam"><td colspan="3">TOPLAM ÇEVRE (metre)</td><td id="toplam-cevre">0,00</td></tr>
+        </tfoot>
+      </table>
+    </div>
+    <button type="button" class="btn-kucuk mavi" onclick="odaEkle()" style="margin-bottom:10px;">➕ Oda Ekle</button>
+    <div class="kart">
+      <label style="margin-top:0;">Kapı boşlukları toplamı (metre) — süpürgelikten düşülür</label>
+      <input type="number" id="kapi" value="0" step="0.1" min="0" oninput="hesapla()" style="margin:0;">
+    </div>
+
+    <div class="bolum-baslik">📦 Takım Hesabı</div>
+    <div class="kart" style="padding:8px;overflow-x:auto;">
+      <table class="tk-tablo">
+        <thead><tr><th>Cinsi</th><th>Miktar</th><th>Birim fiyat</th><th>Tutarı</th></tr></thead>
+        <tbody id="sonuc-govde"></tbody>
+        <tfoot>
+          <tr class="tk-toplam"><td colspan="3">GENEL TOPLAM</td><td id="genel-toplam">0,00 TL</td></tr>
+          <tr class="tk-toplam"><td colspan="3">M² BAŞINA TAKIM FİYATI</td><td id="m2-fiyat">-</td></tr>
+        </tfoot>
+      </table>
+    </div>
+    <button type="button" class="btn-kucuk gri" onclick="ozetKopyala()">📋 Özeti kopyala</button>
+
+    <style>
+    .tk-tablo { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .tk-tablo th { background:var(--bg2); color:var(--muted); font-weight:700; text-transform:uppercase;
+                   font-size:10.5px; padding:8px 6px; text-align:left; white-space:nowrap; }
+    .tk-tablo td { padding:6px; border-top:1px solid var(--border); }
+    .tk-tablo input { width:100%; min-width:70px; margin:0; padding:8px 6px; font-size:13px; border-radius:8px;
+                      border:1px solid var(--border); background:var(--bg2); color:var(--text); }
+    .tk-toplam td { font-weight:800; background:var(--bg2); border-top:2px solid var(--border); }
+    </style>
+
+    <script>
+    const VERI = __VERI__;
+    const PARKE = VERI.parke, SUP = VERI.sup, ALT = VERI.alt;
+    const CUBUK = 2.8;
+    let odaNo = 0, gorunenParke = PARKE.slice(), gorunenSup = [], sonOzet = '';
+
+    function kacak(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function sade(s){
+      return String(s || '').toLocaleUpperCase('tr').replace(/İ/g,'I').replace(/Ş/g,'S').replace(/Ü/g,'U')
+             .replace(/Ö/g,'O').replace(/Ç/g,'C').replace(/Ğ/g,'G');
+    }
+    function tl(n){ return n.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+    function vir(n, k){ return n.toFixed(k).replace('.', ','); }
+
+    const DURAK = ['TERRA','VARIO','EXCLSV','5G','DERZLI','TREND','DAR','PRM','PLUS','CLICK','CMSN','CAMSAN','MDRN','GNS','PAHLI','TAKIM','MM','LAMINANT','PARKE','POLOCLICK'];
+    function renkKelimeleri(s){
+      return sade(s).replace(/[^A-Z0-9 ]+/g,' ').split(/\s+/).filter(t => t.length >= 3 && DURAK.indexOf(t) === -1);
+    }
+
+    function parkeDoldur(){
+      document.getElementById('parke-sec').innerHTML = gorunenParke.map((u, i) =>
+        '<option value="' + i + '">' + kacak(u.ad) + '</option>').join('');
+    }
+    function parkeFiltrele(){
+      const q = sade(document.getElementById('parke-ara').value).trim();
+      gorunenParke = PARKE.filter(u => !q || sade(u.ad).indexOf(q) !== -1);
+      parkeDoldur();
+      parkeDegisti();
+    }
+    function parkeDegisti(){ supSec(); hesapla(); }
+
+    function supBoyDegisti(){
+      const boy = parseInt(document.getElementById('sup-boy').value);
+      gorunenSup = boy ? SUP.filter(s => s.boy === boy) : [];
+      document.getElementById('sup-sec').innerHTML =
+        gorunenSup.map((s, i) => '<option value="' + i + '">' + kacak(s.ad) + '</option>').join('') ||
+        '<option value="-1">— Süpürgelik yok —</option>';
+      supSec();
+      hesapla();
+    }
+    function supSec(){
+      const notKutu = document.getElementById('sup-not');
+      const boy = parseInt(document.getElementById('sup-boy').value);
+      if(!boy){ notKutu.textContent = ''; return; }
+      const p = gorunenParke[parseInt(document.getElementById('parke-sec').value)];
+      if(!p || !gorunenSup.length){ notKutu.textContent = ''; return; }
+      const pk = renkKelimeleri(p.ad);
+      let en = 0, adaylar = [];
+      gorunenSup.forEach((s, i) => {
+        const sk = renkKelimeleri(s.renk);
+        const ortak = sk.filter(t => pk.indexOf(t) !== -1).length;
+        if(ortak > en){ en = ortak; adaylar = [i]; } else if(ortak === en && ortak > 0){ adaylar.push(i); }
+      });
+      if(adaylar.length === 1){
+        document.getElementById('sup-sec').value = String(adaylar[0]);
+        notKutu.textContent = '✅ Renk eşleşti: ' + gorunenSup[adaylar[0]].ad;
+      } else {
+        const np = gorunenSup.findIndex(s => !s.pvc);
+        document.getElementById('sup-sec').value = String(np >= 0 ? np : 0);
+        notKutu.textContent = boy + ' cm süpürgelikte bu renk otomatik bulunamadı. Genel fiyat seçildi, istersen listeden değiştir.';
+      }
+    }
+
+    function altlikVarsayilan(){
+      const tur = document.getElementById('alt-tur').value;
+      const sec = document.getElementById('alt-sec');
+      const idxler = [];
+      ALT.forEach((u, i) => {
+        const n = sade(u.ad);
+        const termal = n.indexOf('TERMAL') !== -1 || n.indexOf('TERMOS') !== -1;
+        const silte = n.indexOf('SILTE') !== -1;
+        if(tur === 'termal' && termal){ idxler.push(i); }
+        else if(tur === 'silte' && silte && !termal){ idxler.push(i); }
+        else if(tur === 'kabron' && n.indexOf('KABRON') !== -1){ idxler.push(i); }
+      });
+      sec.innerHTML = idxler.length
+        ? idxler.map(i => '<option value="' + i + '">' + kacak(ALT[i].ad) + '</option>').join('')
+        : '<option value="-1">— Altlık yok —</option>';
+      sec.value = idxler.length ? String(idxler[0]) : '-1';
+      if(tur === 'kabron'){
+        const bes = idxler.find(i => !/OPTIMUM/.test(sade(ALT[i].ad)) && /(05 MM|O5)/.test(sade(ALT[i].ad)));
+        if(bes !== undefined){ sec.value = String(bes); }
+      }
+    }
+    function altTurDegisti(){ altlikVarsayilan(); hesapla(); }
+
+    function modDegisti(){
+      document.getElementById('elle-alan').style.display = document.getElementById('mod').value === 'elle' ? 'block' : 'none';
+      hesapla();
+    }
+
+    function odaEkle(){
+      odaNo++;
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + odaNo + '</td>' +
+        '<td><input type="number" class="oda-eni" oninput="hesapla()" placeholder="500"></td>' +
+        '<td><input type="number" class="oda-boyu" oninput="hesapla()" placeholder="300"></td>' +
+        '<td class="oda-m2">0,00</td>';
+      document.getElementById('oda-govde').appendChild(tr);
+    }
+
+    function hesapla(){
+      const fi = parseInt(document.getElementById('odeme').value);
+      const oran = fi === 0 ? 0 : (parseFloat(document.getElementById('oran' + fi).value) || 0);
+      function birimFiyat(u){ return (u.nakit === null || u.nakit === undefined) ? null : Math.round(u.nakit * (1 + oran / 100) * 100) / 100; }
+      let m2 = 0, cevre = 0;
+      document.querySelectorAll('#oda-govde tr').forEach(tr => {
+        const eni = parseFloat(tr.querySelector('.oda-eni').value) || 0;
+        const boyu = parseFloat(tr.querySelector('.oda-boyu').value) || 0;
+        tr.querySelector('.oda-m2').textContent = vir(eni * boyu / 10000, 2);
+        m2 += eni * boyu / 10000;
+        cevre += 2 * (eni + boyu) / 100;
+      });
+      document.getElementById('toplam-m2').textContent = vir(m2, 2);
+      document.getElementById('toplam-cevre').textContent = vir(cevre, 2);
+      const kapi = parseFloat(document.getElementById('kapi').value) || 0;
+      const supMetre = Math.max(0, cevre - kapi);
+
+      const parke = gorunenParke[parseInt(document.getElementById('parke-sec').value)];
+      const sup = gorunenSup[parseInt(document.getElementById('sup-sec').value)];
+      const alt = ALT[parseInt(document.getElementById('alt-sec').value)];
+
+      let html = '', genel = 0, ozet = [];
+      function satir(baslik, u, miktarYazi, miktar, birim){
+        const fiyat = birimFiyat(u);
+        if(!fiyat){
+          html += '<tr><td><b>' + baslik + ':</b> ' + kacak(u.ad) + '</td><td colspan="3" style="color:var(--muted);">Fiyat yok</td></tr>';
+          return;
+        }
+        const tutar = miktar * fiyat;
+        genel += tutar;
+        html += '<tr><td><b>' + baslik + ':</b> ' + kacak(u.ad) + '</td><td>' + miktarYazi + '</td><td>' + tl(fiyat) + ' / ' + birim + '</td><td><b>' + tl(tutar) + '</b></td></tr>';
+        ozet.push(baslik + ': ' + u.ad + ' — ' + miktarYazi + ' — ' + tl(tutar) + ' TL');
+      }
+      const elle = document.getElementById('mod').value === 'elle';
+      let paket = 0, cubuk = 0, altMiktar = 0, parkeM2 = 0;
+      if(elle){
+        paket = parseInt(document.getElementById('elle-paket').value) || 0;
+        cubuk = parseInt(document.getElementById('elle-sup').value) || 0;
+        altMiktar = parseFloat(document.getElementById('elle-alt').value) || 0;
+      } else if(m2 > 0){
+        paket = parke ? Math.ceil(m2 / parke.m2 - 1e-9) : 0;
+        cubuk = supMetre > 0 ? Math.ceil(supMetre / CUBUK - 1e-9) : 0;
+        altMiktar = Math.ceil(m2 - 1e-9);
+      }
+      if(parke && paket > 0){
+        parkeM2 = paket * parke.m2;
+        satir('Parke', parke, paket + ' paket (' + vir(parkeM2, 2) + ' m²)', parkeM2, 'm²');
+      }
+      if(sup && cubuk > 0){
+        satir('Süpürgelik', sup, cubuk + ' çubuk (' + vir(cubuk * CUBUK, 1) + ' m)', cubuk * CUBUK, 'metre');
+      }
+      if(alt && altMiktar > 0){
+        satir('Altlık', alt, String(altMiktar).replace('.', ',') + ' m²', altMiktar, 'm²');
+      }
+      if(!html){
+        html = '<tr><td colspan="4" style="color:var(--muted);">' + (elle ? 'Miktar girin' : 'Oda ölçüsü girin') + '</td></tr>';
+      }
+      if(elle){ m2 = parkeM2; }
+      document.getElementById('sonuc-govde').innerHTML = html;
+      document.getElementById('genel-toplam').textContent = tl(genel) + ' TL';
+      document.getElementById('m2-fiyat').textContent = m2 > 0 ? tl(genel / m2) + ' TL' : '-';
+      sonOzet = ozet.join('\n') + (m2 > 0 ? '\nToplam: ' + tl(genel) + ' TL (' + vir(m2, 2) + ' m²)' : '');
+    }
+
+    function ozetKopyala(){
+      if(!sonOzet){ return; }
+      if(navigator.clipboard){ navigator.clipboard.writeText(sonOzet).then(() => alert('Kopyalandı')); }
+      else { alert(sonOzet); }
+    }
+
+    parkeDoldur();
+    document.getElementById('sup-boy').value = '6';
+    supBoyDegisti();
+    altlikVarsayilan();
+    for(let i = 0; i < 10; i++){ odaEkle(); }
+    supSec();
+    hesapla();
+    </script>
+    """
+    icerik = icerik.replace("__VERI__", veri_json)
+    return sayfa(icerik, "Laminant Takım Hesabı")
+    
 @app.route("/ping")
 def ping():
     return "ok"
