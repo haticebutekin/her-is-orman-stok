@@ -207,6 +207,9 @@ def tablolari_olustur():
                 cur.execute("""
                 ALTER TABLE urun ADD COLUMN IF NOT EXISTS paket_m2_fatura NUMERIC(10,4)
                 """)
+                cur.execute("""
+                ALTER TABLE urun ADD COLUMN IF NOT EXISTS fiyat_grubu TEXT
+                """)
                 # Laminant ürünlerde "Ebat" kutusuna daha önce elle paket m2 değeri
                 # yazılmış olabilir (örn. "2,26"). Bu değeri, gerçekten sayı formatındaysa
                 # (yanlışlıkla "210*280" gibi bir ölçü metnini bozmadan) otomatik olarak
@@ -1276,7 +1279,8 @@ def palet_giris():
                     """, (barkod, barkod, barkod))
                     row = cur.fetchone()
                     if row:
-                        uid, urun_ad, mevcut = row
+                        uid, urun_ad, mevcut, ana_barkod = row[0], row[1], row[2], row[9]
+                        barkod = ana_barkod   # hareket kaydı ana barkodla yazılsın
                         cur.execute("UPDATE urun SET adet=%s, son_tedarikci=COALESCE(%s, son_tedarikci) WHERE id=%s", (mevcut + toplam, tedarikci or None, uid))
                         ad = urun_ad
                     else:
@@ -4272,7 +4276,15 @@ def hizli_islem():
     try:
         with con:
             with con.cursor() as cur:
-                cur.execute("SELECT id, ad, adet, cins, ebat, yuzey, sinif, renk, depo FROM urun WHERE barkod=%s AND silindi IS NOT TRUE FOR UPDATE", (barkod,))
+                                cur.execute("""
+                    SELECT u.id, u.ad, u.adet, u.cins, u.ebat, u.yuzey, u.sinif, u.renk, u.depo, u.barkod
+                    FROM urun u
+                    WHERE u.silindi IS NOT TRUE
+                      AND (u.barkod=%s OR u.id IN (SELECT urun_id FROM urun_barkod WHERE barkod=%s))
+                    ORDER BY (u.barkod=%s) DESC
+                    LIMIT 1
+                    FOR UPDATE OF u
+                """, (barkod, barkod, barkod))
                 row = cur.fetchone()
 
                 if not row:
@@ -4348,6 +4360,7 @@ def hizli_islem():
                     "ok": True, "ad": ad, "adet": adet, "toplam": toplam, "miktar": miktar,
                     "cins": cins, "ebat": ebat, "yuzey": yuzey, "sinif": sinif,
                     "renk": renk, "depo": depo, "siparis_ilerleme": siparis_ilerleme,
+                    "barkod": barkod,
                 })
     finally:
         con.close()
@@ -4629,35 +4642,40 @@ def etiketler():
 @app.route("/geri_al", methods=["POST"])
 @rol_gerekli("depocu")
 def geri_al():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     barkod = data.get("barkod")
     tip = data.get("tip")
     siparis_id = data.get("siparis_id")
+    try:
+        miktar = max(1, int(data.get("miktar", 1)))
+    except (TypeError, ValueError):
+        miktar = 1
 
     con = db()
     try:
         with con:
             with con.cursor() as cur:
-                cur.execute("SELECT id, adet FROM urun WHERE barkod=%s FOR UPDATE", (barkod,))
+                cur.execute("""
+                    SELECT u.id, u.adet, u.barkod FROM urun u
+                    WHERE u.silindi IS NOT TRUE
+                      AND (u.barkod=%s OR u.id IN (SELECT urun_id FROM urun_barkod WHERE barkod=%s))
+                    ORDER BY (u.barkod=%s) DESC LIMIT 1
+                    FOR UPDATE OF u
+                """, (barkod, barkod, barkod))
                 row = cur.fetchone()
                 if not row:
                     return jsonify({"ok": False})
 
-                uid, adet = row
-                if tip == "giris":
-                    adet -= 1
-                else:
-                    adet += 1
-                if adet < 0:
-                    adet = 0
-
+                uid, adet, ana_barkod = row
+                adet = adet - miktar if tip == "giris" else adet + miktar
+                adet = max(adet, 0)
                 cur.execute("UPDATE urun SET adet=%s WHERE id=%s", (adet, uid))
 
                 if tip == "cikis" and siparis_id:
                     cur.execute("""
-                        UPDATE siparis_kalem SET verilen = GREATEST(verilen - 1, 0)
+                        UPDATE siparis_kalem SET verilen = GREATEST(verilen - %s, 0)
                         WHERE siparis_id=%s AND barkod=%s
-                    """, (siparis_id, barkod))
+                    """, (miktar, siparis_id, ana_barkod))
                     cur.execute("UPDATE siparis SET durum='acik' WHERE id=%s AND durum='tamamlandi'", (siparis_id,))
     finally:
         con.close()
@@ -8428,7 +8446,7 @@ function sonucGoster(d, barkod){
     const alan = document.getElementById('sonuc-alan');
 
     if (d.ok) {
-        sonIslem = { barkod: d.barkod || barkod, tip: aktifTip, siparis_id: siparisId };
+        sonIslem = { barkod: d.barkod || barkod, tip: aktifTip, siparis_id: siparisId, miktar: d.miktar || 1 };
         oturumGuncelle(barkod, d.ad, d.miktar || 1);
         const oturumToplamAdet = Object.values(oturumListesi).reduce((t, k) => t + k.toplamAdet, 0);
         const oturumUrunSayisi = Object.keys(oturumListesi).length;
