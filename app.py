@@ -1915,6 +1915,16 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Hızlı Fiyat Girişi</div><div class="okut-alt">Tüm ürünlerin fiyatını tek tabloda gir</div></div>
           <div class="okut-ok">›</div>
         </a>
+                <a href="/fiyat_grup" class="okut-kart okut-turkuaz">
+          <div class="okut-ikon">🏷️</div>
+          <div class="okut-metin"><div class="okut-baslik">Gruba Göre Fiyat Girişi</div><div class="okut-alt">Marka / seri bazında tek seferde fiyat gir</div></div>
+          <div class="okut-ok">›</div>
+        </a>
+        <a href="/grup_ata" class="okut-kart okut-mor">
+          <div class="okut-ikon">🗂️</div>
+          <div class="okut-metin"><div class="okut-baslik">Ürünleri Gruba Ata</div><div class="okut-alt">Örn: tüm Starwood renklerini tek grupta topla</div></div>
+          <div class="okut-ok">›</div>
+        </a>
         <a href="/fiyat_toplu_yukle" class="okut-kart okut-mor">
           <div class="okut-ikon">💰</div>
           <div class="okut-metin"><div class="okut-baslik">Fiyat Listesi Toplu Yükle</div><div class="okut-alt">Excel'den ürün fiyatlarını otomatik doldur</div></div>
