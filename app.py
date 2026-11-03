@@ -1549,16 +1549,19 @@ def pin_gir(isim):
     if isim not in ROLLER:
         return redirect("/")
 
-        hata = None
+    hata = None
     if request.method == "POST":
         girilen = request.form.get("pin", "")
         anahtar = (request.remote_addr, isim)
         sayi, ilk = _PIN_DENEME.get(anahtar, [0, time.time()])
         if time.time() - ilk > PIN_KILIT_SANIYE:
             sayi, ilk = 0, time.time()
+
+        dogru_pin = str(PIN_KODLARI.get(isim, ""))
+
         if sayi >= PIN_MAX_DENEME:
             hata = "⛔ Çok fazla yanlış deneme. 10 dakika sonra tekrar dene."
-            elif hmac.compare_digest(girilen.encode("utf-8"), str(PIN_KODLARI.get(isim, "")).encode("utf-8")):
+        elif hmac.compare_digest(girilen.encode("utf-8"), dogru_pin.encode("utf-8")):
             _PIN_DENEME.pop(anahtar, None)
             session.permanent = True
             session["kullanici"] = isim
