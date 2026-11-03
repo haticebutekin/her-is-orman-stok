@@ -4276,7 +4276,7 @@ def hizli_islem():
     try:
         with con:
             with con.cursor() as cur:
-                                cur.execute("""
+                cur.execute("""
                     SELECT u.id, u.ad, u.adet, u.cins, u.ebat, u.yuzey, u.sinif, u.renk, u.depo, u.barkod
                     FROM urun u
                     WHERE u.silindi IS NOT TRUE
