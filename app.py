@@ -1558,7 +1558,7 @@ def pin_gir(isim):
             sayi, ilk = 0, time.time()
         if sayi >= PIN_MAX_DENEME:
             hata = "⛔ Çok fazla yanlış deneme. 10 dakika sonra tekrar dene."
-        elif hmac.compare_digest(girilen, PIN_KODLARI.get(isim, "")):
+            elif hmac.compare_digest(girilen.encode("utf-8"), str(PIN_KODLARI.get(isim, "")).encode("utf-8")):
             _PIN_DENEME.pop(anahtar, None)
             session.permanent = True
             session["kullanici"] = isim
