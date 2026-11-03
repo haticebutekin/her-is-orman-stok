@@ -1,7 +1,7 @@
 from functools import wraps
 from flask import Flask, request, redirect, render_template_string, jsonify, session, send_file, Response
 import psycopg2
-import os, random, io, json, threading, traceback, math
+import os, random, io, json, threading, traceback, math, time, hmac
 import smtplib  # artık kullanılmıyor ama zararsız, gelecekte gerekirse dursun
 from email.message import EmailMessage
 from datetime import timedelta
@@ -32,10 +32,10 @@ VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "BHVDYu-AltC6T-LUrITOY3toL
 VAPID_CLAIMS_EMAIL = os.environ.get("VAPID_EMAIL", "mailto:admin@heris-stok.local")
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)) or ".", "static"))
-app.secret_key = os.environ.get("SECRET_KEY", "heris-stok-2026-sabit-guvenli-anahtar-x7k9m2-degistirme")
+app.secret_key = os.environ.get("SECRET_KEY") or "gecici-anahtar-env-tanimla"
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["SESSION_COOKIE_SECURE"] = False
+app.config["SESSION_COOKIE_SECURE"] = bool(os.environ.get("RENDER"))
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_NAME"] = "heris_stok_oturum"
 SITE_PAROLA = os.environ.get("SITE_PAROLA", "") 
@@ -51,7 +51,7 @@ def _oturum_tani():
 def site_girisi_kontrol():
     if not SITE_PAROLA:
         return
-    if request.endpoint in ("site_giris", "manifest", "service_worker"):
+    if request.endpoint in ("site_giris", "manifest", "service_worker", "ping"):
         return
     if request.path.startswith("/static/") or request.path.startswith("/barkod/"):
         return
@@ -119,6 +119,9 @@ def _pin_yukle():
     return varsayilan
 
 PIN_KODLARI = _pin_yukle()
+_PIN_DENEME = {}   # (ip, isim) -> [yanlış_sayısı, ilk_yanlış_zamanı]
+PIN_MAX_DENEME = 5
+PIN_KILIT_SANIYE = 600
 
 def db():
     return psycopg2.connect(DATABASE_URL)
@@ -1546,15 +1549,24 @@ def pin_gir(isim):
     if isim not in ROLLER:
         return redirect("/")
 
-    hata = None
+        hata = None
     if request.method == "POST":
         girilen = request.form.get("pin", "")
-        if girilen == PIN_KODLARI.get(isim):
+        anahtar = (request.remote_addr, isim)
+        sayi, ilk = _PIN_DENEME.get(anahtar, [0, time.time()])
+        if time.time() - ilk > PIN_KILIT_SANIYE:
+            sayi, ilk = 0, time.time()
+        if sayi >= PIN_MAX_DENEME:
+            hata = "⛔ Çok fazla yanlış deneme. 10 dakika sonra tekrar dene."
+        elif hmac.compare_digest(girilen, PIN_KODLARI.get(isim, "")):
+            _PIN_DENEME.pop(anahtar, None)
             session.permanent = True
             session["kullanici"] = isim
             session["rol"] = ROLLER[isim]
             return redirect("/")
-        hata = "❌ Yanlış PIN, tekrar dene"
+        else:
+            _PIN_DENEME[anahtar] = [sayi + 1, ilk]
+            hata = "❌ Yanlış PIN, tekrar dene"
 
     icerik = """
     <style>
