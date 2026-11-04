@@ -6443,7 +6443,15 @@ def laminant_hesap():
       <select id="mod" onchange="modDegisti()">
         <option value="olcu">Oda ölçüsünden hesapla</option>
         <option value="elle">Miktarı ben gireceğim (oda ölçüsü gerekmez)</option>
+        <option value="m2">Toplam m²'yi ben gireceğim (oda ölçüsü gerekmez)</option>
       </select>
+        <div id="m2-alan" style="display:none;margin-top:10px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div><label style="margin:0;font-size:10.5px;">Toplam alan (m²)</label><input type="number" id="gir-m2" value="0" min="0" step="0.1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+          <div><label style="margin:0;font-size:10.5px;">Süpürgelik metresi (isteğe bağlı)</label><input type="number" id="gir-metre" value="0" min="0" step="0.5" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+        </div>
+        <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">Metre boş (0) bırakılırsa süpürgelik hesaplanmaz. Bu modda oda ölçüleri kullanılmaz.</p>
+      </div>
       <div id="elle-alan" style="display:none;margin-top:10px;">
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
           <div><label style="margin:0;font-size:10.5px;">Parke (paket)</label><input type="number" id="elle-paket" value="0" min="0" step="1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
@@ -9104,8 +9112,10 @@ def takim_hesap():
       altlikVarsayilan();
     }
 
-         function modDegisti(){
-      document.getElementById('elle-alan').style.display = document.getElementById('mod').value === 'elle' ? 'block' : 'none';
+             function modDegisti(){
+      const mod = document.getElementById('mod').value;
+      document.getElementById('elle-alan').style.display = mod === 'elle' ? 'block' : 'none';
+      document.getElementById('m2-alan').style.display = mod === 'm2' ? 'block' : 'none';
       hesapla();
     }
     
@@ -10208,6 +10218,10 @@ def laminant_takim():
       });
       document.getElementById('toplam-m2').textContent = vir(m2, 2);
       document.getElementById('toplam-cevre').textContent = vir(cevre, 2);
+      if(document.getElementById('mod').value === 'm2'){
+        m2 = parseFloat(document.getElementById('gir-m2').value) || 0;
+        cevre = parseFloat(document.getElementById('gir-metre').value) || 0;
+      }
       const kapi = parseFloat(document.getElementById('kapi').value) || 0;
       const supMetre = Math.max(0, cevre - kapi);
 
@@ -10574,6 +10588,10 @@ def laminant_takim2():
       });
       document.getElementById('toplam-m2').textContent = vir(m2, 2);
       document.getElementById('toplam-cevre').textContent = vir(cevre, 2);
+      if(document.getElementById('mod').value === 'm2'){
+        m2 = parseFloat(document.getElementById('gir-m2').value) || 0;
+        cevre = parseFloat(document.getElementById('gir-metre').value) || 0;
+      }
       const kapi = parseFloat(document.getElementById('kapi').value) || 0;
       const supMetre = Math.max(0, cevre - kapi);
 
@@ -10780,7 +10798,15 @@ def laminant_takim3():
       <select id="mod" onchange="modDegisti()">
         <option value="olcu">Oda ölçüsünden hesapla</option>
         <option value="elle">Miktarı ben gireceğim (oda ölçüsü gerekmez)</option>
+        <option value="m2">Toplam m²'yi ben gireceğim (oda ölçüsü gerekmez)</option>
       </select>
+        <div id="m2-alan" style="display:none;margin-top:10px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div><label style="margin:0;font-size:10.5px;">Toplam alan (m²)</label><input type="number" id="gir-m2" value="0" min="0" step="0.1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+          <div><label style="margin:0;font-size:10.5px;">Süpürgelik metresi (isteğe bağlı)</label><input type="number" id="gir-metre" value="0" min="0" step="0.5" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+        </div>
+        <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">Metre boş (0) bırakılırsa süpürgelik hesaplanmaz. Bu modda oda ölçüleri kullanılmaz.</p>
+      </div>
       <div id="elle-alan" style="display:none;margin-top:10px;">
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
           <div><label style="margin:0;font-size:10.5px;">Parke (paket)</label><input type="number" id="elle-paket" value="0" min="0" step="1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
@@ -10917,8 +10943,10 @@ def laminant_takim3():
     }
     function altTurDegisti(){ altlikVarsayilan(); hesapla(); }
 
-    function modDegisti(){
-      document.getElementById('elle-alan').style.display = document.getElementById('mod').value === 'elle' ? 'block' : 'none';
+     function modDegisti(){
+      const mod = document.getElementById('mod').value;
+      document.getElementById('elle-alan').style.display = mod === 'elle' ? 'block' : 'none';
+      document.getElementById('m2-alan').style.display = mod === 'm2' ? 'block' : 'none';
       hesapla();
     }
 
