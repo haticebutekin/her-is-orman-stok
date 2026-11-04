@@ -1915,6 +1915,11 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Hızlı Fiyat Girişi</div><div class="okut-alt">Tüm ürünlerin fiyatını tek tabloda gir</div></div>
           <div class="okut-ok">›</div>
         </a>
+        <a href="/fiyat_eksik" class="okut-kart okut-turuncu">
+          <div class="okut-ikon">⚠️</div>
+          <div class="okut-metin"><div class="okut-baslik">Fiyatı Eksik Ürünler</div><div class="okut-alt">Hangi ürünlerin fiyatı girilmemiş</div></div>
+          <div class="okut-ok">›</div>
+        </a>
                 <a href="/fiyat_grup" class="okut-kart okut-turkuaz">
           <div class="okut-ikon">🏷️</div>
           <div class="okut-metin"><div class="okut-baslik">Gruba Göre Fiyat Girişi</div><div class="okut-alt">Marka / seri bazında tek seferde fiyat gir</div></div>
@@ -10100,6 +10105,7 @@ def laminant_takim():
     const VERI = __VERI__;
     const PARKE = VERI.parke, SUP = VERI.sup, ALT = VERI.alt;
     const CUBUK = 2.8;
+    let sonTeklif = null;
     let odaNo = 0, gorunenParke = PARKE.slice(), gorunenSup = [], sonOzet = '';
 
     function kacak(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -10209,7 +10215,7 @@ def laminant_takim():
       const sup = gorunenSup[parseInt(document.getElementById('sup-sec').value)];
       const alt = ALT[parseInt(document.getElementById('alt-sec').value)];
 
-      let html = '', genel = 0, ozet = [];
+      let html = '', genel = 0, ozet = [], teklif = [];
       function satir(baslik, u, miktarYazi, adet, birim){
         const fiyat = u.fiyat[fi];
         if(!fiyat){
@@ -10220,6 +10226,7 @@ def laminant_takim():
         genel += tutar;
         html += '<tr><td><b>' + baslik + ':</b> ' + kacak(u.ad) + '</td><td>' + miktarYazi + '</td><td>' + tl(fiyat) + ' / ' + birim + '</td><td><b>' + tl(tutar) + '</b></td></tr>';
         ozet.push(baslik + ': ' + u.ad + ' — ' + miktarYazi + ' — ' + tl(tutar) + ' TL');
+        teklif.push({baslik: baslik, ad: u.ad, miktar: miktarYazi, fiyat: tl(fiyat) + ' / ' + birim, tutar: tl(tutar)});
       }
      
             const elle = document.getElementById('mod').value === 'elle';
@@ -10251,6 +10258,8 @@ def laminant_takim():
       document.getElementById('genel-toplam').textContent = tl(genel) + ' TL';
       document.getElementById('m2-fiyat').textContent = m2 > 0 ? tl(genel / m2) + ' TL' : '-';
       sonOzet = ozet.join('\n') + (m2 > 0 ? '\nToplam: ' + tl(genel) + ' TL (' + vir(m2, 2) + ' m²)' : '');
+      sonTeklif = {satirlar: teklif, genel: tl(genel), m2: m2 > 0 ? vir(m2, 2) : '', m2fiyat: m2 > 0 ? tl(genel / m2) : '',
+      odeme: document.getElementById('odeme').selectedOptions[0].text};
     }
 
     function ozetKopyala(){
@@ -10362,6 +10371,12 @@ def laminant_takim2():
     <p style="text-align:center;color:var(--muted);margin-top:0;">
     Parke rengini seç, renkli süpürgelik ve altlık otomatik gelsin. Takım içi fiyatlarla hesaplanır.
     </p>
+    <div class="uyari-kutu" style="background:rgba(33,150,243,.1);border-color:rgba(33,150,243,.35);color:var(--text);">
+      <b>Nasıl kullanılır?</b><br>
+      • Müşteri <b>oda ölçüsü</b> söylediyse: "Hesap şekli" → <i>Oda ölçüsünden hesapla</i>. Eni ve boyu <b>cm</b> olarak yaz.<br>
+      • Müşteri <b>adet</b> söylediyse: "Hesap şekli" → <i>Miktarı ben gireceğim</i>.<br>
+      • Fiyatı olmayan ürün tutara katılmaz, "Fiyat yok" yazar.
+    </div>
 
     <div class="kart">
       <label style="margin-top:0;">Ödeme Türü</label>
@@ -10431,6 +10446,11 @@ def laminant_takim2():
           <tr class="tk-toplam"><td colspan="3">M² BAŞINA TAKIM FİYATI</td><td id="m2-fiyat">-</td></tr>
         </tfoot>
       </table>
+    </div>
+    <div class="kart">
+      <label style="margin-top:0;">Müşteri adı (teklifte görünür)</label>
+      <input type="text" id="teklif-musteri" placeholder="Örn: Ahmet Yılmaz" style="margin:0 0 8px;">
+      <button type="button" class="btn turkuaz" style="margin:0;" onclick="teklifAc()">🧾 Teklif Oluştur</button>
     </div>
     <button type="button" class="btn-kucuk gri" onclick="ozetKopyala()">📋 Özeti kopyala</button>
 
@@ -10600,7 +10620,16 @@ def laminant_takim2():
       if(navigator.clipboard){ navigator.clipboard.writeText(sonOzet).then(() => alert('Kopyalandı')); }
       else { alert(sonOzet); }
     }
-
+    
+    function teklifAc(){
+      if(!sonTeklif || !sonTeklif.satirlar.length){ alert('Önce oda ölçüsü ya da miktar girin.'); return; }
+      const f = document.createElement('form');
+      f.method = 'POST'; f.action = '/teklif'; f.target = '_blank';
+      const a = document.createElement('input'); a.type = 'hidden'; a.name = 'veri'; a.value = JSON.stringify(sonTeklif); f.appendChild(a);
+      const m = document.createElement('input'); m.type = 'hidden'; m.name = 'musteri'; m.value = document.getElementById('teklif-musteri').value; f.appendChild(m);
+      document.body.appendChild(f); f.submit(); document.body.removeChild(f);
+    }
+    
     parkeDoldur();
     document.getElementById('sup-boy').value = '6';
     supBoyDegisti();
@@ -10984,7 +11013,161 @@ def laminant_takim3():
     """
     icerik = icerik.replace("__VERI__", veri_json)
     return sayfa(icerik, "Laminant Takım Hesabı")
-    
+@app.route("/fiyat_eksik")
+@rol_gerekli("muhasebeci")
+def fiyat_eksik():
+    from html import escape
+    sadece_hic = request.args.get("tur") == "hic"
+
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT ad, cins, ebat, barkod,
+                       fiyat_pesin, fiyat_kkart, fiyat_3taksit, fiyat_aysonu
+                FROM urun
+                WHERE silindi IS NOT TRUE
+                  AND (fiyat_pesin IS NULL OR fiyat_kkart IS NULL
+                       OR fiyat_3taksit IS NULL OR fiyat_aysonu IS NULL)
+                ORDER BY cins, ad
+            """)
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+
+    etiketler = ["Peşin", "K.Kartı", "3 Taksit", "Ay Sonu"]
+    gruplar = {}
+    hic_sayisi = 0
+    for ad, cins, ebat, barkod, f1, f2, f3, f4 in satirlar:
+        fiyatlar = [f1, f2, f3, f4]
+        hic = all(f is None for f in fiyatlar)
+        if hic:
+            hic_sayisi += 1
+        if sadece_hic and not hic:
+            continue
+        eksikler = [e for e, f in zip(etiketler, fiyatlar) if f is None]
+        gruplar.setdefault(cins or "Diğer", []).append((ad, ebat, barkod, eksikler, hic))
+
+    govde = ""
+    gosterilen = 0
+    for cins in sorted(gruplar):
+        satir_html = ""
+        for ad, ebat, barkod, eksikler, hic in gruplar[cins]:
+            gosterilen += 1
+            renk = "#e74c3c" if hic else "#e67e22"
+            durum = "Hiç fiyatı yok" if hic else "Eksik: " + ", ".join(eksikler)
+            ebat_yazi = (" • " + escape(ebat)) if ebat else ""
+            satir_html += (
+                f'<a href="/duzenle/{escape(barkod)}" class="dash-liste-satir" style="text-decoration:none;color:inherit;">'
+                f'<span>{escape(ad or "")}<span style="color:var(--muted);font-size:11.5px;">{ebat_yazi}</span></span>'
+                f'<span style="color:{renk};font-size:12px;font-weight:700;">{escape(durum)}</span></a>'
+            )
+        govde += (
+            f'<div class="kart"><div class="bolum-baslik" style="margin:0 0 4px;">{escape(cins)} ({len(gruplar[cins])})</div>'
+            f'{satir_html}</div>'
+        )
+
+    if not govde:
+        govde = '<p class="basari">✅ Fiyatı eksik ürün yok.</p>'
+
+    icerik = (
+        "<h2>💰 Fiyatı Eksik Ürünler</h2>"
+        + f'<p style="text-align:center;color:var(--muted);margin-top:-6px;font-size:13px;">{gosterilen} ürün listeleniyor</p>'
+        + '<div class="filtre-satir">'
+        + f'<a href="/fiyat_eksik" class="filtre-cip {"" if sadece_hic else "aktif"}" style="text-decoration:none;display:block;">Eksik olanların hepsi</a>'
+        + f'<a href="/fiyat_eksik?tur=hic" class="filtre-cip {"aktif" if sadece_hic else ""}" style="text-decoration:none;display:block;">Hiç fiyatı yok ({hic_sayisi})</a>'
+        + '</div>'
+        + '<button type="button" class="btn turkuaz" onclick="window.print()">🖨️ Yazdır / PDF Olarak Kaydet</button>'
+        + '<a href="/fiyat_girisi" class="okut-kart okut-yesil"><div class="okut-ikon">💰</div><div class="okut-metin"><div class="okut-baslik">Hızlı Fiyat Girişine Git</div></div><div class="okut-ok">›</div></a>'
+        + govde
+    )
+    return sayfa(icerik, "Fiyatı Eksik Ürünler")    
+TEKLIF_GECERLILIK_GUN = 7
+
+
+@app.route("/teklif", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def teklif():
+    from html import escape
+    try:
+        veri = json.loads(request.form.get("veri", "{}"))
+    except ValueError:
+        veri = {}
+    satirlar = veri.get("satirlar") if isinstance(veri, dict) else None
+    if not isinstance(satirlar, list) or not satirlar:
+        return sayfa('<p class="hata">❌ Teklif için hesaplanmış kalem yok.</p><a class="btn gri" href="/laminant_takim3">⬅ Geri Dön</a>', "Hata")
+
+    def t(x, n=120):
+        return escape(str(x if x is not None else "")[:n])
+
+    musteri = t(request.form.get("musteri", "").strip(), 80)
+    satir_html = ""
+    for s in satirlar[:20]:
+        if not isinstance(s, dict):
+            continue
+        satir_html += (
+            "<tr><td><b>" + t(s.get("baslik")) + "</b><br>" + t(s.get("ad")) + "</td>"
+            "<td>" + t(s.get("miktar")) + "</td>"
+            "<td style='text-align:right;'>" + t(s.get("fiyat")) + "</td>"
+            "<td style='text-align:right;font-weight:700;'>" + t(s.get("tutar")) + " TL</td></tr>"
+        )
+
+    m2_satiri = ""
+    if veri.get("m2"):
+        m2_satiri = (
+            "<div class='bilgi-oge'><b>Toplam Alan</b>" + t(veri.get("m2")) + " m²</div>"
+            "<div class='bilgi-oge'><b>M² Başına Takım Fiyatı</b>" + t(veri.get("m2fiyat")) + " TL</div>"
+        )
+
+    css = """
+        @page { size: A4; margin: 12mm; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; color:#1a1a1a; margin:0; background:#fafafa; }
+        .fis { max-width: 780px; margin: 0 auto; padding: 28px; background:#fff; box-shadow: 0 2px 20px rgba(0,0,0,.06); }
+        .baslik { display:flex; align-items:center; justify-content:space-between; gap:12px;
+                  border-bottom:3px solid #2196F3; padding-bottom:16px; margin-bottom:20px; }
+        .baslik-sol { display:flex; align-items:center; gap:14px; }
+        .baslik img { width:56px; height:56px; border-radius:10px; background:#fff; border:1px solid #eee; }
+        .baslik h1 { font-size:18px; margin:0; }
+        .alt { font-size:12.5px; color:#888; margin-top:2px; }
+        .bilgi-kutu { display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
+                      gap:10px; background:#f8f9fb; border-radius:10px; padding:14px 16px; margin-bottom:18px; }
+        .bilgi-oge { font-size:12.5px; }
+        .bilgi-oge b { display:block; font-size:10.5px; color:#999; text-transform:uppercase; margin-bottom:2px; }
+        table { width:100%; border-collapse:collapse; font-size:12.5px; }
+        th { background:#1a1a1a; color:#fff; padding:10px 8px; text-align:left; font-size:11px; text-transform:uppercase; }
+        td { border-bottom:1px solid #eee; padding:9px 8px; vertical-align:top; }
+        .toplam td { font-weight:800; background:#f0f4f8; border-top:2px solid #1a1a1a; font-size:14px; }
+        .not { font-size:11.5px; color:#777; margin-top:16px; line-height:1.6; }
+        .yazdir-btn { display:block; margin:22px auto 0; padding:14px 28px; background:linear-gradient(135deg,#2196F3,#00BCD4);
+                      color:#fff; border:none; border-radius:10px; font-size:16px; font-weight:700; cursor:pointer; }
+        .geri { display:block; text-align:center; margin-top:12px; color:#666; font-size:13px; text-decoration:none; }
+        @media print { body { background:#fff; } .fis { box-shadow:none; padding:0; } .yazdir-btn, .geri { display:none; } }
+    """
+
+    html = (
+        "<!DOCTYPE html><html lang='tr'><head><meta charset='utf-8'>"
+        "<title>Teklif</title><meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<style>" + css + "</style></head><body><div class='fis'>"
+        "<div class='baslik'><div class='baslik-sol'>"
+        "<img src='" + LOGO_URL + "'>"
+        "<div><h1>" + escape(UYGULAMA_ADI) + "</h1><div class='alt'>Fiyat Teklifi</div></div></div></div>"
+        "<div class='bilgi-kutu'>"
+        "<div class='bilgi-oge'><b>Müşteri</b>" + (musteri or "-") + "</div>"
+        "<div class='bilgi-oge'><b>Tarih</b>" + tr_simdi().strftime('%d.%m.%Y') + "</div>"
+        "<div class='bilgi-oge'><b>Ödeme Şekli</b>" + t(veri.get("odeme")) + "</div>"
+        + m2_satiri +
+        "</div>"
+        "<table><tr><th>Ürün</th><th>Miktar</th><th style='text-align:right;'>Birim Fiyat</th><th style='text-align:right;'>Tutar</th></tr>"
+        + satir_html +
+        "<tr class='toplam'><td colspan='3'>GENEL TOPLAM</td><td style='text-align:right;'>" + t(veri.get("genel")) + " TL</td></tr></table>"
+        "<div class='not'>Bu teklif " + str(TEKLIF_GECERLILIK_GUN) + " gün geçerlidir. Miktarlar kesim payı dahil yukarı yuvarlanmıştır.</div>"
+        "</div>"
+        "<button class='yazdir-btn' onclick='window.print()'>🖨️ Yazdır / PDF Olarak Kaydet</button>"
+        "<a class='geri' href='javascript:window.close()'>Kapat</a>"
+        "</body></html>"
+    )
+    return html
 @app.route("/ping")
 def ping():
     return "ok"
