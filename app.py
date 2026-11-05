@@ -10281,7 +10281,14 @@ def laminant_takim():
       if(navigator.clipboard){ navigator.clipboard.writeText(sonOzet).then(() => alert('Kopyalandı')); }
       else { alert(sonOzet); }
     }
-
+    function teklifAc(){
+      if(!sonTeklif || !sonTeklif.satirlar.length){ alert('Önce oda ölçüsü ya da miktar girin.'); return; }
+      const f = document.createElement('form');
+      f.method = 'POST'; f.action = '/teklif'; f.target = '_blank';
+      const a = document.createElement('input'); a.type = 'hidden'; a.name = 'veri'; a.value = JSON.stringify(sonTeklif); f.appendChild(a);
+      const m = document.createElement('input'); m.type = 'hidden'; m.name = 'musteri'; m.value = document.getElementById('teklif-musteri').value; f.appendChild(m);
+      document.body.appendChild(f); f.submit(); document.body.removeChild(f);
+    }
     parkeDoldur();
     document.getElementById('sup-boy').value = '6';
     supBoyDegisti();
@@ -10296,6 +10303,7 @@ def laminant_takim():
 @app.route("/laminant_takim2")
 @rol_gerekli("muhasebeci")
 def laminant_takim2():
+        return redirect("/laminant_takim3")
     import re
     con = db()
     try:
@@ -10592,6 +10600,11 @@ def laminant_takim2():
         m2 = parseFloat(document.getElementById('gir-m2').value) || 0;
         cevre = parseFloat(document.getElementById('gir-metre').value) || 0;
       }
+      
+      if(document.getElementById('mod').value === 'm2'){
+        m2 = parseFloat(document.getElementById('gir-m2').value) || 0;
+        cevre = parseFloat(document.getElementById('gir-metre').value) || 0;
+      }
       const kapi = parseFloat(document.getElementById('kapi').value) || 0;
       const supMetre = Math.max(0, cevre - kapi);
 
@@ -10599,7 +10612,7 @@ def laminant_takim2():
       const sup = gorunenSup[parseInt(document.getElementById('sup-sec').value)];
       const alt = ALT[parseInt(document.getElementById('alt-sec').value)];
 
-      let html = '', genel = 0, ozet = [];
+      let html = '', genel = 0, ozet = [], teklif = [];
       function satir(baslik, u, miktarYazi, miktar, birim){
         const fiyat = birimFiyat(u);
         if(!fiyat){
@@ -10610,6 +10623,7 @@ def laminant_takim2():
         genel += tutar;
         html += '<tr><td><b>' + baslik + ':</b> ' + kacak(u.ad) + '</td><td>' + miktarYazi + '</td><td>' + tl(fiyat) + ' / ' + birim + '</td><td><b>' + tl(tutar) + '</b></td></tr>';
         ozet.push(baslik + ': ' + u.ad + ' — ' + miktarYazi + ' — ' + tl(tutar) + ' TL');
+        teklif.push({baslik: baslik, ad: u.ad, miktar: miktarYazi, fiyat: tl(fiyat) + ' / ' + birim, tutar: tl(tutar)});
       }
       if(m2 > 0){
         if(parke){
@@ -10845,6 +10859,11 @@ def laminant_takim3():
         </tfoot>
       </table>
     </div>
+    <div class="kart">
+      <label style="margin-top:0;">Müşteri adı (teklifte görünür)</label>
+      <input type="text" id="teklif-musteri" placeholder="Örn: Ahmet Yılmaz" style="margin:0 0 8px;">
+      <button type="button" class="btn turkuaz" style="margin:0;" onclick="teklifAc()">🧾 Teklif Oluştur</button>
+    </div>
     <button type="button" class="btn-kucuk gri" onclick="ozetKopyala()">📋 Özeti kopyala</button>
 
     <style>
@@ -10974,6 +10993,10 @@ def laminant_takim3():
       });
       document.getElementById('toplam-m2').textContent = vir(m2, 2);
       document.getElementById('toplam-cevre').textContent = vir(cevre, 2);
+      if(document.getElementById('mod').value === 'm2'){
+        m2 = parseFloat(document.getElementById('gir-m2').value) || 0;
+        cevre = parseFloat(document.getElementById('gir-metre').value) || 0;
+      }
       const kapi = parseFloat(document.getElementById('kapi').value) || 0;
       const supMetre = Math.max(0, cevre - kapi);
 
@@ -11022,6 +11045,8 @@ def laminant_takim3():
       document.getElementById('genel-toplam').textContent = tl(genel) + ' TL';
       document.getElementById('m2-fiyat').textContent = m2 > 0 ? tl(genel / m2) + ' TL' : '-';
       sonOzet = ozet.join('\n') + (m2 > 0 ? '\nToplam: ' + tl(genel) + ' TL (' + vir(m2, 2) + ' m²)' : '');
+      sonTeklif = {satirlar: teklif, genel: tl(genel), m2: m2 > 0 ? vir(m2, 2) : '', m2fiyat: m2 > 0 ? tl(genel / m2) : '',
+                   odeme: document.getElementById('odeme').selectedOptions[0].text};
     }
 
     function ozetKopyala(){
