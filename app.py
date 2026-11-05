@@ -10303,7 +10303,7 @@ def laminant_takim():
 @app.route("/laminant_takim2")
 @rol_gerekli("muhasebeci")
 def laminant_takim2():
-        return redirect("/laminant_takim3")
+    return redirect("/laminant_takim3")
     import re
     con = db()
     try:
