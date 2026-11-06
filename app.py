@@ -11213,9 +11213,7 @@ def fiyat_eksik():
         + '<a href="/fiyat_girisi" class="okut-kart okut-yesil"><div class="okut-ikon">💰</div><div class="okut-metin"><div class="okut-baslik">Hızlı Fiyat Girişine Git</div></div><div class="okut-ok">›</div></a>'
         + govde
     )
-    return sayfa(icerik, "Fiyatı Eksik Ürünler")    
-TEKLIF_GECERLILIK_GUN = 7
-
+    return sayfa(icerik, "Fiyatı Eksik Ürünler")
 
 @app.route("/teklif", methods=["POST"])
 @rol_gerekli("muhasebeci")
