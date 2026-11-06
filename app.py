@@ -1905,7 +1905,7 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Tedarikçiler</div><div class="okut-alt">Malzeme hangi tedarikçiden geldi</div></div>
           <div class="okut-ok">›</div>
         </a>
-        <a href="/laminant_takim" class="okut-kart okut-yesil">
+        <a href="/laminant_takim3" class="okut-kart okut-yesil">
           <div class="okut-ikon">📐</div>
           <div class="okut-metin"><div class="okut-baslik">Laminant Hesap</div><div class="okut-alt">Oda ölçüsünden paket ve fiyat hesapla</div></div>
           <div class="okut-ok">›</div>
@@ -10673,6 +10673,7 @@ def laminant_takim2():
     """
     icerik = icerik.replace("__VERI__", veri_json)
     return sayfa(icerik, "Laminant Takım Hesabı")    
+)
 @app.route("/laminant_takim3")
 @rol_gerekli("muhasebeci")
 def laminant_takim3():
@@ -10697,12 +10698,12 @@ def laminant_takim3():
     def fl(x):
         return float(x) if x is not None else None
 
-    # ---- TAKIM İÇİ NAKİT FİYATLAR (burayı fiyat değişince güncelle) ----
+    # ---- TAKIM İÇİ NAKİT FİYATLAR (fiyat değişince burayı güncelle) ----
     SUP_NAKIT = {(6, False): 25.0, (6, True): 25.0, (8, False): 50.0, (8, True): 75.0,
-                 (10, False): 90.0, (10, True): 90.0}          # metre fiyatı
-    KABRON_03, KABRON_05, OPTIMUM_03 = 18.5, 22.5, 22.5         # m² fiyatı
-    TERMAL_03, TERMAL_01, SILTE_03 = 30.0, 20.0, 10.0           # m² fiyatı
-    PARKE_YEDEK = {"GNS": 409.5, "STILO": 376.5, "NATURAL SENSE": 365.5}  # kartta fiyat yoksa
+                 (10, False): 90.0, (10, True): 90.0}
+    KABRON_03, KABRON_05, OPTIMUM_03 = 18.5, 22.5, 22.5
+    TERMAL_03, TERMAL_01, SILTE_03 = 30.0, 20.0, 10.0
+    PARKE_YEDEK = {"GNS": 409.5, "STILO": 376.5, "NATURAL SENSE": 365.5}
 
     def alt_nakit(n):
         if "OPTIMUM" in n:
@@ -10767,6 +10768,29 @@ def laminant_takim3():
     </p>
 
     <div class="kart">
+      <label style="margin-top:0;">Hesap şekli</label>
+      <select id="mod" onchange="modDegisti()">
+        <option value="olcu">Oda ölçüsünden hesapla</option>
+        <option value="m2">Toplam m²'yi ben gireceğim</option>
+        <option value="elle">Miktarı ben gireceğim (paket / çubuk / m²)</option>
+      </select>
+      <div id="m2-alan" style="display:none;margin-top:10px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div><label style="margin:0;font-size:10.5px;">Toplam alan (m²)</label><input type="number" id="gir-m2" value="0" min="0" step="0.1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+          <div><label style="margin:0;font-size:10.5px;">Süpürgelik metresi (isteğe bağlı)</label><input type="number" id="gir-metre" value="0" min="0" step="0.5" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+        </div>
+        <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">Metre 0 bırakılırsa süpürgelik hesaplanmaz.</p>
+      </div>
+      <div id="elle-alan" style="display:none;margin-top:10px;">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+          <div><label style="margin:0;font-size:10.5px;">Parke (paket)</label><input type="number" id="elle-paket" value="0" min="0" step="1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+          <div><label style="margin:0;font-size:10.5px;">Süpürgelik (çubuk)</label><input type="number" id="elle-sup" value="0" min="0" step="1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+          <div><label style="margin:0;font-size:10.5px;">Altlık (m²)</label><input type="number" id="elle-alt" value="0" min="0" step="0.5" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="kart">
       <label style="margin-top:0;">Ödeme Türü</label>
       <select id="odeme" onchange="hesapla()">
         <option value="0">Nakit / Peşin</option>
@@ -10807,42 +10831,21 @@ def laminant_takim3():
       <select id="alt-sec" onchange="hesapla()" style="margin-top:6px;"></select>
     </div>
 
-    <div class="kart">
-      <label style="margin-top:0;">Hesap şekli</label>
-      <select id="mod" onchange="modDegisti()">
-        <option value="olcu">Oda ölçüsünden hesapla</option>
-        <option value="elle">Miktarı ben gireceğim (oda ölçüsü gerekmez)</option>
-        <option value="m2">Toplam m²'yi ben gireceğim (oda ölçüsü gerekmez)</option>
-      </select>
-        <div id="m2-alan" style="display:none;margin-top:10px;">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <div><label style="margin:0;font-size:10.5px;">Toplam alan (m²)</label><input type="number" id="gir-m2" value="0" min="0" step="0.1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
-          <div><label style="margin:0;font-size:10.5px;">Süpürgelik metresi (isteğe bağlı)</label><input type="number" id="gir-metre" value="0" min="0" step="0.5" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
-        </div>
-        <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">Metre boş (0) bırakılırsa süpürgelik hesaplanmaz. Bu modda oda ölçüleri kullanılmaz.</p>
+    <div id="oda-bolumu">
+      <div class="bolum-baslik">🚪 Odalar</div>
+      <div class="kart" style="padding:8px;overflow-x:auto;">
+        <table class="tk-tablo">
+          <thead><tr><th>S/NO</th><th>Oda Eni (cm)</th><th>Oda Boy (cm)</th><th>M²</th></tr></thead>
+          <tbody id="oda-govde"></tbody>
+          <tfoot>
+            <tr class="tk-toplam"><td colspan="3">TOPLAM M²</td><td id="toplam-m2">0,00</td></tr>
+            <tr class="tk-toplam"><td colspan="3">TOPLAM ÇEVRE (metre)</td><td id="toplam-cevre">0,00</td></tr>
+          </tfoot>
+        </table>
       </div>
-      <div id="elle-alan" style="display:none;margin-top:10px;">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-          <div><label style="margin:0;font-size:10.5px;">Parke (paket)</label><input type="number" id="elle-paket" value="0" min="0" step="1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
-          <div><label style="margin:0;font-size:10.5px;">Süpürgelik (çubuk)</label><input type="number" id="elle-sup" value="0" min="0" step="1" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
-          <div><label style="margin:0;font-size:10.5px;">Altlık (m²)</label><input type="number" id="elle-alt" value="0" min="0" step="0.5" oninput="hesapla()" style="margin:2px 0 0;padding:8px;"></div>
-        </div>
-        <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">Bu modda aşağıdaki oda ölçüleri kullanılmaz.</p>
-      </div>
+      <button type="button" class="btn-kucuk mavi" onclick="odaEkle()" style="margin-bottom:10px;">➕ Oda Ekle</button>
     </div>
 
-    <div class="bolum-baslik">🚪 Odalar</div>
-    <div class="kart" style="padding:8px;overflow-x:auto;">
-      <table class="tk-tablo">
-        <thead><tr><th>S/NO</th><th>Oda Eni (cm)</th><th>Oda Boy (cm)</th><th>M²</th></tr></thead>
-        <tbody id="oda-govde"></tbody>
-        <tfoot>
-          <tr class="tk-toplam"><td colspan="3">TOPLAM M²</td><td id="toplam-m2">0,00</td></tr>
-          <tr class="tk-toplam"><td colspan="3">TOPLAM ÇEVRE (metre)</td><td id="toplam-cevre">0,00</td></tr>
-        </tfoot>
-      </table>
-    </div>
-    <button type="button" class="btn-kucuk mavi" onclick="odaEkle()" style="margin-bottom:10px;">➕ Oda Ekle</button>
     <div class="kart">
       <label style="margin-top:0;">Kapı boşlukları toplamı (metre) — süpürgelikten düşülür</label>
       <input type="number" id="kapi" value="0" step="0.1" min="0" oninput="hesapla()" style="margin:0;">
@@ -10859,6 +10862,7 @@ def laminant_takim3():
         </tfoot>
       </table>
     </div>
+
     <div class="kart">
       <label style="margin-top:0;">Müşteri adı (teklifte görünür)</label>
       <input type="text" id="teklif-musteri" placeholder="Örn: Ahmet Yılmaz" style="margin:0 0 8px;">
@@ -10880,7 +10884,7 @@ def laminant_takim3():
     const VERI = __VERI__;
     const PARKE = VERI.parke, SUP = VERI.sup, ALT = VERI.alt;
     const CUBUK = 2.8;
-    let odaNo = 0, gorunenParke = PARKE.slice(), gorunenSup = [], sonOzet = '';
+    let odaNo = 0, gorunenParke = PARKE.slice(), gorunenSup = [], sonOzet = '', sonTeklif = null;
 
     function kacak(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
     function sade(s){
@@ -10962,10 +10966,11 @@ def laminant_takim3():
     }
     function altTurDegisti(){ altlikVarsayilan(); hesapla(); }
 
-     function modDegisti(){
+    function modDegisti(){
       const mod = document.getElementById('mod').value;
       document.getElementById('elle-alan').style.display = mod === 'elle' ? 'block' : 'none';
       document.getElementById('m2-alan').style.display = mod === 'm2' ? 'block' : 'none';
+      document.getElementById('oda-bolumu').style.display = mod === 'olcu' ? 'block' : 'none';
       hesapla();
     }
 
@@ -10980,9 +10985,11 @@ def laminant_takim3():
     }
 
     function hesapla(){
+      const mod = document.getElementById('mod').value;
       const fi = parseInt(document.getElementById('odeme').value);
       const oran = fi === 0 ? 0 : (parseFloat(document.getElementById('oran' + fi).value) || 0);
       function birimFiyat(u){ return (u.nakit === null || u.nakit === undefined) ? null : Math.round(u.nakit * (1 + oran / 100) * 100) / 100; }
+
       let m2 = 0, cevre = 0;
       document.querySelectorAll('#oda-govde tr').forEach(tr => {
         const eni = parseFloat(tr.querySelector('.oda-eni').value) || 0;
@@ -10993,7 +11000,8 @@ def laminant_takim3():
       });
       document.getElementById('toplam-m2').textContent = vir(m2, 2);
       document.getElementById('toplam-cevre').textContent = vir(cevre, 2);
-      if(document.getElementById('mod').value === 'm2'){
+
+      if(mod === 'm2'){
         m2 = parseFloat(document.getElementById('gir-m2').value) || 0;
         cevre = parseFloat(document.getElementById('gir-metre').value) || 0;
       }
@@ -11004,7 +11012,7 @@ def laminant_takim3():
       const sup = gorunenSup[parseInt(document.getElementById('sup-sec').value)];
       const alt = ALT[parseInt(document.getElementById('alt-sec').value)];
 
-      let html = '', genel = 0, ozet = [];
+      let html = '', genel = 0, ozet = [], teklif = [];
       function satir(baslik, u, miktarYazi, miktar, birim){
         const fiyat = birimFiyat(u);
         if(!fiyat){
@@ -11015,10 +11023,11 @@ def laminant_takim3():
         genel += tutar;
         html += '<tr><td><b>' + baslik + ':</b> ' + kacak(u.ad) + '</td><td>' + miktarYazi + '</td><td>' + tl(fiyat) + ' / ' + birim + '</td><td><b>' + tl(tutar) + '</b></td></tr>';
         ozet.push(baslik + ': ' + u.ad + ' — ' + miktarYazi + ' — ' + tl(tutar) + ' TL');
+        teklif.push({baslik: baslik, ad: u.ad, miktar: miktarYazi, fiyat: tl(fiyat) + ' / ' + birim, tutar: tl(tutar)});
       }
-      const elle = document.getElementById('mod').value === 'elle';
+
       let paket = 0, cubuk = 0, altMiktar = 0, parkeM2 = 0;
-      if(elle){
+      if(mod === 'elle'){
         paket = parseInt(document.getElementById('elle-paket').value) || 0;
         cubuk = parseInt(document.getElementById('elle-sup').value) || 0;
         altMiktar = parseFloat(document.getElementById('elle-alt').value) || 0;
@@ -11038,14 +11047,16 @@ def laminant_takim3():
         satir('Altlık', alt, String(altMiktar).replace('.', ',') + ' m²', altMiktar, 'm²');
       }
       if(!html){
-        html = '<tr><td colspan="4" style="color:var(--muted);">' + (elle ? 'Miktar girin' : 'Oda ölçüsü girin') + '</td></tr>';
+        html = '<tr><td colspan="4" style="color:var(--muted);">' + (mod === 'elle' ? 'Miktar girin' : (mod === 'm2' ? 'Toplam m² girin' : 'Oda ölçüsü girin')) + '</td></tr>';
       }
-      if(elle){ m2 = parkeM2; }
+      if(mod === 'elle'){ m2 = parkeM2; }
+
       document.getElementById('sonuc-govde').innerHTML = html;
       document.getElementById('genel-toplam').textContent = tl(genel) + ' TL';
       document.getElementById('m2-fiyat').textContent = m2 > 0 ? tl(genel / m2) + ' TL' : '-';
       sonOzet = ozet.join('\n') + (m2 > 0 ? '\nToplam: ' + tl(genel) + ' TL (' + vir(m2, 2) + ' m²)' : '');
-      sonTeklif = {satirlar: teklif, genel: tl(genel), m2: m2 > 0 ? vir(m2, 2) : '', m2fiyat: m2 > 0 ? tl(genel / m2) : '',
+      sonTeklif = {satirlar: teklif, genel: tl(genel), m2: m2 > 0 ? vir(m2, 2) : '',
+                   m2fiyat: m2 > 0 ? tl(genel / m2) : '',
                    odeme: document.getElementById('odeme').selectedOptions[0].text};
     }
 
@@ -11055,13 +11066,22 @@ def laminant_takim3():
       else { alert(sonOzet); }
     }
 
+    function teklifAc(){
+      if(!sonTeklif || !sonTeklif.satirlar.length){ alert('Önce oda ölçüsü, m² ya da miktar girin.'); return; }
+      const f = document.createElement('form');
+      f.method = 'POST'; f.action = '/teklif'; f.target = '_blank';
+      const a = document.createElement('input'); a.type = 'hidden'; a.name = 'veri'; a.value = JSON.stringify(sonTeklif); f.appendChild(a);
+      const m = document.createElement('input'); m.type = 'hidden'; m.name = 'musteri'; m.value = document.getElementById('teklif-musteri').value; f.appendChild(m);
+      document.body.appendChild(f); f.submit(); document.body.removeChild(f);
+    }
+
     parkeDoldur();
     document.getElementById('sup-boy').value = '6';
     supBoyDegisti();
     altlikVarsayilan();
     for(let i = 0; i < 10; i++){ odaEkle(); }
     supSec();
-    hesapla();
+    modDegisti();
     </script>
     """
     icerik = icerik.replace("__VERI__", veri_json)
