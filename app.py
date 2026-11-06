@@ -5169,7 +5169,30 @@ def barkod_bagla():
         f'<p style="text-align:center;color:var(--muted);"><b>{yeni}</b> artık <b>{ad}</b> kartına ait. Ürünü tekrar okutabilirsin.</p>'
         f'<a class="btn mavi" href="{donus}">Devam</a>', "Barkod Bağlandı")
 
-
+@app.route("/barkod_bagla_json", methods=["POST"])
+@rol_gerekli("depocu", "muhasebeci")
+def barkod_bagla_json():
+    data = request.get_json(silent=True) or {}
+    yeni = (data.get("yeni_barkod") or "").strip()
+    ana = (data.get("ana_barkod") or "").strip()
+    if not yeni or not ana:
+        return jsonify({"ok": False, "msg": "Eksik bilgi"}), 400
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("SELECT id, ad FROM urun WHERE barkod=%s AND silindi IS NOT TRUE", (ana,))
+                u = cur.fetchone()
+                if not u:
+                    return jsonify({"ok": False, "msg": "Ürün bulunamadı"})
+                if _barkod_kullanimda_mi(cur, yeni):
+                    return jsonify({"ok": False, "msg": "Bu barkod zaten bir ürüne bağlı"})
+                cur.execute("INSERT INTO urun_barkod (urun_id, barkod) VALUES (%s,%s)", (u[0], yeni))
+                ad = u[1]
+    finally:
+        con.close()
+    log_aktivite("Ek Barkod Bağlandı", f"{ad} — {yeni}")
+    return jsonify({"ok": True, "ad": ad})
 @app.route("/barkodlar/<barkod>")
 @rol_gerekli("muhasebeci")
 def barkodlar(barkod):
@@ -8508,13 +8531,8 @@ function sonucGoster(d, barkod){
             </div>
             <button class="geri-al-btn" onclick="geriAl()">↩️ Bu işlemi geri al</button>
           </div>`;
-    } else if (d.yeni) {
-        alan.innerHTML = `
-          <div class="sonuc-kart sonuc-yeni">
-            <div class="sonuc-ust"><span class="sonuc-ikon">🆕</span><span class="sonuc-ad">Bu barkod stokta yok</span></div>
-            <div class="sonuc-satirlar">Yeni ürün ekleme sayfasına yönlendiriliyorsunuz...</div>
-          </div>`;
-        setTimeout(() => { window.location.href = "/ekle?barkod=" + encodeURIComponent(barkod); }, 1000);
+        } else if (d.yeni) {
+        yeniBarkodPaneli(barkod);
     } else if (d.yanlis_urun) {
         if(navigator.vibrate) navigator.vibrate([120,80,120,80,120]);
         alan.innerHTML = `
@@ -8530,7 +8548,48 @@ function sonucGoster(d, barkod){
           </div>`;
     }
 }
-
+let bagAramaZ;
+function yeniBarkodPaneli(barkod){
+    window.bagBarkod = barkod;
+    document.getElementById('sonuc-alan').innerHTML = `
+      <div class="sonuc-kart sonuc-yeni">
+        <div class="sonuc-ust"><span class="sonuc-ikon">🆕</span><span class="sonuc-ad">Bu barkod sistemde yok</span></div>
+        <div class="sonuc-satirlar">Okunan: <b>${barkod}</b><br>Ürün zaten stokta varsa aşağıdan seç. Barkod ona bağlanır ve işlem hemen yapılır.</div>
+        <input type="text" id="bag-ara" class="arama" placeholder="🔍 Ürün adını yaz..." autocomplete="off" oninput="bagAra()" style="margin-top:10px;">
+        <div id="bag-sonuc"></div>
+        <a class="btn-kucuk mavi" href="/ekle?barkod=${encodeURIComponent(barkod)}" style="margin-top:8px;">➕ Gerçekten yeni ürün, ekle</a>
+      </div>`;
+    setTimeout(() => { const k = document.getElementById('bag-ara'); if(k){ k.focus(); } }, 100);
+}
+function bagAra(){
+    clearTimeout(bagAramaZ);
+    const q = document.getElementById('bag-ara').value.trim();
+    const kutu = document.getElementById('bag-sonuc');
+    if(!q){ kutu.innerHTML = ''; return; }
+    bagAramaZ = setTimeout(() => {
+        fetch('/urun_ara?q=' + encodeURIComponent(q)).then(r => r.json()).then(liste => {
+            kutu.innerHTML = '';
+            liste.forEach(u => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'btn-kucuk gri';
+                b.style.cssText = 'display:block;width:100%;text-align:left;margin:4px 0;';
+                b.textContent = u.ad + ' (' + u.adet + ' adet • ' + u.depo + ')';
+                b.onclick = () => bagla(u.barkod);
+                kutu.appendChild(b);
+            });
+        });
+    }, 250);
+}
+function bagla(anaBarkod){
+    fetch('/barkod_bagla_json', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({yeni_barkod: window.bagBarkod, ana_barkod: anaBarkod})
+    }).then(r => r.json()).then(d => {
+        if(d.ok){ isleGonder(window.bagBarkod); }
+        else { alert(d.msg || 'Bağlanamadı'); }
+    }).catch(() => alert('Bağlantı hatası'));
+}
 function geriAl(){
     if(!sonIslem) return;
     fetch("/geri_al", {
