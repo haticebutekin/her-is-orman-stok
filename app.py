@@ -10732,7 +10732,6 @@ def laminant_takim2():
     """
     icerik = icerik.replace("__VERI__", veri_json)
     return sayfa(icerik, "Laminant Takım Hesabı")    
-)
 @app.route("/laminant_takim3")
 @rol_gerekli("muhasebeci")
 def laminant_takim3():
