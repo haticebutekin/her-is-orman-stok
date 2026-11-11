@@ -9123,6 +9123,15 @@ def takim_hesap():
       </table>
     </div>
 
+    <div id="alt-toplam" style="position:fixed;left:0;right:0;bottom:0;z-index:9998;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:rgba(18,21,28,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div>
+        <div style="font-size:11px;color:#8b93a3;letter-spacing:.4px;">GENEL TOPLAM</div>
+        <div id="alt-toplam-tutar" style="font-size:19px;font-weight:800;color:#fff;">0,00 TL</div>
+      </div>
+      <button type="button" class="btn-kucuk turkuaz" style="margin:0;" onclick="teklifAc()">🧾 Teklif</button>
+    </div>
+    <div style="height:70px;"></div>
+    
     <style>
     .tk-tablo { width:100%; border-collapse:collapse; font-size:12.5px; }
     .tk-tablo th { background:var(--bg2); color:var(--muted); font-weight:700; text-transform:uppercase;
@@ -10332,6 +10341,7 @@ def laminant_takim():
       if(elle){ m2 = parkeM2; }
       document.getElementById('sonuc-govde').innerHTML = html;
       document.getElementById('genel-toplam').textContent = tl(genel) + ' TL';
+      document.getElementById('alt-toplam-tutar').textContent = tl(genel) + ' TL';
       document.getElementById('m2-fiyat').textContent = m2 > 0 ? tl(genel / m2) + ' TL' : '-';
       sonOzet = ozet.join('\n') + (m2 > 0 ? '\nToplam: ' + tl(genel) + ' TL (' + vir(m2, 2) + ' m²)' : '');
       sonTeklif = {satirlar: teklif, genel: tl(genel), m2: m2 > 0 ? vir(m2, 2) : '', m2fiyat: m2 > 0 ? tl(genel / m2) : '',
