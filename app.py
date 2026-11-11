@@ -2712,7 +2712,7 @@ def liste():
         <div class="urun-depo">🏭 {u[9]}</div>
         <div class="urun-barkod">🔢 {u[10]}</div>
         <div class="urun-gorseller">
-          <img src="/barkod/{u[10]}.png">
+          <img src="/barkod/{u[10]}.png" loading="lazy" decoding="async" width="180" height="60">
         </div>
        <div class="urun-aksiyonlar">
         <button class="btn-kucuk mavi" onclick="window.location.href='/duzenle/{u[10]}'">✏️ Düzenle</button>
@@ -5087,6 +5087,41 @@ def acik_siparis_sayisi():
 @app.route("/service-worker.js")
 def service_worker():
     js = """
+const ONBELLEK = 'heris-v1';
+const ZXING = 'https://unpkg.com/@zxing/library@0.21.3';
+
+self.addEventListener('install', function(event) {
+  event.waitUntil(
+    caches.open(ONBELLEK)
+      .then(function(c){ return c.add(ZXING); })
+      .catch(function(){})
+      .then(function(){ return self.skipWaiting(); })
+  );
+});
+
+self.addEventListener('activate', function(event) {
+  event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener('fetch', function(event) {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (req.url === ZXING) {
+    event.respondWith(caches.match(req).then(function(r){ return r || fetch(req); }));
+    return;
+  }
+  if (req.mode === 'navigate' && url.pathname.indexOf('/kamera/') === 0) {
+    event.respondWith(
+      fetch(req).then(function(resp){
+        const kopya = resp.clone();
+        caches.open(ONBELLEK).then(function(c){ c.put(req, kopya); });
+        return resp;
+      }).catch(function(){ return caches.match(req); })
+    );
+  }
+});
+
 self.addEventListener('push', function(event) {
   let data = {};
   try { data = event.data.json(); } catch(e) { data = { title: 'HER-İŞ Stok Takip', body: event.data ? event.data.text() : '' }; }
@@ -8136,6 +8171,7 @@ def kamera(tip):
 
     <script src="https://unpkg.com/@zxing/library@0.21.3"></script>
 <script>
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('/service-worker.js').catch(function(){}); }
 let codeReader;
 let kilit = false;
 let bipSes;
@@ -8171,12 +8207,13 @@ function kuyruguSenkronEt(){
     const liste = kuyrukOku();
     if(liste.length === 0) return;
     senkronDevamEdiyor = true;
+    const hatalilar = [];
 
-    const isle = (i) => {
-        if(i >= liste.length){
+            if(i >= liste.length){
             kuyrukYaz([]);
             senkronDevamEdiyor = false;
             baglantiDurumuGoster();
+            if(hatalilar.length){ alert('Şu taramalar işlenemedi, elle kontrol et:\n' + hatalilar.join('\n')); }
             return;
         }
         const kalem = liste[i];
@@ -8187,7 +8224,11 @@ function kuyruguSenkronEt(){
         })
         .then(r => r.json())
         .then(d => {
-            oturumGuncelle(kalem.barkod, d.ad || kalem.barkod, kalem.miktar || 1);
+          if(d.ok){
+              oturumGuncelle(kalem.barkod, d.ad || kalem.barkod, kalem.miktar || 1);
+          } else {
+              hatalilar.push(kalem.barkod + ' — ' + (d.msg || (d.yeni ? 'stokta yok (yeni ürün)' : 'işlenemedi')));
+          }
             isle(i + 1);
         })
         .catch(() => {
@@ -8488,14 +8529,18 @@ function isleGonder(barkod){
         return;
     }
 
+       const kontrol = new AbortController();
+    const zamanAsimi = setTimeout(() => kontrol.abort(), 10000);
     fetch("/hizli_islem", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
+        signal: kontrol.signal,
         body: JSON.stringify({ barkod: barkod, tip: aktifTip, siparis_id: siparisId, miktar: aktifCarpan })
     })
-    .then(r => r.json())
+    .then(r => { clearTimeout(zamanAsimi); return r.json(); })
     .then(d => sonucGoster(d, barkod))
     .catch(() => {
+        clearTimeout(zamanAsimi);
         // Bağlantı koptu / istek gitmedi -> kuyruğa al, veri kaybolmasın
         kuyrugaEkle(barkod, aktifCarpan);
         sonucGosterCevrimdisi(barkod);
