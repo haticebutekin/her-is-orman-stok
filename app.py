@@ -8134,7 +8134,7 @@ def kamera(tip):
       </div>
     </div>
 
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script src="https://unpkg.com/@zxing/library@0.21.3"></script>
 <script>
 let codeReader;
 let kilit = false;
@@ -8289,7 +8289,6 @@ function hintOlustur(){
 }
 
 async function baslat(){
-    bipSes = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
     document.getElementById('baslat-alan').style.display = 'none';
     document.getElementById('kamera-cerceve').style.display = 'block';
     document.getElementById('carpan-kart').style.display = 'block';
@@ -8467,9 +8466,19 @@ function carpanSec(deger, btn){
     if(!btn){ document.getElementById('carpan-ozel').value = deger; }
     else { document.getElementById('carpan-ozel').value = ''; }
 }
-
+let sesBaglam = null;
+function bip(){
+    try {
+        if(!sesBaglam){ sesBaglam = new (window.AudioContext || window.webkitAudioContext)(); }
+        const o = sesBaglam.createOscillator();
+        const g = sesBaglam.createGain();
+        o.type = 'square'; o.frequency.value = 1500; g.gain.value = 0.08;
+        o.connect(g); g.connect(sesBaglam.destination);
+        o.start(); o.stop(sesBaglam.currentTime + 0.12);
+    } catch(e) {}
+}
 function isleGonder(barkod){
-    if(bipSes){ bipSes.currentTime = 0; bipSes.play().catch(e => {}); }
+    bip();}
     if(navigator.vibrate) navigator.vibrate(70);
 
     if(!navigator.onLine){
