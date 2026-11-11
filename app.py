@@ -8213,7 +8213,6 @@ function kuyruguSenkronEt(){
             kuyrukYaz([]);
             senkronDevamEdiyor = false;
             baglantiDurumuGoster();
-            if(hatalilar.length){ alert('Şu taramalar işlenemedi, elle kontrol et:\\n' + hatalilar.join('\\n')); }
             return;
         }
         const kalem = liste[i];
