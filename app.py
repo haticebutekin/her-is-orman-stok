@@ -1910,6 +1910,9 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Laminant Hesap</div><div class="okut-alt">Oda ölçüsünden paket ve fiyat hesapla</div></div>
           <div class="okut-ok">›</div>
         </a>
+        </div>
+        <div class="bolum-baslik bolum-tiklanabilir kapali" onclick="bolumAcKapa(this)">💰 Fiyat İşlemleri <span class="bolum-ok">▾</span></div>
+        <div class="bolum-govde kapali">
         <a href="/fiyat_girisi" class="okut-kart okut-yesil">
           <div class="okut-ikon">💰</div>
           <div class="okut-metin"><div class="okut-baslik">Hızlı Fiyat Girişi</div><div class="okut-alt">Tüm ürünlerin fiyatını tek tabloda gir</div></div>
@@ -1930,7 +1933,7 @@ def index():
           <div class="okut-metin"><div class="okut-baslik">Ürünleri Gruba Ata</div><div class="okut-alt">Örn: tüm Starwood renklerini tek grupta topla</div></div>
           <div class="okut-ok">›</div>
         </a>
-        <a href="/fiyat_toplu_yukle" class="okut-kart okut-mor">
+        <a href="/akilli_fiyat_yukle3" class="okut-kart okut-mor">
           <div class="okut-ikon">💰</div>
           <div class="okut-metin"><div class="okut-baslik">Fiyat Listesi Toplu Yükle</div><div class="okut-alt">Excel'den ürün fiyatlarını otomatik doldur</div></div>
           <div class="okut-ok">›</div>
