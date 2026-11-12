@@ -8168,7 +8168,7 @@ def kamera(tip):
         <button class="btn mavi" style="width:auto;" onclick="elleGonder()">Ekle</button>
       </div>
     </div>
-
+    <script>window.onerror=function(m,s,l){alert('JS HATASI: '+m+' | satır '+l);};</script>
     <script src="https://unpkg.com/@zxing/library@0.21.3"></script>
 <script>
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('/service-worker.js').catch(function(){}); }
