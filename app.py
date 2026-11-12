@@ -8319,10 +8319,15 @@ function hintOlustur(){
     // Sistemin ürettiği barkodlar CODE_128'dir; ayrıca dışarıdan alınan
     // hazır ürünlerde en sık görülen EAN_13/UPC_A da destekleniyor.
     // Listeyi kısa tutmak taramayı hızlandırır.
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
         ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.CODE_39,
         ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
         ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E,
+        ZXing.BarcodeFormat.ITF,
+        ZXing.BarcodeFormat.QR_CODE,
     ]);
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
     return hints;
