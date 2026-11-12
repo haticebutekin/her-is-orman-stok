@@ -8129,7 +8129,7 @@ def kamera(tip):
         <button type="button" class="araç-btn" id="kamera-degistir-btn" onclick="kameraDegistir()" style="display:none;">🔄</button>
       </div>
     </div>
-
+    <div id="tarama-durum" style="font-size:11px;color:var(--muted);text-align:center;margin:-6px 0 10px;">Tarama başlamadı</div>
     <div class="kart" id="carpan-kart" style="display:none;padding:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <label style="margin:0;font-size:12.5px;">🔢 Her okutmada ekle</label>
@@ -8372,6 +8372,11 @@ function kameraBaslat(){
     };
 
     codeReader.decodeFromConstraints(kisitlar, 'video', (result, err) => {
+            taramaSay++;
+        if(taramaSay % 5 === 0){
+            const d = document.getElementById('tarama-durum');
+            if(d){ d.textContent = 'Taranan kare: ' + taramaSay + (err && err.name ? ' | ' + err.name : ''); }
+        }
         if (result && !kilit) {
             const simdi = Date.now();
             const okunanMetin = (result.text || "").trim();
@@ -8488,6 +8493,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+let taramaSay = 0;
 let sonOkunanBarkod = null;
 let sonOkumaZamani = 0;
 
