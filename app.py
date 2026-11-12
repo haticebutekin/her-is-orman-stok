@@ -8169,9 +8169,9 @@ def kamera(tip):
       </div>
     </div>
     <script>window.onerror=function(m,s,l){alert('JS HATASI: '+m+' | satır '+l);};</script>
-    <script src="https://unpkg.com/@zxing/library@0.21.3"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script>
-if('serviceWorker' in navigator){ navigator.serviceWorker.register('/service-worker.js').catch(function(){}); }
+if('serviceWorker' in navigator){ navigator.serviceWorker.getRegistrations().then(function(r){ r.forEach(function(x){ x.unregister(); }); }); }
 let codeReader;
 let kilit = false;
 let bipSes;
