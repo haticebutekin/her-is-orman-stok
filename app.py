@@ -8209,10 +8209,12 @@ function kuyruguSenkronEt(){
     senkronDevamEdiyor = true;
     const hatalilar = [];
 
-            if(i >= liste.length){
+    const isle = (i) => {
+        if(i >= liste.length){
             kuyrukYaz([]);
             senkronDevamEdiyor = false;
             baglantiDurumuGoster();
+            if(hatalilar.length){ alert('Işlenemeyen taramalar: ' + hatalilar.join(' | ')); }
             return;
         }
         const kalem = liste[i];
@@ -8223,15 +8225,14 @@ function kuyruguSenkronEt(){
         })
         .then(r => r.json())
         .then(d => {
-          if(d.ok){
-              oturumGuncelle(kalem.barkod, d.ad || kalem.barkod, kalem.miktar || 1);
-          } else {
-              hatalilar.push(kalem.barkod + ' — ' + (d.msg || (d.yeni ? 'stokta yok (yeni ürün)' : 'işlenemedi')));
-          }
+            if(d.ok){
+                oturumGuncelle(kalem.barkod, d.ad || kalem.barkod, kalem.miktar || 1);
+            } else {
+                hatalilar.push(kalem.barkod + ' - ' + (d.msg || (d.yeni ? 'stokta yok (yeni urun)' : 'islenemedi')));
+            }
             isle(i + 1);
         })
         .catch(() => {
-            // hâlâ bağlantı yok, kalan kayıtları kuyrukta bırak ve dur
             kuyrukYaz(liste.slice(i));
             senkronDevamEdiyor = false;
             baglantiDurumuGoster();
@@ -8239,7 +8240,6 @@ function kuyruguSenkronEt(){
     };
     isle(0);
 }
-
 function baglantiDurumuGoster(){
     const bekleyen = kuyrukOku().length;
     let banner = document.getElementById('baglanti-banner');
@@ -8518,7 +8518,7 @@ function bip(){
     } catch(e) {}
 }
 function isleGonder(barkod){
-    bip();}
+    bip();
     if(navigator.vibrate) navigator.vibrate(70);
 
     if(!navigator.onLine){
@@ -8528,7 +8528,7 @@ function isleGonder(barkod){
         return;
     }
 
-       const kontrol = new AbortController();
+    const kontrol = new AbortController();
     const zamanAsimi = setTimeout(() => kontrol.abort(), 10000);
     fetch("/hizli_islem", {
         method: "POST",
@@ -8536,17 +8536,14 @@ function isleGonder(barkod){
         signal: kontrol.signal,
         body: JSON.stringify({ barkod: barkod, tip: aktifTip, siparis_id: siparisId, miktar: aktifCarpan })
     })
-    .then(r => { clearTimeout(zamanAsimi); return r.json(); })
+    .then(r => r.json())
     .then(d => sonucGoster(d, barkod))
     .catch(() => {
-        clearTimeout(zamanAsimi);
-        // Bağlantı koptu / istek gitmedi -> kuyruğa al, veri kaybolmasın
         kuyrugaEkle(barkod, aktifCarpan);
         sonucGosterCevrimdisi(barkod);
     })
-    .finally(() => { kilit = false; });
+    .finally(() => { clearTimeout(zamanAsimi); kilit = false; });
 }
-
 function sonucGosterCevrimdisi(barkod){
     const alan = document.getElementById('sonuc-alan');
     alan.innerHTML = `
