@@ -8608,7 +8608,7 @@ function cdAra(){
     const kutu = document.getElementById('cd-sonuc');
     kutu.innerHTML = '';
     if(!q){ return; }
-    const kelimeler = q.split(/\s+/);
+    const kelimeler = q.split(/\\s+/);
     const liste = urunOnbellekOku().filter(u => {
         const a = (u.ad || '').toLocaleLowerCase('tr');
         return kelimeler.every(k => a.indexOf(k) !== -1);
