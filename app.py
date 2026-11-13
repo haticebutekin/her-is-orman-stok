@@ -2720,6 +2720,7 @@ def liste():
         <button class="btn-kucuk mavi" onclick="window.location.href='/duzenle/{u[10]}'">✏️ Düzenle</button>
         <button class="btn-kucuk turkuaz" onclick="window.open('/etiket/{u[10]}','_blank')">🖨️ Etiket</button>
         <button class="btn-kucuk mor" onclick="window.location.href='/barkodlar/{u[10]}'">🔗 Barkodlar</button>
+        <button class="btn-kucuk yesil" onclick="adetDuzelt('{u[10]}', {u[8]})">🔢 Adet</button>
         <button class="btn-kucuk kirmizi" onclick="urunSil('{u[10]}')">🗑️ Sil</button>
         </div>
         </div>
@@ -2757,6 +2758,22 @@ def liste():
             var metin = k.textContent.toLocaleLowerCase('tr');
             k.style.display = metin.indexOf(q) !== -1 ? '' : 'none';
           });
+        }
+                function adetDuzelt(barkod, mevcut){
+          var yeni = prompt('Gerçek adet kaç? (sistemde şu an: ' + mevcut + ')', mevcut);
+          if(yeni === null) return;
+          yeni = parseInt(yeni);
+          if(isNaN(yeni) || yeni < 0){ alert('Geçerli bir sayı gir.'); return; }
+          fetch('/adet_duzelt', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({barkod: barkod, adet: yeni})
+          }).then(function(r){ return r.json(); }).then(function(d){
+            if(d.ok){
+              var el = document.getElementById('urun-' + barkod);
+              if(el){ var r = el.querySelector('.urun-adet-rozet'); if(r){ r.textContent = d.adet + ' adet'; } }
+            } else { alert(d.msg || 'Kaydedilemedi'); }
+          }).catch(function(){ alert('Bağlantı hatası, KAYDEDİLMEDİ'); });
         }
         function urunSil(barkod){
           if(!confirm('Bu ürünü silmek istediğine emin misin? Bu işlem geri alınamaz.')) return;
@@ -5254,7 +5271,40 @@ def urun_onbellek():
     return jsonify([
         {"ad": r[0], "barkod": r[1], "adet": r[2], "depo": r[3] or "", "ekler": r[4] or []}
         for r in satirlar
-    ])    
+    ])  
+@app.route("/adet_duzelt", methods=["POST"])
+@rol_gerekli("muhasebeci")
+def adet_duzelt():
+    data = request.get_json(silent=True) or {}
+    barkod = (data.get("barkod") or "").strip()
+    try:
+        yeni = int(data.get("adet"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "msg": "Geçersiz adet"}), 400
+    if yeni < 0 or yeni > 10000000:
+        return jsonify({"ok": False, "msg": "Geçersiz adet"}), 400
+    con = db()
+    try:
+        with con:
+            with con.cursor() as cur:
+                cur.execute("SELECT id, ad, adet FROM urun WHERE barkod=%s AND silindi IS NOT TRUE FOR UPDATE", (barkod,))
+                row = cur.fetchone()
+                if not row:
+                    return jsonify({"ok": False, "msg": "Ürün bulunamadı"})
+                uid, ad, eski = row
+                eski = eski or 0
+                fark = yeni - eski
+                cur.execute("UPDATE urun SET adet=%s WHERE id=%s", (yeni, uid))
+                if fark != 0:
+                    cur.execute("""
+                        INSERT INTO hareket (barkod, ad, tip, adet, kullanici, tarih)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (barkod, ad, 'giris' if fark > 0 else 'cikis', abs(fark),
+                          session.get("kullanici", "Bilinmiyor"), tr_simdi()))
+    finally:
+        con.close()
+    log_aktivite("Adet Düzeltildi", f"{ad} — {eski} → {yeni}")
+    return jsonify({"ok": True, "adet": yeni})
 @app.route("/barkodlar/<barkod>")
 @rol_gerekli("muhasebeci")
 def barkodlar(barkod):
