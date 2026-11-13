@@ -5231,6 +5231,28 @@ def barkod_bagla_json():
         con.close()
     log_aktivite("Ek Barkod Bağlandı", f"{ad} — {yeni}")
     return jsonify({"ok": True, "ad": ad})
+@app.route("/urun_onbellek")
+@rol_gerekli("depocu", "muhasebeci")
+def urun_onbellek():
+    con = db()
+    try:
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT u.ad, u.barkod, u.adet, u.depo,
+                       COALESCE(array_agg(ub.barkod) FILTER (WHERE ub.barkod IS NOT NULL), '{}')
+                FROM urun u
+                LEFT JOIN urun_barkod ub ON ub.urun_id = u.id
+                WHERE u.silindi IS NOT TRUE
+                GROUP BY u.id, u.ad, u.barkod, u.adet, u.depo
+                ORDER BY u.ad
+            """)
+            satirlar = cur.fetchall()
+    finally:
+        con.close()
+    return jsonify([
+        {"ad": r[0], "barkod": r[1], "adet": r[2], "depo": r[3] or "", "ekler": r[4] or []}
+        for r in satirlar
+    ])    
 @app.route("/barkodlar/<barkod>")
 @rol_gerekli("muhasebeci")
 def barkodlar(barkod):
@@ -8194,9 +8216,9 @@ function kuyrukOku(){
 function kuyrukYaz(liste){
     try { localStorage.setItem(BEKLEYEN_KUYRUK_ANAHTARI, JSON.stringify(liste)); } catch(e) {}
 }
-function kuyrugaEkle(barkod, miktar){
+function kuyrugaEkle(barkod, miktar, ana){
     const liste = kuyrukOku();
-    liste.push({ barkod: barkod, tip: aktifTip, siparis_id: siparisId, miktar: miktar || 1, zaman: Date.now() });
+    liste.push({ barkod: barkod, tip: aktifTip, siparis_id: siparisId, miktar: miktar || 1, ana: ana || null, zaman: Date.now() });
     kuyrukYaz(liste);
     baglantiDurumuGoster();
 }
@@ -8218,11 +8240,19 @@ function kuyruguSenkronEt(){
             return;
         }
         const kalem = liste[i];
-        fetch("/hizli_islem", {
+        const baglaOnce = kalem.ana
+            ? fetch("/barkod_bagla_json", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ yeni_barkod: kalem.barkod, ana_barkod: kalem.ana })
+              }).then(r => r.json())
+            : Promise.resolve(null);
+        baglaOnce
+        .then(() => fetch("/hizli_islem", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({ barkod: kalem.barkod, tip: kalem.tip, siparis_id: kalem.siparis_id, miktar: kalem.miktar || 1 })
-        })
+        }))
         .then(r => r.json())
         .then(d => {
             if(d.ok){
@@ -8240,6 +8270,29 @@ function kuyruguSenkronEt(){
     };
     isle(0);
 }
+
+const URUN_ONBELLEK_ANAHTARI = 'heris_urun_onbellek';
+function urunOnbellekOku(){
+    try { return JSON.parse(localStorage.getItem(URUN_ONBELLEK_ANAHTARI) || '[]'); } catch(e) { return []; }
+}
+function urunOnbellekYenile(){
+    if(!navigator.onLine) return;
+    fetch('/urun_onbellek').then(r => r.json()).then(l => {
+        if(Array.isArray(l)){
+            try { localStorage.setItem(URUN_ONBELLEK_ANAHTARI, JSON.stringify(l)); } catch(e) {}
+        }
+    }).catch(() => {});
+}
+function urunBulYerel(barkod){
+    const l = urunOnbellekOku();
+    for(let i = 0; i < l.length; i++){
+        if(l[i].barkod === barkod || (l[i].ekler || []).indexOf(barkod) !== -1){ return l[i]; }
+    }
+    return null;
+}
+urunOnbellekYenile();
+setInterval(urunOnbellekYenile, 600000);
+window.addEventListener('online', urunOnbellekYenile);
 function baglantiDurumuGoster(){
     const bekleyen = kuyrukOku().length;
     let banner = document.getElementById('baglanti-banner');
@@ -8528,13 +8581,66 @@ function bip(){
         o.start(); o.stop(sesBaglam.currentTime + 0.12);
     } catch(e) {}
 }
+function cevrimdisiIsle(barkod){
+    const u = urunBulYerel(barkod);
+    if(u || urunOnbellekOku().length === 0){
+        kuyrugaEkle(barkod, aktifCarpan);
+        sonucGosterCevrimdisi(barkod, u ? u.ad : '');
+    } else {
+        cevrimdisiBagPaneli(barkod);
+    }
+}
+
+function cevrimdisiBagPaneli(barkod){
+    window.bagBarkod = barkod;
+    document.getElementById('sonuc-alan').innerHTML = `
+      <div class="sonuc-kart sonuc-yeni">
+        <div class="sonuc-ust"><span class="sonuc-ikon">🆕</span><span class="sonuc-ad">Bu barkod telefonda kayıtlı değil</span></div>
+        <div class="sonuc-satirlar">Okunan: <b>${barkod}</b><br>İnternet yok. Ürünü listeden seç, internet gelince barkod ona bağlanıp giriş yapılacak.</div>
+        <input type="text" id="cd-ara" class="arama" placeholder="🔍 Ürün adını yaz..." autocomplete="off" oninput="cdAra()" style="margin-top:10px;">
+        <div id="cd-sonuc"></div>
+      </div>`;
+    setTimeout(() => { const k = document.getElementById('cd-ara'); if(k){ k.focus(); } }, 100);
+}
+
+function cdAra(){
+    const q = document.getElementById('cd-ara').value.toLocaleLowerCase('tr').trim();
+    const kutu = document.getElementById('cd-sonuc');
+    kutu.innerHTML = '';
+    if(!q){ return; }
+    const kelimeler = q.split(/\s+/);
+    const liste = urunOnbellekOku().filter(u => {
+        const a = (u.ad || '').toLocaleLowerCase('tr');
+        return kelimeler.every(k => a.indexOf(k) !== -1);
+    }).slice(0, 15);
+    liste.forEach(u => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn-kucuk gri';
+        b.style.cssText = 'display:block;width:100%;text-align:left;margin:4px 0;';
+        b.textContent = u.ad + ' (' + u.depo + ')';
+        b.onclick = () => cdSec(u.barkod, u.ad);
+        kutu.appendChild(b);
+    });
+}
+
+function cdSec(anaBarkod, ad){
+    const yeni = window.bagBarkod;
+    kuyrugaEkle(yeni, aktifCarpan, anaBarkod);
+    const l = urunOnbellekOku();
+    for(let i = 0; i < l.length; i++){
+        if(l[i].barkod === anaBarkod){ l[i].ekler = (l[i].ekler || []).concat([yeni]); break; }
+    }
+    try { localStorage.setItem(URUN_ONBELLEK_ANAHTARI, JSON.stringify(l)); } catch(e) {}
+    sonucGosterCevrimdisi(yeni, ad);
+}
+
 function isleGonder(barkod){
     bip();
     if(navigator.vibrate) navigator.vibrate(70);
 
     if(!navigator.onLine){
-        kuyrugaEkle(barkod, aktifCarpan);
-        sonucGosterCevrimdisi(barkod);
+        cevrimdisiIsle(barkod);
         kilit = false;
         return;
     }
@@ -8549,24 +8655,21 @@ function isleGonder(barkod){
     })
     .then(r => r.json())
     .then(d => sonucGoster(d, barkod))
-    .catch(() => {
-        kuyrugaEkle(barkod, aktifCarpan);
-        sonucGosterCevrimdisi(barkod);
-    })
+    .catch(() => { cevrimdisiIsle(barkod); })
     .finally(() => { clearTimeout(zamanAsimi); kilit = false; });
 }
-function sonucGosterCevrimdisi(barkod){
+
+function sonucGosterCevrimdisi(barkod, ad){
     const alan = document.getElementById('sonuc-alan');
     alan.innerHTML = `
     <div class="kart" style="border-color:rgba(255,152,0,.4);background:rgba(255,152,0,.08);">
       <div style="text-align:center;font-size:34px;">📶</div>
-      <h3 style="text-align:center;margin:6px 0 2px;">Bağlantı Yok — Kuyruğa Alındı</h3>
+      <h3 style="text-align:center;margin:6px 0 2px;">${ad ? ad : 'Bağlantı Yok'} — Kuyruğa Alındı</h3>
       <p style="text-align:center;color:var(--muted);font-size:13px;">
-        Barkod: ${barkod}<br>İnternet gelince otomatik olarak işlenecek. Sayfayı kapatmayın.
+        Barkod: ${barkod}<br>Telefonda kayıtlı. Kamera sayfası internetle açılınca otomatik işlenecek.
       </p>
     </div>`;
 }
-
 function sonucGoster(d, barkod){
     const alan = document.getElementById('sonuc-alan');
 
