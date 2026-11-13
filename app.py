@@ -123,7 +123,70 @@ _PIN_DENEME = {}   # (ip, isim) -> [yanlış_sayısı, ilk_yanlış_zamanı]
 PIN_MAX_DENEME = 5
 PIN_KILIT_SANIYE = 600
 
+from psycopg2 import pool as _pg_pool
+
+_HAVUZ = None
+_HAVUZ_KILIT = threading.Lock()
+
+
+class _HavuzBaglanti:
+    """con.close() çağrılınca bağlantıyı kapatmaz, havuza geri verir."""
+    def __init__(self, con, havuz):
+        self._con = con
+        self._havuz = havuz
+        self._bitti = False
+
+    def __getattr__(self, ad):
+        return getattr(self._con, ad)
+
+    def __enter__(self):
+        return self._con.__enter__()
+
+    def __exit__(self, *a):
+        return self._con.__exit__(*a)
+
+    def close(self):
+        if self._bitti:
+            return
+        self._bitti = True
+        try:
+            if self._con.closed:
+                self._havuz.putconn(self._con, close=True)
+            else:
+                self._con.rollback()
+                self._havuz.putconn(self._con)
+        except Exception:
+            pass
+
+
 def db():
+    global _HAVUZ
+    if not DATABASE_URL:
+        return psycopg2.connect(DATABASE_URL)
+    if _HAVUZ is None:
+        with _HAVUZ_KILIT:
+            if _HAVUZ is None:
+                _HAVUZ = _pg_pool.ThreadedConnectionPool(
+                    1, 12, DATABASE_URL,
+                    keepalives=1, keepalives_idle=30,
+                    keepalives_interval=10, keepalives_count=3,
+                )
+    for _ in range(3):
+        con = None
+        try:
+            con = _HAVUZ.getconn()
+            if con.closed:
+                raise psycopg2.OperationalError("kapali baglanti")
+            with con.cursor() as cur:
+                cur.execute("SELECT 1")
+            con.rollback()
+            return _HavuzBaglanti(con, _HAVUZ)
+        except Exception:
+            if con is not None:
+                try:
+                    _HAVUZ.putconn(con, close=True)
+                except Exception:
+                    pass
     return psycopg2.connect(DATABASE_URL)
 
 def tr_simdi():
